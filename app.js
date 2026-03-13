@@ -449,7 +449,7 @@ function setProgreso(pct, label) {
    El usuario NO ve ninguna pantalla de autorización.
 ══════════════════════════════════════════════════════ */
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgnfjlTPkiHtLXtX5l-CzDe5E2J2b410Y8xGbztN78CfDT6Bq2a57iE2eabYKfZm95VQ/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwvsXmUuQdlzyH_SH1Pn-D3xZaYxG6d7YSkdCSussP4D63HCKx6DGIb-sR5rHMO8GrOcg/exec';
 
 async function subirAGoogleDrive(archivo, onProgress) {
   console.log('\n📤 SUBIENDO ARCHIVO VÍA APPS SCRIPT\n');
