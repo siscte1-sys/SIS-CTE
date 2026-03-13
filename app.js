@@ -445,9 +445,8 @@ function setProgreso(pct, label) {
 
 /* ══════════════════════════════════════════════════════
    GOOGLE DRIVE UPLOAD — vía Google Apps Script
-   La subida ocurre en el servidor de Apps Script usando
-   una cuenta de servicio. El usuario NO ve ninguna
-   pantalla de autorización de Google.
+   La cuenta de servicio sube el archivo en el servidor.
+   El usuario NO ve ninguna pantalla de autorización.
 ══════════════════════════════════════════════════════ */
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwgnfjlTPkiHtLXtX5l-CzDe5E2J2b410Y8xGbztN78CfDT6Bq2a57iE2eabYKfZm95VQ/exec';
@@ -460,63 +459,63 @@ async function subirAGoogleDrive(archivo, onProgress) {
 
   onProgress(10);
 
-  /* Convertir archivo a base64 para enviarlo por JSON */
+  /* Leer archivo como base64 */
   const fileB64 = await new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result.split(',')[1]); // solo la parte base64
+    reader.onload  = () => resolve(reader.result.split(',')[1]);
     reader.onerror = () => reject(new Error('Error leyendo el archivo'));
     reader.readAsDataURL(archivo);
   });
 
-  onProgress(30);
+  onProgress(35);
 
   const fecha    = new Date().toISOString().slice(0, 10);
   const mimeType = archivo.type ||
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-  const payload = {
+  const payload = JSON.stringify({
     fileData: fileB64,
     fileName: archivo.name,
     mimeType,
     area,
     fecha
-  };
-
-  onProgress(40);
-  console.log('📡 Enviando al Apps Script...');
-
-  /* Apps Script no soporta CORS con fetch directo en algunos navegadores,
-     usamos no-cors con XMLHttpRequest y leemos la respuesta normalmente */
-  const respuesta = await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', APPS_SCRIPT_URL);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const p = Math.round(40 + (e.loaded / e.total) * 40);
-        onProgress(p);
-      }
-    };
-
-    xhr.onload = () => {
-      try {
-        const data = JSON.parse(xhr.responseText);
-        if (data.ok) {
-          resolve(data);
-        } else {
-          reject(new Error(data.error || 'Error en Apps Script'));
-        }
-      } catch(e) {
-        reject(new Error('Respuesta inválida del servidor: ' + xhr.responseText));
-      }
-    };
-    xhr.onerror = () => reject(new Error('Error de red al conectar con el servidor'));
-    xhr.send(JSON.stringify(payload));
   });
 
-  onProgress(90);
-  console.log('✅ Archivo subido correctamente:', respuesta.fileId);
+  onProgress(45);
+  console.log('📡 Enviando al Apps Script...');
+
+  /* Usar Content-Type: text/plain evita el preflight CORS que bloquea Apps Script.
+     Apps Script acepta este content-type y parsea el JSON internamente. */
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method:   'POST',
+    redirect: 'follow',
+    headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
+    body:     payload
+  });
+
+  onProgress(85);
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => res.status);
+    throw new Error('Error del servidor: ' + txt);
+  }
+
+  const texto = await res.text();
+  console.log('📥 Respuesta:', texto.slice(0, 300));
+
+  let respuesta;
+  try {
+    respuesta = JSON.parse(texto);
+  } catch(e) {
+    throw new Error('Respuesta inválida del servidor: ' + texto.slice(0, 100));
+  }
+
+  if (!respuesta.ok) {
+    throw new Error(respuesta.error || 'El servidor no pudo procesar el archivo');
+  }
+
+  onProgress(95);
+  console.log('✅ Archivo subido:', respuesta.fileId);
 
   return {
     fileUrl:   respuesta.fileUrl,
