@@ -307,7 +307,7 @@
           </button>
           <button class="btn-acc btn-acc-red" onclick="abrirModalLimpiarDuplicados()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 4 21 4"/><line x1="19" y1="4" x2="21" y2="6"/><path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></svg>
-            Limpiar duplicados
+            Eliminar registros BD
           </button>
           <button class="btn-acc btn-acc-ghost" onclick="irSubir()">← Volver a Envíos</button>
         </div>
@@ -393,19 +393,19 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 4 21 4"/><line x1="19" y1="4" x2="21" y2="6"/><path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></svg>
       </div>
       <div>
-        <div class="modal-titulo">Limpiar duplicados</div>
-        <div class="modal-sub">Busca y elimina archivos duplicados en Google Drive</div>
+        <div class="modal-titulo">Eliminar registros BD</div>
+        <div class="modal-sub">Elimina registros de la base de datos (no afecta Google Drive)</div>
       </div>
       <button class="modal-cerrar" onclick="cerrarModalLimpiarDuplicados()">✕</button>
     </div>
 
     <div id="limpieza-contenido" class="modal-body">
-      <p class="modal-desc">Este proceso buscará archivos duplicados en Google Drive y eliminará los más antiguos, manteniendo solo el más reciente de cada nombre.</p>
+      <p class="modal-desc">Este proceso eliminará registros duplicados de la base de datos (Firestore). Los archivos en Google Drive no serán afectados.</p>
       
       <div style="margin-top:16px">
         <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--txt2)">
           <input type="checkbox" id="check-confirmar" onchange="verificarCheckLimpieza()" style="width:18px;height:18px">
-          <span>Entiendo que se eliminarán archivos duplicados de Google Drive</span>
+          <span>Entiendo que se eliminarán registros de la base de datos (Firestore), no de Google Drive</span>
         </label>
       </div>
 
