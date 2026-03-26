@@ -1299,6 +1299,46 @@ async function iniciarLimpiezaDuplicados() {
 }
 
 /* ══════════════════════════════════
+   REFRESCO GLOBAL
+   Sincroniza TODO con Firestore
+══════════════════════════════════ */
+async function refrescarTodo() {
+  const btn = $('btn-refresh-global');
+  const ico = $('refresh-ico');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  if (ico) ico.style.animation = 'spin 0.7s linear infinite';
+  try {
+    const vistaAdmin = $('vista-admin');
+    if (vistaAdmin && vistaAdmin.style.display !== 'none') {
+      await cargarAdmin();
+    }
+    await cargarMisEnvios();
+    toast('✓ Pantalla actualizada desde la base de datos');
+  } catch(e) {
+    toast('Error al actualizar: ' + e.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    if (ico) ico.style.animation = '';
+  }
+}
+
+async function refrescarMisEnvios() {
+  const btn = $('btn-refresh-mis-envios');
+  const ico = $('refresh-mis-ico');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  if (ico) ico.style.animation = 'spin 0.7s linear infinite';
+  try {
+    await cargarMisEnvios();
+    toast('✓ Mis Envíos actualizados');
+  } catch(e) {
+    toast('Error: ' + e.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    if (ico) ico.style.animation = '';
+  }
+}
+
+/* ══════════════════════════════════
    EXPONER AL HTML
 ══════════════════════════════════ */
 window.login                        = login;
@@ -1315,6 +1355,8 @@ window.irSubir                      = irSubir;
 window.seleccionarMesArchivado      = seleccionarMesArchivado;
 window.archPaso2                    = archPaso2;
 window.descargarMesCompleto         = descargarMesCompleto;
+window.refrescarTodo                = refrescarTodo;
+window.refrescarMisEnvios           = refrescarMisEnvios;
 window.ir                           = ir;
 window.show                         = show;
 window.hide                         = hide;
