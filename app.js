@@ -9,6 +9,8 @@
        • Lógica de plazo / mensaje de retraso en UI
    ─ Fix v5.1:
        • acta_link muestra "No aplica — enviado dentro del plazo" cuando no hay acta
+   ─ Fix v5.1.1:
+       • cargarMisEnvios() se llama tras eliminar registros BD para limpiar la UI
 ══════════════════════════════════════════════════════════ */
 
 /* ── Firebase ────────────────────────────────────────── */
@@ -728,7 +730,7 @@ async function enviarArchivo() {
         hora:           horaTexto,
         registro:       numRegistro,
         driveLink:      storageURL,
-        actaLink:       actaURL || null,       // null si no hay acta
+        actaLink:       actaURL || null,
         comprobanteUrl: comprobanteURL || ''
       });
     } catch(mailErr) {
@@ -960,10 +962,8 @@ async function enviarCorreosNotificacion(datos) {
 async function cargarAdmin() {
   $('tabla-body').innerHTML     = `<tr><td colspan="9" class="td-vacio">Cargando...</td></tr>`;
   $('admin-personas').innerHTML = `<p class="cargando-txt">Cargando...</p>`;
-  docsAdmin = []; // limpiar inmediatamente
+  docsAdmin = [];
   try {
-    // Sin orderBy para evitar requerir índice compuesto en Firestore
-    // Se ordena en memoria después
     const snap = await window._fb.getDocs(window._fb.collection(db,'entregas'));
     docsAdmin  = snap.docs
       .map(d => ({id:d.id,...d.data()}))
@@ -1282,13 +1282,15 @@ async function iniciarLimpiezaDuplicados() {
     $('limpieza-progreso-txt').textContent='✓ Eliminación completada';
     log(`\n✅ ${eliminados} registro${eliminados!==1?'s':''} eliminado${eliminados!==1?'s':''} de Firestore.`);
     log('ℹ️ Los archivos en Google Drive no fueron afectados.');
-    log('🔄 Actualizando tabla...');
+    log('🔄 Actualizando pantalla...');
     docsAdmin = [];
     $('tabla-body').innerHTML = `<tr><td colspan="9" class="td-vacio">Actualizando...</td></tr>`;
     $('admin-personas').innerHTML = `<p class="cargando-txt">Actualizando...</p>`;
     await new Promise(r => setTimeout(r, 1500));
     cerrarModalLimpiarDuplicados();
     await cargarAdmin();
+    // ── FIX v5.1.1: refrescar "Mis Envíos" del usuario para limpiar la UI ──
+    await cargarMisEnvios();
     toast(`✓ ${eliminados} registro${eliminados!==1?'s':''} eliminado${eliminados!==1?'s':''}`);
   } catch(e) {
     log(`\n❌ Error: ${e.message}`);
