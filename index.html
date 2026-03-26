@@ -28,13 +28,6 @@
       Panel de control
     </button>
 
-    <!-- ── BOTÓN ACTUALIZAR GLOBAL ── -->
-    <button id="btn-refresh-global" onclick="refrescarTodo()" title="Actualizar todo desde la base de datos"
-      style="display:flex;align-items:center;gap:5px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:600;color:#475569;cursor:pointer;transition:all .18s;">
-      <svg id="refresh-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-4.39"/></svg>
-      Actualizar
-    </button>
-
     <div class="nav-user">
       <img id="nav-foto" class="nav-foto" src="" alt="">
       <span id="nav-nombre" class="nav-nombre"></span>
@@ -213,16 +206,10 @@
         <p id="enviar-hint" style="text-align:center;font-size:12px;color:#ef4444;margin-top:6px;">Sube el Excel para habilitar el envío</p>
       </div>
 
-      <!-- ── MIS ENVÍOS con botón Actualizar ── -->
+      <!-- ── MIS ENVÍOS — sin botón Actualizar ── -->
       <div class="mis-envios-sep">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Mis Envíos
-        <button id="btn-refresh-mis-envios" onclick="refrescarMisEnvios()"
-          title="Actualizar mis envíos desde la base de datos"
-          style="margin-left:auto;display:flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600;color:#475569;cursor:pointer;transition:all .18s;">
-          <svg id="refresh-mis-ico" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-4.39"/></svg>
-          Actualizar
-        </button>
       </div>
       <div id="mis-envios-lista" class="mis-envios-lista">
         <div class="mis-envios-vacio">
