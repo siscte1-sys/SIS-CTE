@@ -960,13 +960,18 @@ async function enviarCorreosNotificacion(datos) {
 async function cargarAdmin() {
   $('tabla-body').innerHTML     = `<tr><td colspan="9" class="td-vacio">Cargando...</td></tr>`;
   $('admin-personas').innerHTML = `<p class="cargando-txt">Cargando...</p>`;
+  docsAdmin = []; // limpiar inmediatamente
   try {
-    const q    = window._fb.query(window._fb.collection(db,'entregas'), window._fb.orderBy('timestamp','desc'));
-    const snap = await window._fb.getDocs(q);
-    docsAdmin  = snap.docs.map(d => ({id:d.id,...d.data()}));
+    // Sin orderBy para evitar requerir índice compuesto en Firestore
+    // Se ordena en memoria después
+    const snap = await window._fb.getDocs(window._fb.collection(db,'entregas'));
+    docsAdmin  = snap.docs
+      .map(d => ({id:d.id,...d.data()}))
+      .sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||''));
     renderAdmin(docsAdmin);
   } catch(e) {
-    console.error(e);
+    console.error('cargarAdmin error:', e);
+    $('tabla-body').innerHTML = `<tr><td colspan="9" class="td-vacio" style="color:var(--red)">Error al cargar: ${e.message}</td></tr>`;
     toast('Error al cargar: '+e.message,'err');
   }
 }
@@ -1277,7 +1282,14 @@ async function iniciarLimpiezaDuplicados() {
     $('limpieza-progreso-txt').textContent='✓ Eliminación completada';
     log(`\n✅ ${eliminados} registro${eliminados!==1?'s':''} eliminado${eliminados!==1?'s':''} de Firestore.`);
     log('ℹ️ Los archivos en Google Drive no fueron afectados.');
-    setTimeout(() => { cerrarModalLimpiarDuplicados(); cargarAdmin(); toast(`${eliminados} registros eliminados ✓`); }, 2500);
+    log('🔄 Actualizando tabla...');
+    docsAdmin = [];
+    $('tabla-body').innerHTML = `<tr><td colspan="9" class="td-vacio">Actualizando...</td></tr>`;
+    $('admin-personas').innerHTML = `<p class="cargando-txt">Actualizando...</p>`;
+    await new Promise(r => setTimeout(r, 1500));
+    cerrarModalLimpiarDuplicados();
+    await cargarAdmin();
+    toast(`✓ ${eliminados} registro${eliminados!==1?'s':''} eliminado${eliminados!==1?'s':''}`);
   } catch(e) {
     log(`\n❌ Error: ${e.message}`);
     toast('Error: '+e.message,'err');
