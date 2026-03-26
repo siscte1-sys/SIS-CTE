@@ -481,3 +481,12 @@ tbody tr:hover td{background:#fafafa;}
   .login-panel-right{padding:24px 20px;}
   .lpl-sub{display:none;}
 }
+/* ══════════════════════════════
+   MODAL ELIMINAR REGISTROS BD
+══════════════════════════════ */
+.elim-aviso-rojo{display:flex;align-items:center;gap:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:13px;color:#dc2626;font-weight:600;margin:14px 0 12px;}
+.elim-fechas{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.elim-fecha-campo label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--txt3);margin-bottom:4px;}
+.btn-elim-preview{width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s;}
+.btn-elim-preview:hover:not(:disabled){background:#b91c1c;}
+.btn-elim-preview:disabled{opacity:.6;cursor:not-allowed;}
