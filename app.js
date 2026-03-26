@@ -1,15 +1,15 @@
 /* ══════════════════════════════════════════════════════════
-   PORTAL SISCTE — app.js  v5.0
-   ─ Almacenamiento: todos los archivos → Google Drive
-     (carpeta por área, se crea automáticamente)
-   ─ Firestore: solo guarda metadatos (nombre, área, fecha…)
-   ─ EmailJS: correo al usuario + alerta al admin con link Drive
-   ─ PDF comprobante descargado automáticamente al enviar
-   ─ Panel admin con filtros y exportación Excel filtrada
-   ─ Archivado mensual con checkboxes individuales + rango de fechas
-   ─ Limpieza total de BD con descarga Excel previa y doble confirmación
+   PORTAL SISCTE — app.js  v5.1
+   ─ Base: v5.0 (Firebase sis-cte1, Drive 1EBYsT..., login email+Google)
+   ─ Incorporado de v4.4:
+       • Acta PDF obligatoria después del día 10 del mes
+       • Comprobante PDF generado y subido a Drive (carpeta NOTIFICACIONES_USUARIOS)
+       • EmailJS doble: correo usuario + alerta admin con link comprobante
+       • Reemplazo de archivos duplicados en Firestore + Drive
+       • Lógica de plazo / mensaje de retraso en UI
 ══════════════════════════════════════════════════════════ */
 
+/* ── Firebase ────────────────────────────────────────── */
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyDPgK1CBF0sO00j6Rho_e9xkc9Xj2HdPaI",
   authDomain:        "sis-cte1.firebaseapp.com",
@@ -19,35 +19,27 @@ const FIREBASE_CONFIG = {
   appId:             "1:861145504172:web:daa073aec7e6478709c209"
 };
 
-/* ── EMAILJS — Usuario ───────────────────────────────────
-   Servicio original: correo de confirmación al usuario
-──────────────────────────────────────────────────────── */
+/* ── EmailJS — Correo de confirmación al USUARIO ─────── */
 const EMAILJS_CONFIG = {
   publicKey:  "gaScEoguCEcx7aFYT",
   serviceId:  "service_ybvnh3i",
   templateId: "template_8d6u82j"
 };
 
-/* ── EMAILJS — Admin ─────────────────────────────────────
-   Servicio Gmail sis.cte1: alerta al administrador
-   Variables: to_email, usuario_nombre, usuario_email,
-              area, archivo, tamano, fecha, hora,
-              link_archivo, link_carpeta
-──────────────────────────────────────────────────────── */
-const EMAILJS_ADMIN_SERVICE  = "service_olg4mtm";   // ← Gmail sis.cte1
-const EMAILJS_ADMIN_TEMPLATE = "template_kxdf3rr";  // ← template admin
+/* ── EmailJS — Alerta al ADMIN ───────────────────────── */
+const EMAILJS_ADMIN_SERVICE  = "service_olg4mtm";  // Gmail sis.cte1
+const EMAILJS_ADMIN_TEMPLATE = "template_kxdf3rr"; // template admin
 
-/* Google Drive API — todos los archivos se suben aquí */
+/* ── Google Drive ────────────────────────────────────── */
 const GDRIVE_CONFIG = {
   clientId: '861145504172-qf14jcon0msi3hl3l5cn5j5eard2gdvb.apps.googleusercontent.com',
   scope: 'https://www.googleapis.com/auth/drive'
 };
 
-/* ID de la carpeta raíz GENERAL en Google Drive
-   Las subcarpetas por área se crean automáticamente aquí dentro */
-const GDRIVE_ROOT_FOLDER_ID  = '1EBYsTtNi7JMTOYqKSnjFWnipmaq1L_LU';
-const GDRIVE_CARPETA_GENERAL = '1EBYsTtNi7JMTOYqKSnjFWnipmaq1L_LU'; // ← misma carpeta GENERAL
+const GDRIVE_CARPETA_GENERAL      = '1EBYsTtNi7JMTOYqKSnjFWnipmaq1L_LU'; // raíz archivos Excel
+const GDRIVE_CARPETA_COMPROBANTES = '1sZnOusOY3mT-nidmdlveKaj3FxX5WG5_'; // NOTIFICACIONES_USUARIOS
 
+/* ── Admin ───────────────────────────────────────────── */
 const ADMIN_EMAILS = [
   "sis.cte1@gmail.com"
 ];
@@ -64,8 +56,11 @@ const AREAS = [
 
 let db, auth, usuario = null;
 let archivoSeleccionado = null;
-let docsAdmin = [];
-let _firebaseReady = null;
+let actaSeleccionada    = null;
+let docsAdmin           = [];
+let _firebaseReady      = null;
+let _driveTokenCache    = null;
+let _driveTokenExpiry   = 0;
 
 /* ══════════════════════════════════
    FIREBASE INIT
@@ -74,48 +69,54 @@ let _resolveFirebase;
 _firebaseReady = new Promise(res => { _resolveFirebase = res; });
 
 async function initFirebase() {
-  const { initializeApp }
-    = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-  const { getFirestore, collection, addDoc, getDocs, orderBy, query, doc, getDoc }
-    = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-  const { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-    getRedirectResult, signOut, onAuthStateChanged,
-    createUserWithEmailAndPassword, signInWithEmailAndPassword,
-    sendPasswordResetEmail, updateProfile }
-    = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");
-
-  const app = initializeApp(FIREBASE_CONFIG);
-  db   = getFirestore(app);
-  auth = getAuth(app);
-
-  window._fb = {
-    collection, addDoc, getDocs, orderBy, query, doc, getDoc,
-    GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-    getRedirectResult, signOut, onAuthStateChanged,
-    createUserWithEmailAndPassword, signInWithEmailAndPassword,
-    sendPasswordResetEmail, updateProfile
-  };
-
   try {
-    const result = await getRedirectResult(auth);
-    if (result?.user) console.log('Redirect login OK:', result.user.email);
-  } catch(e) { console.warn('Redirect result:', e.message); }
+    const { initializeApp }
+      = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const { getFirestore, collection, addDoc, getDocs, orderBy, query, doc, getDoc }
+      = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+      getRedirectResult, signOut, onAuthStateChanged,
+      createUserWithEmailAndPassword, signInWithEmailAndPassword,
+      sendPasswordResetEmail, updateProfile }
+      = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");
 
-  onAuthStateChanged(auth, u => {
-    if (u) {
-      usuario = { uid: u.uid, nombre: u.displayName, email: u.email, foto: u.photoURL };
-      actualizarNav();
-      esAdmin() ? show('nb-subir') : hide('nb-subir');
-      esAdmin() ? show('nb-admin') : hide('nb-admin');
-      irSubir();
-    } else {
-      usuario = null;
-      actualizarNav();
-      ir('vista-login');
-    }
-  });
+    const app = initializeApp(FIREBASE_CONFIG);
+    db   = getFirestore(app);
+    auth = getAuth(app);
 
-  _resolveFirebase();
+    window._fb = {
+      collection, addDoc, getDocs, orderBy, query, doc, getDoc,
+      GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+      getRedirectResult, signOut, onAuthStateChanged,
+      createUserWithEmailAndPassword, signInWithEmailAndPassword,
+      sendPasswordResetEmail, updateProfile
+    };
+
+    try {
+      const result = await getRedirectResult(auth);
+      if (result?.user) console.log('✓ Redirect login:', result.user.email);
+    } catch(e) { console.warn('Redirect result:', e.message); }
+
+    onAuthStateChanged(auth, u => {
+      if (u) {
+        usuario = { uid: u.uid, nombre: u.displayName, email: u.email, foto: u.photoURL };
+        actualizarNav();
+        esAdmin() ? show('nb-subir') : hide('nb-subir');
+        esAdmin() ? show('nb-admin') : hide('nb-admin');
+        irSubir();
+      } else {
+        usuario = null;
+        actualizarNav();
+        ir('vista-login');
+      }
+    });
+
+    _resolveFirebase();
+  } catch(e) {
+    console.error('❌ Error Firebase:', e);
+    toast('Error iniciando sistema: ' + e.message, 'err');
+    _resolveFirebase();
+  }
 }
 
 /* ══════════════════════════════════
@@ -125,35 +126,33 @@ async function login() {
   try {
     await _firebaseReady;
     const provider = new window._fb.GoogleAuthProvider();
+    provider.addScope('profile');
+    provider.addScope('email');
     try {
+      toast('Abriendo ventana de Google...', 'ok');
       await window._fb.signInWithPopup(auth, provider);
     } catch(popupErr) {
-      if (popupErr.code === 'auth/popup-blocked' ||
-          popupErr.code === 'auth/popup-closed-by-user' ||
-          popupErr.code === 'auth/cancelled-popup-request') {
+      if (['auth/popup-blocked','auth/popup-closed-by-user','auth/cancelled-popup-request']
+          .includes(popupErr.code)) {
+        toast('Redirigiendo a Google...', 'ok');
         await window._fb.signInWithRedirect(auth, provider);
-      } else {
-        throw popupErr;
-      }
+      } else { throw popupErr; }
     }
   } catch(e) {
-    if (e.code !== 'auth/popup-closed-by-user' &&
-        e.code !== 'auth/cancelled-popup-request') {
-      toast('Error al iniciar sesión: ' + (e.message || e.code), 'err');
-    }
+    if (!['auth/popup-closed-by-user','auth/cancelled-popup-request'].includes(e.code))
+      toast('Error: ' + (e.message || e.code), 'err');
   }
 }
 
 async function logout() {
-  _driveTokenCache  = null;
-  _driveTokenExpiry = 0;
+  _driveTokenCache = null; _driveTokenExpiry = 0;
   try { await window._fb.signOut(auth); } catch(e) {}
 }
 
 async function loginEmail() {
   await _firebaseReady;
-  const email = document.getElementById('login-email')?.value?.trim();
-  const pass  = document.getElementById('login-pass')?.value;
+  const email = $('login-email')?.value?.trim();
+  const pass  = $('login-pass')?.value;
   if (!email || !pass) { toast('Ingresa correo y contraseña','err'); return; }
   try {
     const cred = await window._fb.signInWithEmailAndPassword(auth, email, pass);
@@ -169,9 +168,9 @@ async function loginEmail() {
 
 async function registrarEmail() {
   await _firebaseReady;
-  const nombre = document.getElementById('reg-nombre')?.value?.trim();
-  const email  = document.getElementById('reg-email')?.value?.trim();
-  const pass   = document.getElementById('reg-pass')?.value;
+  const nombre = $('reg-nombre')?.value?.trim();
+  const email  = $('reg-email')?.value?.trim();
+  const pass   = $('reg-pass')?.value;
   if (!nombre) { toast('Ingresa tu nombre completo','err'); return; }
   if (!email)  { toast('Ingresa tu correo','err'); return; }
   if (!pass || pass.length < 6) { toast('La contraseña debe tener al menos 6 caracteres','err'); return; }
@@ -179,9 +178,9 @@ async function registrarEmail() {
     const cred = await window._fb.createUserWithEmailAndPassword(auth, email, pass);
     await window._fb.updateProfile(cred.user, { displayName: nombre });
     await cred.user.reload();
-    usuario = { uid: cred.user.uid, nombre: nombre, email: cred.user.email, foto: cred.user.photoURL };
+    usuario = { uid: cred.user.uid, nombre, email: cred.user.email, foto: cred.user.photoURL };
     actualizarNav();
-    toast('Cuenta creada exitosamente');
+    toast('Cuenta creada exitosamente ✓');
   } catch(e) {
     const msg = e.code === 'auth/email-already-in-use' ? 'Ya existe una cuenta con ese correo'
               : e.code === 'auth/invalid-email'        ? 'Correo no válido'
@@ -192,7 +191,7 @@ async function registrarEmail() {
 }
 
 async function olvidoContrasena() {
-  const email = document.getElementById('login-email')?.value?.trim();
+  const email = $('login-email')?.value?.trim();
   if (!email) { toast('Ingresa primero tu correo en el campo de arriba','err'); return; }
   try {
     await window._fb.sendPasswordResetEmail(auth, email);
@@ -203,10 +202,10 @@ async function olvidoContrasena() {
 }
 
 window.switchTab = function(tab) {
-  document.getElementById('panel-login').style.display    = tab==='login'    ? 'block' : 'none';
-  document.getElementById('panel-registro').style.display = tab==='registro' ? 'block' : 'none';
-  document.getElementById('tab-login').classList.toggle('active',    tab==='login');
-  document.getElementById('tab-registro').classList.toggle('active', tab==='registro');
+  $('panel-login').style.display    = tab === 'login'    ? 'block' : 'none';
+  $('panel-registro').style.display = tab === 'registro' ? 'block' : 'none';
+  $('tab-login').classList.toggle('active',    tab === 'login');
+  $('tab-registro').classList.toggle('active', tab === 'registro');
 };
 
 const esAdmin = () =>
@@ -222,9 +221,8 @@ const hideAll = () => ['vista-login','vista-subir','vista-exito','vista-admin'].
 
 function ir(v) {
   hideAll();
-  const el = $(v);
-  if (!el) return;
-  el.style.display = (v === 'vista-login') ? 'flex' : 'block';
+  const el = $(v); if (!el) return;
+  el.style.display = v === 'vista-login' ? 'flex' : 'block';
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (v==='vista-subir'||v==='vista-exito') $('nb-subir')?.classList.add('active');
   if (v==='vista-admin') $('nb-admin')?.classList.add('active');
@@ -242,25 +240,20 @@ function actualizarNav() {
   if (usuario) {
     const fotoEl = $('nav-foto');
     if (usuario.foto) {
-      fotoEl.src = usuario.foto;
-      fotoEl.style.display = 'block';
-      const initEl = $('nav-iniciales');
-      if (initEl) initEl.style.display = 'none';
+      fotoEl.src = usuario.foto; fotoEl.style.display = 'block';
+      const ie = $('nav-iniciales'); if (ie) ie.style.display = 'none';
     } else {
       fotoEl.style.display = 'none';
-      let initEl = $('nav-iniciales');
-      if (!initEl) {
-        initEl = document.createElement('div');
-        initEl.id = 'nav-iniciales';
-        initEl.style.cssText = 'width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
-        fotoEl.parentNode.insertBefore(initEl, fotoEl.nextSibling);
+      let ie = $('nav-iniciales');
+      if (!ie) {
+        ie = document.createElement('div'); ie.id = 'nav-iniciales';
+        ie.style.cssText = 'width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+        fotoEl.parentNode.insertBefore(ie, fotoEl.nextSibling);
       }
       const nombre = usuario.nombre || usuario.email || '?';
-      const partes = nombre.trim().split(' ');
-      initEl.textContent = partes.length >= 2
-        ? (partes[0][0] + partes[1][0]).toUpperCase()
-        : nombre.slice(0,2).toUpperCase();
-      initEl.style.display = 'flex';
+      const p = nombre.trim().split(' ');
+      ie.textContent = p.length >= 2 ? (p[0][0]+p[1][0]).toUpperCase() : nombre.slice(0,2).toUpperCase();
+      ie.style.display = 'flex';
     }
     $('nav-nombre').textContent = usuario.nombre?.split(' ')[0] || usuario.email;
     show('nav-sesion'); hide('nav-guest');
@@ -272,29 +265,22 @@ function actualizarNav() {
 }
 
 function resetBtn() {
-  const btn = $('btn-enviar');
-  if (!btn) return;
-  btn.disabled = false;
-  btn.innerHTML = `
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+  const btn = $('btn-enviar'); if (!btn) return;
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
     </svg> Registrar Envío`;
+  actualizarBotonEnviar();
 }
 
 /* ══════════════════════════════════
    AREAS
 ══════════════════════════════════ */
 function poblarAreas(selectId, placeholder='— Selecciona tu área —') {
-  const sel = $(selectId);
-  if (!sel) return;
+  const sel = $(selectId); if (!sel) return;
   sel.innerHTML = `<option value="">${placeholder}</option>`;
-  AREAS.forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a; opt.textContent = a;
-    sel.appendChild(opt);
-  });
+  AREAS.forEach(a => { const o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o); });
 }
 
 /* ══════════════════════════════════
@@ -302,53 +288,45 @@ function poblarAreas(selectId, placeholder='— Selecciona tu área —') {
 ══════════════════════════════════ */
 function irSubir() {
   archivoSeleccionado = null;
-  const fi = $('file-input');
-  if (fi) fi.value = '';
+  actaSeleccionada    = null;
+  const fi=$('file-input'); if(fi) fi.value='';
+  const ai=$('acta-input'); if(ai) ai.value='';
   $('dropzone').style.display    = 'flex';
   $('file-preview').style.display = 'none';
+  const ad=$('acta-dropzone'); if(ad) ad.style.display='flex';
+  const ap=$('acta-preview');  if(ap) ap.style.display='none';
   $('progress-wrap').style.display = 'none';
   $('area-select').value = '';
-  const det = $('detalle-envio'); if (det) det.value = '';
-  const bar = $('progress-bar');
-  if (bar) bar.style.width = '0%';
-  const ptxt = $('progress-txt');
-  if (ptxt) ptxt.textContent = '0%';
+  const det=$('detalle-envio'); if(det) det.value='';
+  const bar=$('progress-bar'); if(bar) bar.style.width='0%';
+  const ptxt=$('progress-txt'); if(ptxt) ptxt.textContent='0%';
   resetBtn();
-  const heroNombre = $('hero-nombre');
-  if (heroNombre) heroNombre.textContent = usuario?.nombre || usuario?.email || '';
+  const hn=$('hero-nombre'); if(hn) hn.textContent=usuario?.nombre||usuario?.email||'';
   ir('vista-subir');
   cargarMisEnvios();
 }
 
 /* ══════════════════════════════════
-   MIS ENVÍOS — historial personal
+   MIS ENVÍOS
 ══════════════════════════════════ */
 async function cargarMisEnvios() {
-  const lista = $('mis-envios-lista');
-  if (!lista || !usuario) return;
-  lista.innerHTML = `<div class="mis-envios-vacio"><p style="font-size:12px;color:var(--txt3);">Cargando tus envíos...</p></div>`;
+  const lista=$('mis-envios-lista'); if(!lista||!usuario) return;
+  lista.innerHTML=`<div class="mis-envios-vacio"><p style="font-size:12px;color:var(--txt3);">Cargando tus envíos...</p></div>`;
   try {
-    const { where } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const q = window._fb.query(
-      window._fb.collection(db,'entregas'),
-      where('uid','==',usuario.uid)
-    );
-    const snap = await window._fb.getDocs(q);
-    const docs = snap.docs.map(d=>({id:d.id,...d.data()}))
-      .sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||''));
-    if (docs.length === 0) {
-      lista.innerHTML = `
-        <div class="mis-envios-vacio">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-          <p>No hay envíos registrados todavía.</p>
-        </div>`;
+    const {where}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const q=window._fb.query(window._fb.collection(db,'entregas'),where('uid','==',usuario.uid));
+    const snap=await window._fb.getDocs(q);
+    const docs=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||''));
+    if(!docs.length){
+      lista.innerHTML=`<div class="mis-envios-vacio">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        <p>No hay envíos registrados todavía.</p></div>`;
       return;
     }
-    lista.innerHTML = docs.map(d=>`
+    lista.innerHTML=docs.map(d=>`
       <div class="mis-envio-item${d.archivado?' mei-archivado':''}" id="mei-${d.id}">
-        <div class="mei-ico">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        </div>
+        <div class="mei-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
         <div class="mei-info">
           <div class="mei-nombre">${d.nombreArchivo}</div>
           <div class="mei-meta">
@@ -357,110 +335,203 @@ async function cargarMisEnvios() {
             &nbsp;·&nbsp;${d.tamanoTexto||'—'}
             ${d.archivado
               ? '&nbsp;·&nbsp;<span style="color:var(--txt3);font-size:10px;font-weight:600;">Archivado</span>'
-              : '&nbsp;·&nbsp;<span style="color:var(--blue);font-size:10px;font-weight:500;" title="Para reemplazar este archivo, sube uno nuevo con el mismo nombre">↩ Para reemplazar, sube el mismo nombre</span>'
-            }
+              : '&nbsp;·&nbsp;<span style="color:var(--blue);font-size:10px;font-weight:500;">↩ Para reemplazar, sube el mismo nombre</span>'}
+            ${d.comprobanteURL
+              ? `&nbsp;·&nbsp;<a href="${d.comprobanteURL}" target="_blank" style="color:#16a34a;font-size:10px;font-weight:600;">🧾 Ver comprobante</a>`
+              : ''}
           </div>
         </div>
       </div>`).join('');
   } catch(e) {
-    lista.innerHTML = `<div class="mis-envios-vacio"><p style="color:var(--red);font-size:11px;">Error: ${e.message}</p></div>`;
+    lista.innerHTML=`<div class="mis-envios-vacio"><p style="color:var(--red);font-size:11px;">Error: ${e.message}</p></div>`;
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  initFirebase();
+/* ══════════════════════════════════
+   DOM READY
+══════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', async () => {
+  initFirebase().catch(e => console.error(e));
   poblarAreas('area-select');
   poblarAreas('filtro-area', 'Todas las áreas');
+  await new Promise(r => setTimeout(r, 100));
 
-  $('btn-google').addEventListener('click', login);
-  document.getElementById('btn-login-email')?.addEventListener('click', loginEmail);
-  document.getElementById('btn-registrar')?.addEventListener('click', registrarEmail);
-  document.getElementById('btn-forgot')?.addEventListener('click', olvidoContrasena);
+  /* botones estáticos */
+  $('btn-google')?.addEventListener('click', login);
+  $('btn-login-email')?.addEventListener('click', loginEmail);
+  $('btn-registrar')?.addEventListener('click', registrarEmail);
+  $('btn-forgot')?.addEventListener('click', olvidoContrasena);
   document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', logout));
-  $('nb-subir').addEventListener('click', () => usuario ? irSubir() : ir('vista-login'));
-  $('nb-admin').addEventListener('click', () => { if(esAdmin()){ ir('vista-admin'); cargarAdmin(); } });
-  $('btn-enviar-otro').addEventListener('click', irSubir);
+  $('nb-subir')?.addEventListener('click', () => usuario ? irSubir() : ir('vista-login'));
+  $('nb-admin')?.addEventListener('click', () => { if(esAdmin()){ ir('vista-admin'); cargarAdmin(); } });
+  $('btn-enviar-otro')?.addEventListener('click', irSubir);
+  $('btn-enviar')?.addEventListener('click', enviarArchivo);
+  $('btn-filtrar')?.addEventListener('click', aplicarFiltros);
+  $('btn-limpiar')?.addEventListener('click', limpiarFiltros);
+  $('btn-excel')?.addEventListener('click', () => exportarExcel(docsAdmin, false));
+  $('btn-excel-filtrado')?.addEventListener('click', exportarFiltrado);
 
+  /* dropzone Excel */
   const dz = $('dropzone');
-  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dz-over'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('dz-over'));
-  dz.addEventListener('drop', e => {
-    e.preventDefault(); dz.classList.remove('dz-over');
-    if (e.dataTransfer.files[0]) seleccionar(e.dataTransfer.files[0]);
-  });
-  dz.addEventListener('click', abrirSelectorArchivo);
-  $('file-input').addEventListener('change', () => {
-    if ($('file-input').files[0]) seleccionar($('file-input').files[0]);
-  });
-  $('btn-cambiar').addEventListener('click', () => {
+  if (dz) {
+    dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dz-over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dz-over'));
+    dz.addEventListener('drop',      e => { e.preventDefault(); dz.classList.remove('dz-over'); if(e.dataTransfer.files[0]) seleccionar(e.dataTransfer.files[0]); });
+    dz.addEventListener('click',     abrirSelectorArchivo);
+  }
+  $('file-input')?.addEventListener('change', () => { if($('file-input').files[0]) seleccionar($('file-input').files[0]); });
+
+  /* botón cambiar Excel */
+  $('btn-cambiar')?.addEventListener('click', () => {
     archivoSeleccionado = null;
     $('file-preview').style.display = 'none';
     $('dropzone').style.display = 'flex';
-    const fi = $('file-input'); if (fi) fi.value = '';
+    const fi=$('file-input'); if(fi) fi.value='';
+    actualizarBotonEnviar();
   });
-  $('btn-enviar').addEventListener('click', enviarArchivo);
-  $('btn-filtrar').addEventListener('click', aplicarFiltros);
-  $('btn-limpiar').addEventListener('click', limpiarFiltros);
-  $('btn-excel').addEventListener('click', () => exportarExcel(docsAdmin, false));
-  $('btn-excel-filtrado').addEventListener('click', exportarFiltrado);
 });
 
-/* ── VALIDACIÓN ── */
+/* ══════════════════════════════════
+   SELECTORES DE ARCHIVO
+══════════════════════════════════ */
 function abrirSelectorArchivo() {
-  const input = document.createElement('input');
-  input.type   = 'file';
-  input.accept = '.xlsx,.xls';
-  input.style.display = 'none';
-  input.addEventListener('change', () => {
-    if (input.files[0]) seleccionar(input.files[0]);
-    input.remove();
-  });
-  document.body.appendChild(input);
-  input.click();
+  const i=document.createElement('input'); i.type='file'; i.accept='.xlsx,.xls'; i.style.display='none';
+  i.addEventListener('change', () => { if(i.files[0]) seleccionar(i.files[0]); i.remove(); });
+  document.body.appendChild(i); i.click();
+}
+
+function abrirSelectorActa() {
+  const i=document.createElement('input'); i.type='file'; i.accept='.pdf'; i.style.display='none';
+  i.addEventListener('change', () => { if(i.files[0]) seleccionarActa(i.files[0]); i.remove(); });
+  document.body.appendChild(i); i.click();
+}
+
+function quitarActa() {
+  actaSeleccionada = null;
+  const ad=$('acta-dropzone'); if(ad) ad.style.display='flex';
+  const ap=$('acta-preview');  if(ap) ap.style.display='none';
+  actualizarBotonEnviar();
 }
 
 function seleccionar(f) {
   const ext = f.name.split('.').pop().toLowerCase();
-  if (!['xlsx','xls'].includes(ext)) {
-    toast('Solo se aceptan archivos Excel (.xlsx o .xls)', 'err'); return;
-  }
+  if (!['xlsx','xls'].includes(ext)) { toast('Solo se aceptan archivos Excel (.xlsx o .xls)','err'); return; }
   archivoSeleccionado = f;
   $('fp-nombre').textContent = f.name;
   $('fp-peso').textContent   = formatSize(f.size);
-  const modoEl = $('fp-modo');
-  if (modoEl) modoEl.textContent = '☁️ Google Drive';
+  const m=$('fp-modo'); if(m) m.textContent='☁️ Google Drive';
   $('dropzone').style.display     = 'none';
   $('file-preview').style.display = 'flex';
+  actualizarBotonEnviar();
 }
 
-function formatSize(bytes) {
-  if (bytes >= 1024*1024) return (bytes/(1024*1024)).toFixed(2)+' MB';
-  return (bytes/1024).toFixed(1)+' KB';
+function seleccionarActa(f) {
+  if (!f) return;
+  if (f.name.split('.').pop().toLowerCase() !== 'pdf') { toast('El acta debe ser PDF (.pdf)','err'); return; }
+  actaSeleccionada = f;
+  const an=$('acta-nombre'); if(an) an.textContent=f.name;
+  const ap2=$('acta-peso');  if(ap2) ap2.textContent=formatSize(f.size);
+  const ad=$('acta-dropzone'); if(ad) ad.style.display='none';
+  const ap=$('acta-preview');  if(ap) ap.style.display='flex';
+  actualizarBotonEnviar();
+}
+
+/* ══════════════════════════════════
+   LÓGICA DE PLAZO / ACTA OBLIGATORIA
+   Regla: días 1-10 del mes → acta opcional
+          desde el día 11   → acta obligatoria (envío tardío)
+══════════════════════════════════ */
+function actaEsObligatoriaHoy() {
+  return new Date().getDate() > 10;
+}
+
+function infoPlazoPorFecha() {
+  const ahora = new Date();
+  const dia   = ahora.getDate();
+  const mesPasado = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1);
+  const nombreMesPasado = mesPasado.toLocaleDateString('es-EC',
+    { month:'long', year:'numeric', timeZone:'America/Guayaquil' });
+
+  if (dia <= 10) {
+    const diasRestantes = 10 - dia;
+    return {
+      tardio: false,
+      mesReporte: nombreMesPasado,
+      mensaje: diasRestantes === 0
+        ? `Hoy vence el plazo para el reporte de ${nombreMesPasado}`
+        : `Envío del reporte de ${nombreMesPasado} · te quedan ${diasRestantes} día${diasRestantes!==1?'s':''} sin acta`
+    };
+  } else {
+    const diasRetraso = dia - 10;
+    return {
+      tardio: true,
+      mesReporte: nombreMesPasado,
+      mensaje: `Envío tardío del reporte de ${nombreMesPasado} · ${diasRetraso} día${diasRetraso!==1?'s':''} de retraso — Acta obligatoria`
+    };
+  }
+}
+
+function actualizarBotonEnviar() {
+  const btn = $('btn-enviar'); if (!btn) return;
+  const actaObligatoria = actaEsObligatoriaHoy();
+  const info = infoPlazoPorFecha();
+  const listo = !!(archivoSeleccionado && (actaSeleccionada || !actaObligatoria));
+  btn.disabled = !listo;
+  btn.style.opacity = listo ? '1' : '0.45';
+  btn.style.cursor  = listo ? 'pointer' : 'not-allowed';
+
+  /* badge de acta */
+  const actaLabel = $('acta-label-oblig');
+  if (actaLabel) {
+    if (actaObligatoria) {
+      actaLabel.textContent = 'OBLIGATORIO — Envío tardío';
+      actaLabel.style.background = '#ef4444';
+    } else {
+      actaLabel.textContent = 'OPCIONAL hasta el día 10';
+      actaLabel.style.background = '#d97706';
+    }
+  }
+
+  /* aviso de plazo */
+  const plazoEl = $('acta-plazo-info');
+  if (plazoEl) plazoEl.textContent = info.mensaje;
+
+  /* hint bajo el botón */
+  const hint = $('enviar-hint');
+  if (hint) {
+    if (!archivoSeleccionado && actaObligatoria)
+      hint.textContent = 'Sube el Excel y el Acta PDF (retraso — acta obligatoria)';
+    else if (!archivoSeleccionado)
+      hint.textContent = 'Sube el Excel para habilitar el envío';
+    else if (!actaSeleccionada && actaObligatoria)
+      hint.textContent = '⚠️ El Acta PDF es obligatoria — envío tardío (pasó el día 10)';
+    else
+      hint.textContent = '';
+  }
+}
+
+function formatSize(b) {
+  return b >= 1024*1024 ? (b/(1024*1024)).toFixed(2)+' MB' : (b/1024).toFixed(1)+' KB';
 }
 
 function setProgreso(pct, label) {
   $('progress-bar').style.width = pct+'%';
   $('progress-txt').textContent = pct+'%';
-  const lbl = $('progress-label-txt');
-  if (lbl) lbl.textContent = label||'';
+  const l=$('progress-label-txt'); if(l) l.textContent=label||'';
 }
 
 /* ══════════════════════════════════
-   GOOGLE DRIVE UPLOAD
+   GOOGLE DRIVE — TOKEN
 ══════════════════════════════════ */
-let _driveTokenCache = null;
-let _driveTokenExpiry = 0;
-
-function obtenerTokenDrive(forzarNuevo = false) {
-  if (!forzarNuevo && _driveTokenCache && Date.now() < _driveTokenExpiry) {
+function obtenerTokenDrive(forzarNuevo=false) {
+  if (!forzarNuevo && _driveTokenCache && Date.now() < _driveTokenExpiry)
     return Promise.resolve(_driveTokenCache);
-  }
   return new Promise((resolve, reject) => {
     const cargarGIS = () => new Promise((res, rej) => {
       if (window.google?.accounts?.oauth2) { res(); return; }
       const s = document.createElement('script');
       s.src = 'https://accounts.google.com/gsi/client';
-      s.onload = res; s.onerror = rej;
+      s.onload = res; s.onerror = () => rej(new Error('No se pudo cargar Google Identity Services'));
       document.head.appendChild(s);
     });
     cargarGIS().then(() => {
@@ -468,166 +539,151 @@ function obtenerTokenDrive(forzarNuevo = false) {
         client_id: GDRIVE_CONFIG.clientId,
         scope: GDRIVE_CONFIG.scope,
         callback: (resp) => {
-          if (resp.error) {
-            reject(new Error('Error de autorización: ' + resp.error));
-          } else {
-            _driveTokenCache  = resp.access_token;
-            _driveTokenExpiry = Date.now() + 45 * 60 * 1000;
-            resolve(resp.access_token);
-          }
+          if (resp.error) { reject(new Error('Error de autorización: ' + resp.error)); return; }
+          _driveTokenCache  = resp.access_token;
+          _driveTokenExpiry = Date.now() + 45 * 60 * 1000;
+          toast('✓ Conectado a Google Drive');
+          resolve(resp.access_token);
         }
       });
       client.requestAccessToken();
-    }).catch(() => reject(new Error('No se pudo cargar Google Identity Services.')));
+    }).catch(e => reject(e));
   });
 }
 
+/* ══════════════════════════════════
+   GOOGLE DRIVE — CARPETA POR ÁREA
+══════════════════════════════════ */
 async function obtenerOCrearSubcarpeta(token, nombreArea) {
-  console.log('🔍 Buscando subcarpeta:', nombreArea, '— parent ID:', GDRIVE_CARPETA_GENERAL);
-  const query = encodeURIComponent(
+  const q = encodeURIComponent(
     `mimeType='application/vnd.google-apps.folder' and name='${nombreArea}' and '${GDRIVE_CARPETA_GENERAL}' in parents and trashed=false`
   );
-  const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`,
+  const sr = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`,
     { headers: { 'Authorization': 'Bearer ' + token } }
   );
-  console.log('📂 Búsqueda status:', res.status);
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error('❌ Error buscando subcarpeta:', res.status, errText);
-    throw new Error('Error buscando subcarpeta: ' + res.status + ' — ' + errText);
-  }
-  const data = await res.json();
-  console.log('📂 Resultado búsqueda:', data);
-  if (data.files && data.files.length > 0) {
-    console.log('✅ Subcarpeta existente:', data.files[0].id);
-    return data.files[0].id;
-  }
+  if (!sr.ok) throw new Error('Error buscando carpeta: HTTP ' + sr.status);
+  const sd = await sr.json();
+  if (sd.files?.length > 0) return sd.files[0].id;
 
-  console.log('➕ Creando subcarpeta:', nombreArea, 'en parent:', GDRIVE_CARPETA_GENERAL);
-  const crear = await fetch('https://www.googleapis.com/drive/v3/files', {
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + token,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      name:     nombreArea,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents:  [GDRIVE_CARPETA_GENERAL]
-    })
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: nombreArea, mimeType: 'application/vnd.google-apps.folder', parents: [GDRIVE_CARPETA_GENERAL] })
   });
-  console.log('📁 Creación subcarpeta status:', crear.status);
-  if (!crear.ok) {
-    const errText = await crear.text();
-    console.error('❌ Error creando subcarpeta:', crear.status, errText);
-    throw new Error('Error creando subcarpeta: ' + crear.status + ' — ' + errText);
-  }
-  const carpeta = await crear.json();
-  console.log('✅ Subcarpeta creada:', carpeta);
+  if (!cr.ok) { const e=await cr.json(); throw new Error(e.error?.message||cr.status); }
+  const carpeta = await cr.json();
+  await fetch(`https://www.googleapis.com/drive/v3/files/${carpeta.id}/permissions`, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone' })
+  });
+  toast(`📁 Carpeta "${nombreArea}" creada ✓`);
+  return carpeta.id;
+}
+
+/* ══════════════════════════════════
+   GOOGLE DRIVE — SUBIR ARCHIVO (Excel o Acta)
+══════════════════════════════════ */
+async function subirAGoogleDrive(archivo, onProgress) {
+  const token = await obtenerTokenDrive();
+  const area  = $('area-select')?.value;
+  if (!area) throw new Error('No se seleccionó área');
+  const idSubcarpeta = await obtenerOCrearSubcarpeta(token, area);
+  onProgress(40);
+
+  const fecha       = new Date().toISOString().slice(0,10);
+  const nombreFinal = `${fecha}_${archivo.name}`;
+
+  return new Promise((resolve, reject) => {
+    const metadata = {
+      name:     nombreFinal,
+      mimeType: archivo.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      parents:  [idSubcarpeta]
+    };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', archivo);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    xhr.upload.onprogress = e => { if(e.lengthComputable) onProgress(Math.round(40 + (e.loaded/e.total)*50)); };
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const resp = JSON.parse(xhr.responseText);
+        fetch(`https://www.googleapis.com/drive/v3/files/${resp.id}/permissions`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'reader', type: 'anyone' })
+        }).finally(() => resolve(`https://drive.google.com/file/d/${resp.id}/view`));
+      } else {
+        reject(new Error('HTTP ' + xhr.status + ': ' + xhr.responseText));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Error de red'));
+    xhr.send(form);
+  });
+}
+
+/* ══════════════════════════════════
+   GOOGLE DRIVE — SUBIR COMPROBANTE PDF
+   (carpeta NOTIFICACIONES_USUARIOS)
+══════════════════════════════════ */
+async function subirComprobantePDFaDrive(dataUrl, registro) {
   try {
-    await fetch(`https://www.googleapis.com/drive/v3/files/${carpeta.id}/permissions`, {
+    const token    = await obtenerTokenDrive();
+    const base64   = dataUrl.split(',')[1];
+    const byteChars = atob(base64);
+    const bytes    = new Uint8Array(byteChars.length);
+    for (let i=0; i<byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+    const blob     = new Blob([bytes], { type: 'application/pdf' });
+
+    const fecha    = new Date().toISOString().slice(0,10);
+    const nombre   = `COMPROBANTE_${registro}_${fecha}.pdf`;
+    const metadata = { name: nombre, mimeType: 'application/pdf', parents: [GDRIVE_CARPETA_COMPROBANTES] };
+
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', blob, nombre);
+
+    const res = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+      { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: form }
+    );
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: 'reader', type: 'anyone' })
     });
-    toast(`📁 Carpeta "${nombreArea}" creada ✓`);
+
+    const link = `https://drive.google.com/file/d/${data.id}/view`;
+    console.log('✓ Comprobante PDF subido a Drive:', link);
+    return link;
   } catch(e) {
-    console.warn('No se pudo asignar permiso a la carpeta:', e.message);
-  }
-  return carpeta.id;
-}
-
-async function subirAGoogleDrive(archivo, onProgress) {
-  console.log('\n📤 SUBIENDO ARCHIVO A GOOGLE DRIVE\n');
-  try {
-    const token = await obtenerTokenDrive();
-    console.log('✓ Token obtenido');
-
-    const area = document.getElementById('area-select')?.value;
-    if (!area) throw new Error('No se seleccionó área');
-    console.log('✓ Área:', area);
-
-    onProgress(15);
-
-    // CREAR/BUSCAR CARPETA — si falla, lanza error y detiene todo
-    const idSubcarpeta = await obtenerOCrearSubcarpeta(token, area);
-    console.log('✓ ID subcarpeta:', idSubcarpeta);
-
-    onProgress(30);
-
-    const fecha       = new Date().toISOString().slice(0, 10);
-    const nombreFinal = `${fecha}_${archivo.name}`;
-    console.log('✓ Nombre final:', nombreFinal);
-
-    return new Promise((resolve, reject) => {
-      const metadata = {
-        name:     nombreFinal,
-        mimeType: archivo.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        parents:  [idSubcarpeta]
-      };
-      const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-      form.append('file', archivo);
-
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink');
-      xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const p = Math.round(30 + (e.loaded / e.total) * 60);
-          onProgress(p);
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status === 200) {
-          const resp = JSON.parse(xhr.responseText);
-          console.log('✓ Archivo subido:', resp.id);
-          // Dar permisos de lectura al archivo
-          fetch(`https://www.googleapis.com/drive/v3/files/${resp.id}/permissions`, {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ role: 'reader', type: 'anyone' })
-          }).then(() => {
-            resolve({
-              fileUrl:   `https://drive.google.com/file/d/${resp.id}/view`,
-              folderUrl: `https://drive.google.com/drive/folders/${idSubcarpeta}`,
-              folderId:  idSubcarpeta,
-              fileId:    resp.id
-            });
-          }).catch(() => {
-            resolve({
-              fileUrl:   resp.webViewLink || `https://drive.google.com/file/d/${resp.id}/view`,
-              folderUrl: `https://drive.google.com/drive/folders/${idSubcarpeta}`,
-              folderId:  idSubcarpeta,
-              fileId:    resp.id
-            });
-          });
-        } else {
-          const msg = (() => { try { return JSON.parse(xhr.responseText)?.error?.message; } catch(e) { return xhr.responseText; } })();
-          console.error('❌ Error subiendo archivo:', xhr.status, msg);
-          reject(new Error('Error subiendo a Google Drive: ' + (msg || xhr.status)));
-        }
-      };
-      xhr.onerror = () => reject(new Error('Error de red al subir a Google Drive'));
-      xhr.send(form);
-    });
-
-  } catch(e) {
-    console.error('\n❌ ERROR CRÍTICO en subirAGoogleDrive:\n', e.message);
-    throw e;
+    console.warn('⚠️ No se pudo subir comprobante a Drive:', e.message);
+    return null;
   }
 }
 
 /* ══════════════════════════════════
-   ENVIAR ARCHIVO
+   ENVIAR ARCHIVO — FLUJO PRINCIPAL
 ══════════════════════════════════ */
 async function enviarArchivo() {
-  if (!archivoSeleccionado){ toast('Selecciona un archivo primero','err'); return; }
-  const areaVal = $('area-select').value;
-  if (!areaVal){ toast('Debes seleccionar tu área antes de enviar','err'); return; }
+  if (!archivoSeleccionado) { toast('Selecciona un archivo Excel primero','err'); return; }
+
+  const actaObligatoria = actaEsObligatoriaHoy();
+  if (actaObligatoria && !actaSeleccionada) {
+    const _info = infoPlazoPorFecha();
+    toast(`⚠️ Envío tardío del reporte de ${_info.mesReporte} — el Acta PDF es obligatoria`, 'err');
+    return;
+  }
+
+  const areaVal    = $('area-select').value;
+  if (!areaVal) { toast('Debes seleccionar tu área','err'); return; }
   const detalleVal = ($('detalle-envio')?.value||'').trim();
 
   const btn = $('btn-enviar');
@@ -641,17 +697,49 @@ async function enviarArchivo() {
     const fechaTexto = ahora.toLocaleDateString('es-EC',{timeZone:'America/Guayaquil',day:'2-digit',month:'long',year:'numeric'});
     const horaTexto  = ahora.toLocaleTimeString('es-EC',{timeZone:'America/Guayaquil',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
-    setProgreso(20, 'Conectando con Google Drive...');
-    const driveResult = await subirAGoogleDrive(archivoSeleccionado, (p) => {
-      setProgreso(20 + Math.round(p * 0.6), `Subiendo a Drive... ${p}%`);
+    /* 1. Subir Excel */
+    setProgreso(10, 'Subiendo Excel a Google Drive...');
+    const storageURL = await subirAGoogleDrive(archivoSeleccionado,
+      p => setProgreso(10 + Math.round(p*0.25), `Subiendo Excel... ${Math.round(p)}%`));
+
+    /* 2. Subir Acta PDF (si existe) */
+    let actaURL = null;
+    if (actaSeleccionada) {
+      setProgreso(40, 'Subiendo Acta PDF...');
+      actaURL = await subirAGoogleDrive(actaSeleccionada,
+        p => setProgreso(40 + Math.round(p*0.15), `Subiendo Acta... ${Math.round(p)}%`));
+    }
+
+    const numRegistro = 'SISCTE-' + Date.now().toString(36).toUpperCase();
+
+    /* 3. Generar comprobante PDF */
+    setProgreso(60, 'Generando comprobante PDF...');
+    const comprobanteDataUrl = await generarComprobantePDFComoURL({
+      nombre:    usuario.nombre,
+      email:     usuario.email,
+      area:      areaVal,
+      archivo:   archivoSeleccionado.name,
+      acta:      actaSeleccionada?.name || '—',
+      tamano:    formatSize(archivoSeleccionado.size),
+      fecha:     fechaTexto,
+      hora:      horaTexto,
+      registro:  numRegistro,
+      driveLink: storageURL,
+      actaLink:  actaURL || ''
     });
 
-    const storageURL  = driveResult.fileUrl;
-    const folderURL   = driveResult.folderUrl;
+    /* 4. Subir comprobante a Drive (NOTIFICACIONES_USUARIOS) */
+    setProgreso(72, 'Subiendo comprobante PDF...');
+    let comprobanteURL = null;
+    if (comprobanteDataUrl) {
+      comprobanteURL = await subirComprobantePDFaDrive(comprobanteDataUrl, numRegistro);
+    }
 
-    setProgreso(80,'Registrando en Firestore...');
+    /* 5. Registrar en Firestore (con deduplicación) */
+    setProgreso(84, 'Registrando en Firestore...');
+    const { where, deleteDoc, doc: docRef } =
+      await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
 
-    const { where, deleteDoc, doc: docRef } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
     const qDup = window._fb.query(
       window._fb.collection(db,'entregas'),
       where('uid',          '==', usuario.uid),
@@ -659,78 +747,66 @@ async function enviarArchivo() {
       where('area',         '==', areaVal)
     );
     const snapDup = await window._fb.getDocs(qDup);
-    for (const docSnap of snapDup.docs) {
-      await deleteDoc(docRef(db,'entregas', docSnap.id));
+    for (const ds of snapDup.docs) {
+      await deleteDoc(docRef(db,'entregas',ds.id));
     }
     const fueReemplazo = snapDup.docs.length > 0;
 
-    await window._fb.addDoc(window._fb.collection(db,'entregas'),{
+    let driveFileId = null;
+    const m = storageURL?.match(/\/d\/([a-zA-Z0-9-_]+)\//);
+    if (m) driveFileId = m[1];
+
+    await window._fb.addDoc(window._fb.collection(db,'entregas'), {
       uid:           usuario.uid,
       nombre:        usuario.nombre,
       email:         usuario.email,
       foto:          usuario.foto,
       area:          areaVal,
       nombreArchivo: archivoSeleccionado.name,
+      nombreActa:    actaSeleccionada?.name || null,
       tamanoBytes:   archivoSeleccionado.size,
       tamanoTexto:   formatSize(archivoSeleccionado.size),
       metodo:        'google_drive',
       storageURL,
-      folderURL,
+      actaURL,
+      comprobanteURL,
+      driveFileId,
       detalle:       detalleVal,
+      registro:      numRegistro,
       fechaTexto,
       horaTexto,
       timestamp:     ahora.toISOString()
     });
 
+    /* 6. Correos */
+    setProgreso(93, 'Enviando correos de notificación...');
+    try {
+      await enviarCorreosNotificacion({
+        nombre:         usuario.nombre,
+        email:          usuario.email,
+        area:           areaVal,
+        archivo:        archivoSeleccionado.name,
+        acta:           actaSeleccionada?.name || '—',
+        tamano:         formatSize(archivoSeleccionado.size),
+        fecha:          fechaTexto,
+        hora:           horaTexto,
+        registro:       numRegistro,
+        driveLink:      storageURL,
+        actaLink:       actaURL || '',
+        comprobanteUrl: comprobanteURL || ''
+      });
+    } catch(mailErr) {
+      console.error('❌ Error enviando correos:', mailErr);
+    }
+
     setProgreso(100, fueReemplazo ? '¡Archivo reemplazado!' : '¡Completado!');
     mostrarExito(areaVal, fechaTexto, horaTexto);
-
-    const numRegistro = 'SISCTE-' + Date.now().toString(36).toUpperCase();
-
-    generarComprobantePDF({
-      nombre:   usuario.nombre,
-      email:    usuario.email,
-      area:     areaVal,
-      archivo:  archivoSeleccionado.name,
-      tamano:   formatSize(archivoSeleccionado.size),
-      fecha:    fechaTexto,
-      hora:     horaTexto,
-      registro: numRegistro
-    });
-
-    // Correo al usuario (confirmación)
-    enviarCorreoNotificacion({
-      nombre:   usuario.nombre,
-      email:    usuario.email,
-      area:     areaVal,
-      archivo:  archivoSeleccionado.name,
-      tamano:   formatSize(archivoSeleccionado.size),
-      fecha:    fechaTexto,
-      hora:     horaTexto,
-      registro: numRegistro
-    });
-
-    // Correo al admin con alerta y link a la carpeta
-    enviarCorreoAdmin({
-      nombre:    usuario.nombre,
-      email:     usuario.email,
-      area:      areaVal,
-      archivo:   archivoSeleccionado.name,
-      tamano:    formatSize(archivoSeleccionado.size),
-      fecha:     fechaTexto,
-      hora:      horaTexto,
-      registro:  numRegistro,
-      storageURL,
-      folderURL
-    });
-
     setTimeout(() => ir('vista-exito'), 500);
 
   } catch(err) {
     console.error(err);
-    const msg = err?.message || (typeof err === 'string' ? err : 'Error desconocido al subir');
-    toast('Error al subir: ' + msg, 'err');
-    $('progress-wrap').style.display='none';
+    toast('Error al subir: ' + (err?.message || 'Error desconocido'), 'err');
+    $('progress-wrap').style.display = 'none';
     resetBtn();
   }
 }
@@ -746,110 +822,105 @@ function mostrarExito(area, fecha, hora) {
 }
 
 /* ══════════════════════════════════
-   COMPROBANTE PDF
+   GENERAR COMPROBANTE PDF (retorna dataURL)
 ══════════════════════════════════ */
-async function generarComprobantePDF(d) {
+async function generarComprobantePDFComoURL(d) {
   try {
     if (!window.jspdf) {
-      await new Promise((res, rej) => {
+      await new Promise((res,rej) => {
         const s = document.createElement('script');
         s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
+        s.onload=res; s.onerror=rej; document.head.appendChild(s);
       });
     }
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const doc = new jsPDF({ unit:'mm', format:'a4' });
     const W = 210;
 
-    doc.setFillColor(37, 99, 235);
-    doc.rect(0, 0, W, 42, 'F');
-    doc.setFillColor(255, 255, 255);
-    doc.roundedRect(14, 9, 24, 24, 5, 5, 'F');
-    doc.setTextColor(37, 99, 235);
-    doc.setFontSize(15);
-    doc.setFont('helvetica', 'bold');
-    doc.text('S', 22, 25);
-    doc.setFillColor(29, 78, 216);
-    doc.rect(14, 30, 24, 3, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('SISCTE - Comprobante de Envio', 44, 20);
+    doc.setFillColor(37,99,235);
+    doc.rect(0,0,W,50,'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(20); doc.setFont('helvetica','bold');
+    doc.text('SISCTE', W/2, 22, { align:'center' });
+    doc.setFontSize(11); doc.setFont('helvetica','normal');
+    doc.text('Portal de Gestión de Envíos · Personal CTE', W/2, 30, { align:'center' });
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Sistema de Gestion de Documentos Excel', 44, 28);
-    doc.text('Este documento certifica el registro exitoso de tu archivo.', 44, 35);
-    doc.setFillColor(22, 163, 74);
-    doc.roundedRect(14, 50, 52, 11, 3, 3, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('REGISTRADO', 19, 57.5);
-    doc.setTextColor(107, 114, 128);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('No. de Registro: ' + d.registro, 70, 57);
+    doc.text('Confirmación de entrega registrada exitosamente', W/2, 38, { align:'center' });
+
+    doc.setFillColor(22,163,74);
+    doc.circle(W/2, 62, 8, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(14); doc.setFont('helvetica','bold');
+    doc.text('✓', W/2, 66, { align:'center' });
+
+    doc.setTextColor(17,24,39);
+    doc.setFontSize(16); doc.setFont('helvetica','bold');
+    doc.text('¡Archivo registrado exitosamente!', W/2, 78, { align:'center' });
+    doc.setFontSize(10); doc.setFont('helvetica','normal');
+    doc.setTextColor(100,116,139);
+    doc.text('Tu entrega fue guardada correctamente en el sistema SISCTE.', W/2, 85, { align:'center' });
 
     const campos = [
-      ['Enviado por',  d.nombre],
-      ['Correo',       d.email],
-      ['Area',         d.area],
-      ['Archivo',      d.archivo],
-      ['Tamano',       d.tamano],
-      ['Fecha',        d.fecha],
-      ['Hora',         d.hora],
-      ['Almacenamiento', 'Google Drive'],
+      ['ENVIADO POR', d.nombre],
+      ['CORREO',      d.email],
+      ['ÁREA',        d.area],
+      ['ARCHIVO',     d.archivo],
+      ['ACTA PDF',    d.acta||'—'],
+      ['TAMAÑO',      d.tamano],
+      ['FECHA',       d.fecha],
+      ['HORA',        d.hora],
     ];
-
-    let y = 72;
-    campos.forEach(([lbl, val], i) => {
-      if (i % 2 === 0) {
-        doc.setFillColor(243, 244, 246);
-        doc.rect(14, y - 5, W - 28, 10, 'F');
-      }
-      doc.setTextColor(107, 114, 128);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.text(lbl.toUpperCase(), 18, y);
-      doc.setTextColor(17, 24, 39);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      const valStr = String(val || '-');
-      doc.text(valStr.length > 60 ? valStr.substring(0,57)+'...' : valStr, 70, y);
-      y += 12;
+    let y = 95;
+    campos.forEach(([lbl,val],i) => {
+      doc.setFillColor(i%2===0?248:255, i%2===0?250:255, i%2===0?252:255);
+      doc.rect(14, y-5, W-28, 12, 'F');
+      doc.setDrawColor(226,232,240); doc.setLineWidth(0.3);
+      doc.rect(14, y-5, W-28, 12, 'S');
+      doc.setTextColor(148,163,184); doc.setFontSize(7); doc.setFont('helvetica','bold');
+      doc.text(lbl, 18, y);
+      doc.setTextColor(30,41,59); doc.setFontSize(10); doc.setFont('helvetica','normal');
+      const v = String(val||'—');
+      doc.text(v.length>55 ? v.substring(0,52)+'...' : v, 70, y);
+      y += 13;
     });
 
-    doc.setDrawColor(229, 231, 235);
-    doc.setLineWidth(0.5);
-    doc.line(14, y + 2, W - 14, y + 2);
-    y += 10;
-    doc.setFillColor(239, 246, 255);
-    doc.roundedRect(14, y, W - 28, 18, 3, 3, 'F');
-    doc.setTextColor(37, 99, 235);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('INFORMACION', 18, y + 7);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(30, 64, 175);
-    doc.text('Guarda este comprobante como respaldo de tu entrega. El archivo fue', 18, y + 12);
-    doc.text('almacenado en Google Drive y el registro queda permanente en el sistema.', 18, y + 16);
-    doc.setFillColor(37, 99, 235);
-    doc.rect(0, 280, W, 17, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Sistema SISCTE - Generado el ' + d.fecha + ' a las ' + d.hora, 14, 291);
-    doc.text('siscte1-sys.github.io/SIS-CTE', W - 14, 291, { align: 'right' });
-    doc.save('Comprobante_SISCTE_' + d.registro + '.pdf');
-    toast('Comprobante PDF descargado');
+    y += 2;
+    doc.setFillColor(241,245,249);
+    doc.roundedRect(14, y, W-28, 14, 3, 3, 'F');
+    doc.setDrawColor(203,213,225); doc.setLineWidth(0.3);
+    doc.roundedRect(14, y, W-28, 14, 3, 3, 'S');
+    doc.setTextColor(148,163,184); doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.text('N° DE REGISTRO', 18, y+5);
+    doc.setTextColor(26,58,107); doc.setFontSize(12); doc.setFont('helvetica','bold');
+    doc.text(d.registro, 70, y+9);
+
+    y += 22;
+    doc.setFillColor(255,251,235);
+    doc.roundedRect(14, y, W-28, 16, 3, 3, 'F');
+    doc.setDrawColor(245,158,11); doc.setLineWidth(0.8);
+    doc.line(14, y, 14, y+16);
+    doc.setTextColor(120,53,15); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('Guarda este comprobante como respaldo de tu entrega en el sistema SISCTE.', 20, y+6);
+    doc.setFont('helvetica','normal');
+    doc.text('Tu archivo fue almacenado en Google Drive y el registro queda permanente.', 20, y+12);
+
+    doc.setFillColor(37,99,235);
+    doc.rect(0, 275, W, 22, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.text('Sistema SISCTE — Generado el '+d.fecha+' a las '+d.hora, 14, 284);
+    doc.text('siscte1-sys.github.io/SIS-CTE', W-14, 284, { align:'right' });
+    doc.setFontSize(7); doc.setTextColor(179,207,255);
+    doc.text('Este documento es un comprobante automático de tu entrega.', W/2, 290, { align:'center' });
+
+    return doc.output('datauristring');
   } catch(e) {
     console.warn('PDF error:', e.message);
+    return null;
   }
 }
 
 /* ══════════════════════════════════
-   EMAILJS — Correo al usuario
+   EMAILJS — INIT
 ══════════════════════════════════ */
 async function cargarEmailJS() {
   if (!window.emailjs) {
@@ -863,51 +934,85 @@ async function cargarEmailJS() {
   }
 }
 
-async function enviarCorreoNotificacion(datos) {
+/* ══════════════════════════════════
+   EMAILJS — Correo al USUARIO
+══════════════════════════════════ */
+async function enviarCorreoUsuario(datos) {
   try {
     await cargarEmailJS();
-    await emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, {
-      to_email: datos.email,
-      to_name:  datos.nombre,
-      area:     datos.area,
-      archivo:  datos.archivo,
-      tamano:   datos.tamano,
-      fecha:    datos.fecha,
-      hora:     datos.hora,
-      registro: datos.registro
-    });
+    const result = await emailjs.send(
+      EMAILJS_CONFIG.serviceId,
+      EMAILJS_CONFIG.templateId,
+      {
+        to_email:        datos.email,
+        to_name:         datos.nombre,
+        area:            datos.area,
+        archivo:         datos.archivo,
+        acta:            datos.acta||'—',
+        tamano:          datos.tamano,
+        fecha:           datos.fecha,
+        hora:            datos.hora,
+        registro:        datos.registro,
+        drive_link:      datos.driveLink||'',
+        acta_link:       datos.actaLink||'',
+        comprobante_url: datos.comprobanteUrl||''
+      }
+    );
+    console.log('✓ Correo usuario enviado — status:', result.status);
     toast('Correo de confirmación enviado ✓');
   } catch(e) {
-    console.warn('EmailJS usuario:', e.message||e);
+    console.error('❌ EmailJS usuario falló:', e.status||'', e.text||e.message||e);
+    throw e;
   }
 }
 
 /* ══════════════════════════════════
-   EMAILJS — Alerta al admin
-   ─ Usa service_olg4mtm (Gmail sis.cte1)
-   ─ Usa template_kxdf3rr (template admin)
+   EMAILJS — Alerta al ADMIN
 ══════════════════════════════════ */
 async function enviarCorreoAdmin(datos) {
   try {
     await cargarEmailJS();
-    await emailjs.send(EMAILJS_ADMIN_SERVICE, EMAILJS_ADMIN_TEMPLATE, {
-      to_email:       ADMIN_EMAILS[0],
-      to_name:        'Administrador SISCTE',
-      usuario_nombre: datos.nombre,
-      usuario_email:  datos.email,
-      area:           datos.area,
-      archivo:        datos.archivo,
-      tamano:         datos.tamano,
-      fecha:          datos.fecha,
-      hora:           datos.hora,
-      registro:       datos.registro,
-      link_archivo:   datos.storageURL,
-      link_carpeta:   datos.folderURL
-    });
-    console.log('✓ Alerta enviada al admin');
+    const result = await emailjs.send(
+      EMAILJS_ADMIN_SERVICE,
+      EMAILJS_ADMIN_TEMPLATE,
+      {
+        to_email:        ADMIN_EMAILS[0],
+        to_name:         'Administrador SISCTE',
+        usuario_nombre:  datos.nombre,
+        usuario_email:   datos.email,
+        area:            datos.area,
+        archivo:         datos.archivo,
+        acta:            datos.acta||'—',
+        tamano:          datos.tamano,
+        fecha:           datos.fecha,
+        hora:            datos.hora,
+        registro:        datos.registro,
+        link_archivo:    datos.driveLink||'',
+        link_acta:       datos.actaLink||'',
+        link_carpeta:    `https://drive.google.com/drive/folders/${GDRIVE_CARPETA_GENERAL}`,
+        comprobante_url: datos.comprobanteUrl||''
+      }
+    );
+    console.log('✓ Alerta admin enviada — status:', result.status);
   } catch(e) {
-    // No mostrar error al usuario si falla el correo al admin
-    console.warn('EmailJS admin:', e.message||e);
+    console.error('❌ EmailJS admin falló:', e.status||'', e.text||e.message||e);
+    throw e;
+  }
+}
+
+/* ══════════════════════════════════
+   EMAILJS — ORQUESTADOR
+══════════════════════════════════ */
+async function enviarCorreosNotificacion(datos) {
+  const resultados = await Promise.allSettled([
+    enviarCorreoAdmin(datos),
+    enviarCorreoUsuario(datos)
+  ]);
+  if (resultados[0].status === 'rejected')
+    console.error('❌ Correo ADMIN no enviado:', resultados[0].reason);
+  if (resultados[1].status === 'rejected') {
+    console.error('❌ Correo USUARIO no enviado:', resultados[1].reason);
+    toast('⚠️ No se pudo enviar el correo de confirmación', 'err');
   }
 }
 
@@ -915,7 +1020,7 @@ async function enviarCorreoAdmin(datos) {
    PANEL ADMIN
 ══════════════════════════════════ */
 async function cargarAdmin() {
-  $('tabla-body').innerHTML     = `<tr><td colspan="7" class="td-vacio">Cargando...</td></tr>`;
+  $('tabla-body').innerHTML     = `<tr><td colspan="9" class="td-vacio">Cargando...</td></tr>`;
   $('admin-personas').innerHTML = `<p class="cargando-txt">Cargando...</p>`;
   try {
     const q    = window._fb.query(window._fb.collection(db,'entregas'), window._fb.orderBy('timestamp','desc'));
@@ -940,46 +1045,44 @@ function renderAdmin(docs) {
     porPersona[d.email].cant++;
     if(d.area) porPersona[d.email].areas.add(d.area);
   });
-  $('admin-personas').innerHTML = Object.values(porPersona)
-    .sort((a,b)=>b.cant-a.cant)
-    .map(p=>`
-      <div class="persona-row">
-        <img class="persona-foto" src="${p.foto||avatar(p.nombre)}" alt="" onerror="this.src='${avatar(p.nombre)}'">
-        <div class="persona-info">
-          <div class="persona-nombre">${p.nombre||'—'}</div>
-          <div class="persona-email">${p.email}</div>
-          <div class="persona-ultima">Área(s): ${[...p.areas].join(', ')||'—'} · Último: ${p.fechaTexto} · ${p.horaTexto}</div>
-        </div>
-        <span class="persona-badge">${p.cant} archivo${p.cant>1?'s':''}</span>
-      </div>`).join('') || '<p class="cargando-txt">Sin entregas</p>';
 
-  $('tabla-body').innerHTML = docs.length===0
-    ? `<tr><td colspan="9" class="td-vacio">No hay registros para los filtros aplicados</td></tr>`
-    : docs.map((d,i)=>`
-        <tr class="${d.archivado?'tr-archivado':''}">
-          <td class="td-n">${i+1}</td>
-          <td><div class="td-user">
-            <img class="td-foto" src="${d.foto||avatar(d.nombre)}" alt="" onerror="this.src='${avatar(d.nombre)}'">
-            <div><div class="td-nombre">${d.nombre||'—'}</div><div class="td-email">${d.email}</div></div>
-          </div></td>
-          <td><span class="badge-area">${d.area||'—'}</span></td>
-          <td class="td-arch">${renderDescarga(d)}</td>
-          <td class="td-detalle" title="${d.detalle||'—'}">${d.detalle ? (d.detalle.length>40 ? d.detalle.slice(0,40)+'…' : d.detalle) : '<span style="color:#9ca3af">—</span>'}</td>
-          <td class="td-peso">${d.tamanoTexto||'—'}</td>
-          <td class="td-fecha">${d.fechaTexto}</td>
-          <td class="td-hora">${d.horaTexto}</td>
-          <td>${d.archivado
-            ? `<span class="badge-archivado">Archivado</span>`
-            : `<span class="badge-activo">Activo</span>`}</td>
-        </tr>`).join('');
+  $('admin-personas').innerHTML = Object.values(porPersona).sort((a,b)=>b.cant-a.cant).map(p=>`
+    <div class="persona-row">
+      <img class="persona-foto" src="${p.foto||avatar(p.nombre)}" alt="" onerror="this.src='${avatar(p.nombre)}'">
+      <div class="persona-info">
+        <div class="persona-nombre">${p.nombre||'—'}</div>
+        <div class="persona-email">${p.email}</div>
+        <div class="persona-ultima">Área(s): ${[...p.areas].join(', ')||'—'} · Último: ${p.fechaTexto} · ${p.horaTexto}</div>
+      </div>
+      <span class="persona-badge">${p.cant} archivo${p.cant>1?'s':''}</span>
+    </div>`).join('') || '<p class="cargando-txt">Sin entregas</p>';
 
-  $('filtro-resultado').textContent=`${docs.length} registro${docs.length!==1?'s':''} encontrado${docs.length!==1?'s':''}`;
+  $('tabla-body').innerHTML = !docs.length
+    ? `<tr><td colspan="9" class="td-vacio">No hay registros</td></tr>`
+    : docs.map((d,i) => `
+      <tr class="${d.archivado?'tr-archivado':''}">
+        <td class="td-n">${i+1}</td>
+        <td><div class="td-user">
+          <img class="td-foto" src="${d.foto||avatar(d.nombre)}" alt="" onerror="this.src='${avatar(d.nombre)}'">
+          <div><div class="td-nombre">${d.nombre||'—'}</div><div class="td-email">${d.email}</div></div>
+        </div></td>
+        <td><span class="badge-area">${d.area||'—'}</span></td>
+        <td class="td-arch">${renderDescarga(d)}</td>
+        <td class="td-detalle" title="${d.detalle||'—'}">${d.detalle?(d.detalle.length>40?d.detalle.slice(0,40)+'…':d.detalle):'<span style="color:#9ca3af">—</span>'}</td>
+        <td class="td-peso">${d.tamanoTexto||'—'}</td>
+        <td class="td-fecha">${d.fechaTexto}</td>
+        <td class="td-hora">${d.horaTexto}</td>
+        <td>${d.archivado
+          ? `<span class="badge-archivado">Archivado</span>`
+          : `<span class="badge-activo">Activo</span>`}</td>
+      </tr>`).join('');
+
+  $('filtro-resultado').textContent = `${docs.length} registro${docs.length!==1?'s':''} encontrado${docs.length!==1?'s':''}`;
 }
 
 function renderDescarga(d) {
-  const svg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
-  if (d.storageURL)
-    return `<a href="${d.storageURL}" target="_blank" class="link-archivo">${svg}${d.nombreArchivo}</a>`;
+  const svg=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+  if (d.storageURL) return `<a href="${d.storageURL}" target="_blank" class="link-archivo">${svg}${d.nombreArchivo}</a>`;
   return `<span style="color:var(--txt3);font-size:12px;">${d.nombreArchivo||'—'}</span>`;
 }
 
@@ -990,26 +1093,24 @@ function filtrarDocs(docs) {
   const area   = $('filtro-area').value.toLowerCase();
   const nombre = $('filtro-nombre').value.trim().toLowerCase();
   const email  = $('filtro-email').value.trim().toLowerCase();
-  const fechaD = $('filtro-fecha-desde').value;
-  const fechaH = $('filtro-fecha-hasta').value;
+  const fd     = $('filtro-fecha-desde').value;
+  const fh     = $('filtro-fecha-hasta').value;
   let r = [...docs];
   if (area)   r=r.filter(d=>(d.area||'').toLowerCase().includes(area));
   if (nombre) r=r.filter(d=>(d.nombre||'').toLowerCase().includes(nombre));
   if (email)  r=r.filter(d=>(d.email||'').toLowerCase().includes(email));
-  if (fechaD) r=r.filter(d=>d.timestamp>=new Date(fechaD).toISOString());
-  if (fechaH){ const h=new Date(fechaH); h.setHours(23,59,59); r=r.filter(d=>d.timestamp<=h.toISOString()); }
+  if (fd)     r=r.filter(d=>d.timestamp>=new Date(fd).toISOString());
+  if (fh)     { const h=new Date(fh); h.setHours(23,59,59); r=r.filter(d=>d.timestamp<=h.toISOString()); }
   return r;
 }
 
-function aplicarFiltros(){ renderAdmin(filtrarDocs(docsAdmin)); }
-
-function limpiarFiltros(){
+function aplicarFiltros() { renderAdmin(filtrarDocs(docsAdmin)); }
+function limpiarFiltros() {
   ['filtro-area','filtro-nombre','filtro-email','filtro-fecha-desde','filtro-fecha-hasta']
-    .forEach(id=>{ const e=$(id); if(e) e.value=''; });
+    .forEach(id => { const e=$(id); if(e) e.value=''; });
   renderAdmin(docsAdmin);
 }
-
-function exportarFiltrado(){ exportarExcel(filtrarDocs(docsAdmin),true); }
+function exportarFiltrado() { exportarExcel(filtrarDocs(docsAdmin), true); }
 
 /* ══════════════════════════════════
    EXPORTAR EXCEL
@@ -1017,72 +1118,62 @@ function exportarFiltrado(){ exportarExcel(filtrarDocs(docsAdmin),true); }
 const avatar = n =>
   `https://ui-avatars.com/api/?name=${encodeURIComponent(n||'?')}&background=1d4ed8&color=fff`;
 
-async function exportarExcel(docs, filtrado=false){
-  if (!window.XLSX){
-    await new Promise((res,rej)=>{
+async function exportarExcel(docs, filtrado=false) {
+  if (!window.XLSX) {
+    await new Promise((res,rej) => {
       const s=document.createElement('script');
       s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
       s.onload=res; s.onerror=rej; document.head.appendChild(s);
     });
   }
-  const filas = docs.map((d,i)=>({
-    '#':i+1,
-    'Nombre':d.nombre||'—',
-    'Correo':d.email||'—',
-    'Área':d.area||'—',
-    'Archivo':d.nombreArchivo||'—',
-    'Descripción':d.detalle||'—',
-    'Peso':d.tamanoTexto||'—',
-    'Fecha':d.fechaTexto||'—',
-    'Hora':d.horaTexto||'—',
+  const filas = docs.map((d,i) => ({
+    '#':i+1, 'Nombre':d.nombre||'—', 'Correo':d.email||'—', 'Área':d.area||'—',
+    'Archivo':d.nombreArchivo||'—', 'Acta':d.nombreActa||'—',
+    'Descripción':d.detalle||'—', 'Peso':d.tamanoTexto||'—',
+    'Fecha':d.fechaTexto||'—', 'Hora':d.horaTexto||'—',
     'Estado':d.archivado?'ARCHIVADO':'Activo',
-    'Link Drive':d.storageURL||'—'
+    'Link Drive':d.storageURL||'—',
+    'Link Comprobante':d.comprobanteURL||'—'
   }));
-  const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.json_to_sheet(filas);
-  ws['!cols']=[{wch:4},{wch:28},{wch:34},{wch:22},{wch:38},{wch:40},{wch:12},{wch:22},{wch:14},{wch:12},{wch:50}];
-  XLSX.utils.book_append_sheet(wb,ws,'Entregas');
-  XLSX.writeFile(wb,`informe_SISCTE${filtrado?'_filtrado':'_completo'}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(filas);
+  ws['!cols'] = [{wch:4},{wch:28},{wch:34},{wch:22},{wch:38},{wch:30},{wch:40},{wch:12},{wch:22},{wch:14},{wch:12},{wch:50},{wch:50}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Entregas');
+  XLSX.writeFile(wb, `informe_SISCTE${filtrado?'_filtrado':'_completo'}_${new Date().toISOString().slice(0,10)}.xlsx`);
   toast(`Informe${filtrado?' filtrado':''} descargado ✓`);
 }
 
-/* ══════════════════════════════════════════════════════
-   SISTEMA DE ARCHIVADO MENSUAL v2
-══════════════════════════════════════════════════════ */
-
+/* ══════════════════════════════════
+   ARCHIVADO MENSUAL
+══════════════════════════════════ */
 window.verificarChecks = function() {
   const ok = $('check1')?.checked && $('check2')?.checked && $('check3')?.checked;
-  const btn = $('arch-btn-descargar');
-  if (btn) btn.disabled = !ok;
+  const btn = $('arch-btn-descargar'); if(btn) btn.disabled=!ok;
 };
 
-function labelMes(isoTimestamp) {
-  const d = new Date(isoTimestamp);
-  return d.toLocaleDateString('es-EC', { month:'long', year:'numeric', timeZone:'America/Guayaquil' });
+function labelMes(ts) {
+  return new Date(ts).toLocaleDateString('es-EC',
+    { month:'long', year:'numeric', timeZone:'America/Guayaquil' });
 }
 
 function abrirModalArchivado() {
   const mesesMap = {};
   docsAdmin.forEach(d => {
-    if (d.archivado) return;
-    if (!d.storageURL) return;
+    if (d.archivado || !d.storageURL) return;
     const mes = d.timestamp.slice(0,7);
     if (!mesesMap[mes]) mesesMap[mes] = { docs:[], label: labelMes(d.timestamp) };
     mesesMap[mes].docs.push(d);
   });
-
   const meses = Object.entries(mesesMap).sort((a,b)=>b[0].localeCompare(a[0]));
-  if (meses.length === 0) { toast('No hay archivos pendientes de archivar','ok'); return; }
+  if (!meses.length) { toast('No hay archivos pendientes de archivar'); return; }
 
   const sel = $('arch-mes-select');
   sel.innerHTML = '<option value="">— Selecciona el mes —</option>';
-  meses.forEach(([key, val]) => {
-    const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = `${val.label} (${val.docs.length} archivo${val.docs.length>1?'s':''})`;
-    sel.appendChild(opt);
+  meses.forEach(([k,v]) => {
+    const o=document.createElement('option'); o.value=k;
+    o.textContent=`${v.label} (${v.docs.length} archivo${v.docs.length>1?'s':''})`;
+    sel.appendChild(o);
   });
-
   window._archMeses = mesesMap;
   $('modal-archivado').style.display = 'flex';
   $('arch-paso1').style.display = 'block';
@@ -1094,307 +1185,186 @@ function abrirModalArchivado() {
 function seleccionarMesArchivado() {
   const mes = $('arch-mes-select').value;
   $('arch-btn-siguiente').disabled = !mes;
-  if (!mes) { $('arch-resumen').innerHTML = ''; return; }
+  if (!mes) return;
   const info = window._archMeses[mes];
-
-  const hoy = new Date().toISOString().slice(0,10);
-  const primerDia = mes + '-01';
-
   $('arch-resumen').innerHTML = `
-    <div style="margin:12px 0 8px;padding:10px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">
-      <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:8px;">Filtrar por rango de fechas (opcional)</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <div style="display:flex;flex-direction:column;gap:3px;">
-          <label style="font-size:11px;color:#6b7280;">Desde</label>
-          <input type="date" id="arch-fecha-desde" value="${primerDia}" max="${hoy}"
-            style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;"
-            onchange="filtrarArchivosMes()">
+    <div class="arch-stat"><span>${info.docs.length}</span> archivos a descargar y archivar</div>
+    <div class="arch-personas">${info.docs.map(d=>`
+      <div class="arch-persona-row">
+        <img src="${d.foto||avatar(d.nombre)}" alt="" onerror="this.src='${avatar(d.nombre)}'">
+        <div>
+          <div class="arch-persona-nombre">${d.nombre||'—'} <span class="badge-area" style="font-size:10px">${d.area||''}</span></div>
+          <div class="arch-persona-archivo">${d.nombreArchivo} · ${d.tamanoTexto||'—'}</div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:3px;">
-          <label style="font-size:11px;color:#6b7280;">Hasta</label>
-          <input type="date" id="arch-fecha-hasta" value="${hoy}" max="${hoy}"
-            style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;"
-            onchange="filtrarArchivosMes()">
-        </div>
-        <button onclick="seleccionarTodosArch(true)"
-          style="margin-top:14px;padding:4px 10px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;">
-          ✓ Todos
-        </button>
-        <button onclick="seleccionarTodosArch(false)"
-          style="margin-top:14px;padding:4px 10px;background:#6b7280;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;">
-          ✗ Ninguno
-        </button>
-      </div>
-    </div>
-    <div id="arch-lista-checks" style="max-height:260px;overflow-y:auto;"></div>
-    <div id="arch-contador-sel" style="font-size:12px;color:#2563eb;font-weight:600;margin-top:8px;text-align:right;"></div>`;
-
-  window._archDocsActuales = info.docs;
-  filtrarArchivosMes();
+      </div>`).join('')}</div>`;
 }
 
-window.filtrarArchivosMes = function() {
-  const desde = $('arch-fecha-desde')?.value || '';
-  const hasta = $('arch-fecha-hasta')?.value || '';
-  const docs  = window._archDocsActuales || [];
-
-  let filtrados = [...docs];
-  if (desde) filtrados = filtrados.filter(d => d.timestamp.slice(0,10) >= desde);
-  if (hasta) filtrados = filtrados.filter(d => d.timestamp.slice(0,10) <= hasta);
-
-  window._archDocsFiltrados = filtrados;
-
-  const lista = $('arch-lista-checks');
-  if (!lista) return;
-
-  if (filtrados.length === 0) {
-    lista.innerHTML = `<p style="text-align:center;color:#9ca3af;font-size:12px;padding:16px;">Sin archivos en ese rango</p>`;
-    actualizarContadorArch();
-    $('arch-btn-siguiente').disabled = true;
-    return;
-  }
-
-  lista.innerHTML = filtrados.map((d,i) => `
-    <label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6;cursor:pointer;">
-      <input type="checkbox" class="arch-check" data-idx="${i}" checked
-        style="margin-top:3px;width:15px;height:15px;accent-color:#2563eb;"
-        onchange="actualizarContadorArch()">
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:12px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.nombreArchivo}</div>
-        <div style="font-size:11px;color:#6b7280;">
-          <span style="background:#eff6ff;color:#1d4ed8;padding:1px 6px;border-radius:4px;font-weight:600;font-size:10px;">${d.area||'—'}</span>
-          &nbsp;${d.nombre||'—'} · ${d.fechaTexto} · ${d.tamanoTexto||'—'}
-        </div>
-      </div>
-    </label>`).join('');
-
-  actualizarContadorArch();
-  $('arch-btn-siguiente').disabled = false;
-};
-
-window.actualizarContadorArch = function() {
-  const checks = document.querySelectorAll('.arch-check');
-  const sel = [...checks].filter(c => c.checked).length;
-  const contador = $('arch-contador-sel');
-  if (contador) contador.textContent = `${sel} de ${checks.length} seleccionado${sel!==1?'s':''}`;
-  $('arch-btn-siguiente').disabled = sel === 0;
-};
-
-window.seleccionarTodosArch = function(val) {
-  document.querySelectorAll('.arch-check').forEach(c => c.checked = val);
-  actualizarContadorArch();
-};
-
 function archPaso2() {
-  const checks  = document.querySelectorAll('.arch-check');
-  const selDocs = [];
-  checks.forEach((c, i) => {
-    if (c.checked && window._archDocsFiltrados?.[i]) selDocs.push(window._archDocsFiltrados[i]);
-  });
-  if (selDocs.length === 0) { toast('Selecciona al menos un archivo','err'); return; }
-  window._archDocsSeleccionados = selDocs;
-
-  $('arch-paso1').style.display = 'none';
-  $('arch-paso2').style.display = 'block';
+  const mes = $('arch-mes-select').value; if(!mes) return;
+  $('arch-paso1').style.display = 'none'; $('arch-paso2').style.display = 'block';
+  const info = window._archMeses[mes];
   $('arch-advertencia-detalle').textContent =
-    `Se descargarán ${selDocs.length} archivo(s) seleccionado(s). ` +
-    `Después podrás marcarlos como archivados. El historial de envíos quedará guardado permanentemente.`;
+    `Se descargarán ${info.docs.length} archivo(s) de ${labelMes(info.docs[0].timestamp)}. Después podrás eliminar los binarios. El historial quedará guardado.`;
 }
 
 async function descargarMesCompleto() {
-  const docs = window._archDocsSeleccionados || [];
-  $('arch-paso2').style.display = 'none';
-  $('arch-paso3').style.display = 'block';
+  const mes = $('arch-mes-select').value;
+  const info = window._archMeses[mes];
+  $('arch-paso2').style.display = 'none'; $('arch-paso3').style.display = 'block';
   $('arch-progreso-txt').textContent = 'Abriendo archivos de Drive...';
-
   let ok = 0;
-  for (let i=0; i<docs.length; i++) {
-    const d = docs[i];
-    $('arch-progreso-bar').style.width = Math.round(((i+1)/docs.length)*100)+'%';
-    $('arch-progreso-txt').textContent = `Abriendo ${i+1} de ${docs.length}: ${d.nombreArchivo}`;
-    try {
-      if (d.storageURL) window.open(d.storageURL, '_blank');
-      ok++;
-    } catch(e) { console.warn('Error abriendo', d.nombreArchivo, e); }
-    await new Promise(r => setTimeout(r, 400));
+  for (let i=0; i<info.docs.length; i++) {
+    const d = info.docs[i];
+    $('arch-progreso-bar').style.width = Math.round(((i+1)/info.docs.length)*100)+'%';
+    $('arch-progreso-txt').textContent = `Abriendo ${i+1} de ${info.docs.length}: ${d.nombreArchivo}`;
+    try { if(d.storageURL) window.open(d.storageURL,'_blank'); ok++; } catch(e) {}
+    await new Promise(r => setTimeout(r,400));
   }
-
-  $('arch-progreso-txt').textContent = `✓ ${ok} de ${docs.length} archivos abiertos desde Drive`;
+  $('arch-progreso-txt').textContent = `✓ ${ok} de ${info.docs.length} archivos abiertos`;
   $('arch-btn-archivar').style.display = 'block';
-  $('arch-btn-archivar').onclick = () => confirmarArchivar(docs);
+  $('arch-btn-archivar').onclick = () => confirmarArchivar(mes, info.docs);
 }
 
-async function confirmarArchivar(docs) {
-  $('arch-btn-archivar').disabled = true;
-  $('arch-btn-archivar').textContent = 'Archivando...';
-
+async function confirmarArchivar(mes, docs) {
+  $('arch-btn-archivar').disabled = true; $('arch-btn-archivar').textContent = 'Archivando...';
   try {
     const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    let procesados = 0;
+    let p = 0;
     for (const d of docs) {
-      $('arch-progreso-bar').style.width = Math.round(((procesados+1)/docs.length)*100)+'%';
-      $('arch-progreso-txt').textContent = `Archivando ${procesados+1} de ${docs.length}...`;
+      $('arch-progreso-bar').style.width = Math.round(((p+1)/docs.length)*100)+'%';
       await updateDoc(doc(db,'entregas',d.id), {
         archivado:      true,
         fechaArchivado: new Date().toISOString(),
         notaArchivado:  `Archivado el ${new Date().toLocaleDateString('es-EC',{timeZone:'America/Guayaquil',day:'2-digit',month:'long',year:'numeric'})}`
       });
-      procesados++;
-      await new Promise(r => setTimeout(r, 150));
+      p++; await new Promise(r => setTimeout(r,150));
     }
-    $('arch-progreso-txt').textContent = `✓ ${procesados} registros archivados. Historial conservado.`;
-    $('arch-btn-archivar').textContent = '✓ Archivado completado';
+    $('arch-progreso-txt').textContent = `✓ ${p} registros archivados.`;
+    $('arch-btn-archivar').textContent = '✓ Completado';
     setTimeout(async () => {
-      cerrarModalArchivado();
-      await cargarAdmin();
-      toast(`${procesados} archivo(s) archivados correctamente ✓`);
+      cerrarModalArchivado(); await cargarAdmin(); toast(`Mes archivado ✓`);
     }, 2000);
   } catch(e) {
     toast('Error al archivar: '+e.message,'err');
-    $('arch-btn-archivar').disabled = false;
-    $('arch-btn-archivar').textContent = 'Reintentar';
+    $('arch-btn-archivar').disabled = false; $('arch-btn-archivar').textContent = 'Reintentar';
   }
 }
 
-function cerrarModalArchivado() {
-  $('modal-archivado').style.display = 'none';
-}
+function cerrarModalArchivado() { $('modal-archivado').style.display = 'none'; }
 
-/* ══════════════════════════════════════════════════════
-   LIMPIAR BASE DE DATOS
-══════════════════════════════════════════════════════ */
-
-window.verificarCheckLimpieza = function() {
-  const ok = $('check-confirmar')?.checked;
-  $('btn-iniciar-limpieza').disabled = !ok;
-};
-
+/* ══════════════════════════════════
+   ELIMINAR REGISTROS BD
+══════════════════════════════════ */
 function abrirModalLimpiarDuplicados() {
   $('limpieza-contenido').style.display = 'block';
   $('limpieza-progreso').style.display  = 'none';
   $('check-confirmar').checked = false;
   $('btn-iniciar-limpieza').disabled = true;
-
-  const desc = $('limpieza-contenido').querySelector('.modal-desc');
-  if (desc && !$('limpieza-rango')) {
-    const hoy = new Date().toISOString().slice(0,10);
-    const rango = document.createElement('div');
-    rango.id = 'limpieza-rango';
-    rango.style.cssText = 'margin:14px 0;padding:12px;background:#fef2f2;border-radius:8px;border:1px solid #fecaca;';
-    rango.innerHTML = `
-      <div style="font-size:12px;font-weight:700;color:#991b1b;margin-bottom:10px;">⚠️ Esta acción es IRREVERSIBLE — elige bien el rango</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <div style="display:flex;flex-direction:column;gap:3px;">
-          <label style="font-size:11px;color:#6b7280;font-weight:600;">Desde</label>
-          <input type="date" id="limp-fecha-desde" max="${hoy}"
-            style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:3px;">
-          <label style="font-size:11px;color:#6b7280;font-weight:600;">Hasta</label>
-          <input type="date" id="limp-fecha-hasta" value="${hoy}" max="${hoy}"
-            style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;">
-        </div>
-      </div>
-      <div id="limp-conteo" style="font-size:12px;color:#dc2626;font-weight:600;margin-top:8px;"></div>
-      <button onclick="contarRegistrosLimpieza()"
-        style="margin-top:8px;padding:5px 12px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">
-        Ver cuántos registros se borrarán
-      </button>`;
-    desc.insertAdjacentElement('afterend', rango);
-  }
-
+  $('elim-preview-result').style.display = 'none';
+  $('elim-fecha-desde').value = '';
+  $('elim-fecha-hasta').value = new Date().toISOString().slice(0,10);
   $('modal-limpiar-duplicados').style.display = 'flex';
 }
 
-window.contarRegistrosLimpieza = function() {
-  const desde = $('limp-fecha-desde')?.value || '';
-  const hasta = $('limp-fecha-hasta')?.value || '';
-  let docs = [...docsAdmin];
-  if (desde) docs = docs.filter(d => d.timestamp.slice(0,10) >= desde);
-  if (hasta) docs = docs.filter(d => d.timestamp.slice(0,10) <= hasta);
-  const conteo = $('limp-conteo');
-  if (conteo) {
-    if (docs.length === 0) {
-      conteo.textContent = 'Sin registros en ese rango.';
-      conteo.style.color = '#6b7280';
+function cerrarModalLimpiarDuplicados() { $('modal-limpiar-duplicados').style.display = 'none'; }
+
+window.verificarCheckLimpieza = function() {
+  $('btn-iniciar-limpieza').disabled = !$('check-confirmar').checked;
+};
+
+async function _obtenerRegistrosEnRango() {
+  const fd = $('elim-fecha-desde').value;
+  const fh = $('elim-fecha-hasta').value;
+  const snap = await window._fb.getDocs(window._fb.collection(db,'entregas'));
+  let entregas = snap.docs.map(d => ({id:d.id,...d.data()}));
+  if (fd) entregas = entregas.filter(d => d.timestamp >= new Date(fd).toISOString());
+  if (fh) { const h=new Date(fh); h.setHours(23,59,59,999); entregas=entregas.filter(d=>d.timestamp<=h.toISOString()); }
+  return entregas;
+}
+
+window.previsualizarEliminacion = async function() {
+  const btn = $('btn-preview-eliminar');
+  btn.textContent = 'Consultando...'; btn.disabled = true;
+  try {
+    const registros = await _obtenerRegistrosEnRango();
+    const res = $('elim-preview-result');
+    res.style.display = 'block';
+    if (!registros.length) {
+      res.style.background='#fff7ed'; res.style.borderColor='#fed7aa'; res.style.color='#c2410c';
+      res.textContent = '⚠️ No se encontraron registros en ese rango de fechas.';
     } else {
-      conteo.textContent = `⚠️ Se eliminarán ${docs.length} registro(s) permanentemente.`;
-      conteo.style.color = '#dc2626';
+      res.style.background='#f0fdf4'; res.style.borderColor='#bbf7d0'; res.style.color='#15803d';
+      res.textContent = `✓ Se eliminarán ${registros.length} registro${registros.length!==1?'s':''} de Firestore (los archivos en Drive no se tocan).`;
     }
+  } catch(e) {
+    toast('Error al consultar: '+e.message,'err');
+  } finally {
+    btn.textContent = 'Ver cuántos registros se borrarán'; btn.disabled = false;
   }
-  window._limpiezaDocs = docs;
 };
 
 async function iniciarLimpiezaDuplicados() {
-  const docs = window._limpiezaDocs;
-  if (!docs || docs.length === 0) {
-    toast('Primero define el rango y verifica cuántos registros se borrarán', 'err');
-    return;
-  }
-
-  const confirmar = window.confirm(
-    `⚠️ ÚLTIMA ADVERTENCIA\n\n` +
-    `Estás por eliminar ${docs.length} registro(s) de forma PERMANENTE.\n\n` +
-    `Los archivos en Google Drive NO se eliminarán, solo los registros de Firestore ` +
-    `y el historial visible en "Mis Envíos".\n\n` +
-    `¿Deseas continuar?`
-  );
-  if (!confirmar) return;
-
-  toast('Descargando Excel de respaldo antes de borrar...', 'ok');
-  await exportarExcel(docs, true);
-  await new Promise(r => setTimeout(r, 1500));
-
   $('limpieza-contenido').style.display = 'none';
   $('limpieza-progreso').style.display  = 'block';
   $('limpieza-resultados').innerHTML    = '';
-
+  const log = msg => {
+    const el=$('limpieza-resultados');
+    el.innerHTML += msg+'\n';
+    el.scrollTop = el.scrollHeight;
+  };
   try {
-    const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-
-    let procesados = 0;
-    const log = $('limpieza-resultados');
-
-    for (const d of docs) {
-      const pct = Math.round(((procesados+1)/docs.length)*100);
-      $('limpieza-progreso-bar').style.width = pct+'%';
-      $('limpieza-progreso-txt').textContent = `Eliminando ${procesados+1} de ${docs.length}...`;
-      try {
-        await deleteDoc(doc(db, 'entregas', d.id));
-        log.innerHTML += `<div style="color:#16a34a;">✓ Eliminado: ${d.nombreArchivo} (${d.area||'—'} · ${d.fechaTexto})</div>`;
-      } catch(e) {
-        log.innerHTML += `<div style="color:#dc2626;">✗ Error: ${d.nombreArchivo} — ${e.message}</div>`;
-      }
-      log.scrollTop = log.scrollHeight;
-      procesados++;
-      await new Promise(r => setTimeout(r, 100));
+    log('🔍 Obteniendo registros en el rango seleccionado...\n');
+    const entregas = await _obtenerRegistrosEnRango();
+    log(`✓ ${entregas.length} registros encontrados\n`);
+    if (!entregas.length) {
+      log('ℹ️ No hay registros para eliminar en ese rango.');
+      $('limpieza-progreso-bar').style.width='100%';
+      $('limpieza-progreso-txt').textContent='Sin registros que eliminar';
+      setTimeout(() => cerrarModalLimpiarDuplicados(), 2000);
+      return;
     }
-
-    $('limpieza-progreso-txt').textContent = `✓ ${procesados} registros eliminados permanentemente.`;
-    log.innerHTML += `<div style="color:#2563eb;font-weight:700;margin-top:8px;">═══ Limpieza completada: ${procesados} registros eliminados ═══</div>`;
-
-    setTimeout(async () => {
-      cerrarModalLimpiarDuplicados();
-      await cargarAdmin();
-      toast(`Base de datos limpiada: ${procesados} registros eliminados ✓`);
-    }, 3000);
-
+    const { deleteDoc, doc: dRef } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    let eliminados = 0;
+    for (let i=0; i<entregas.length; i++) {
+      const d = entregas[i];
+      const pct = Math.round(((i+1)/entregas.length)*100);
+      $('limpieza-progreso-bar').style.width = pct+'%';
+      $('limpieza-progreso-txt').textContent = `Eliminando ${i+1} de ${entregas.length}...`;
+      log(`  🗑️ ${d.nombreArchivo} · ${d.area||'—'} · ${d.fechaTexto||d.timestamp.slice(0,10)}`);
+      await deleteDoc(dRef(db,'entregas',d.id));
+      eliminados++;
+      await new Promise(r => setTimeout(r,80));
+    }
+    $('limpieza-progreso-bar').style.width='100%';
+    $('limpieza-progreso-txt').textContent='✓ Eliminación completada';
+    log(`\n✅ ${eliminados} registro${eliminados!==1?'s':''} eliminado${eliminados!==1?'s':''} de Firestore.`);
+    log('ℹ️ Los archivos en Google Drive no fueron afectados.');
+    setTimeout(() => { cerrarModalLimpiarDuplicados(); cargarAdmin(); toast(`${eliminados} registros eliminados ✓`); }, 2500);
   } catch(e) {
-    toast('Error durante la limpieza: '+e.message,'err');
+    log(`\n❌ Error: ${e.message}`);
+    toast('Error: '+e.message,'err');
   }
 }
 
-function cerrarModalLimpiarDuplicados() {
-  $('modal-limpiar-duplicados').style.display = 'none';
-}
-
-/* ── Exponer funciones al HTML ── */
-window.abrirModalArchivado      = abrirModalArchivado;
-window.irSubir                  = irSubir;
-window.cerrarModalArchivado     = cerrarModalArchivado;
-window.seleccionarMesArchivado  = seleccionarMesArchivado;
-window.archPaso2                = archPaso2;
-window.descargarMesCompleto     = descargarMesCompleto;
-window.abrirModalLimpiarDuplicados   = abrirModalLimpiarDuplicados;
-window.cerrarModalLimpiarDuplicados  = cerrarModalLimpiarDuplicados;
-window.iniciarLimpiezaDuplicados     = iniciarLimpiezaDuplicados;
+/* ══════════════════════════════════
+   EXPONER AL HTML
+══════════════════════════════════ */
+window.login                        = login;
+window.abrirSelectorArchivo         = abrirSelectorArchivo;
+window.abrirSelectorActa            = abrirSelectorActa;
+window.seleccionarActa              = seleccionarActa;
+window.quitarActa                   = quitarActa;
+window.abrirModalArchivado          = abrirModalArchivado;
+window.cerrarModalArchivado         = cerrarModalArchivado;
+window.abrirModalLimpiarDuplicados  = abrirModalLimpiarDuplicados;
+window.cerrarModalLimpiarDuplicados = cerrarModalLimpiarDuplicados;
+window.iniciarLimpiezaDuplicados    = iniciarLimpiezaDuplicados;
+window.irSubir                      = irSubir;
+window.seleccionarMesArchivado      = seleccionarMesArchivado;
+window.archPaso2                    = archPaso2;
+window.descargarMesCompleto         = descargarMesCompleto;
+window.ir                           = ir;
+window.show                         = show;
+window.hide                         = hide;
+window.toast                        = toast;
+window.$                            = $;
