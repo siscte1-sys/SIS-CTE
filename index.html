@@ -9,7 +9,7 @@
 <body>
 
 <!-- ════════════════════════════════
-     NAVBAR minimalista (solo admin)
+     NAVBAR
 ════════════════════════════════ -->
 <nav>
   <div class="nav-left">
@@ -74,93 +74,81 @@
             <div class="lpl-dot"></div>
           </div>
           <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.1);padding-top:12px;">
-            <p style="font-size:10px;color:rgba(255,255,255,.4);margin:0;line-height:1.6;">v3.0 · © 2026 SISCTE<br>Todos los derechos reservados</p>
+            <p style="font-size:10px;color:rgba(255,255,255,.4);margin:0;line-height:1.6;">v5.1 · © 2026 SISCTE<br>Todos los derechos reservados</p>
           </div>
         </div>
       </div>
 
       <!-- Panel derecho -->
       <div class="login-panel-right">
-
-      <!-- Tabs -->
-      <div class="auth-tabs">
-        <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Iniciar sesión</button>
-        <button class="auth-tab" id="tab-registro" onclick="switchTab('registro')">Registrarse</button>
-      </div>
-
-      <!-- PANEL: Iniciar sesión -->
-      <div id="panel-login">
-        <p class="login-card-desc">Accede con tu cuenta Google o con correo y contraseña.</p>
-
-        <!-- Google -->
-        <button class="btn-google" id="btn-google" onclick="login()">
-          <svg width="18" height="18" viewBox="0 0 48 48">
-            <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 33.1 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C33.8 6.5 29.1 4.5 24 4.5 12.7 4.5 3.5 13.7 3.5 25S12.7 45.5 24 45.5c11 0 20.5-8 20.5-20.5 0-1.4-.1-2.7-.4-3.5z"/>
-            <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.1 19 12 24 12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C33.8 6.5 29.1 4.5 24 4.5c-7.7 0-14.3 4.4-17.7 10.2z"/>
-            <path fill="#4CAF50" d="M24 45.5c5 0 9.6-1.9 13.1-5l-6.1-5.1C29.1 37 26.6 38 24 38c-5.2 0-9.6-2.9-11.3-7.1l-6.5 5C9.6 41 16.4 45.5 24 45.5z"/>
-            <path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.1 5.1C40.7 35.4 44 30.6 44 25c0-1.4-.1-2.7-.4-3.5z"/>
-          </svg>
-          Acceder con Google
-        </button>
-
-        <div class="auth-divider"><span>o</span></div>
-
-        <!-- Email/Password login -->
-        <div class="form-field">
-          <label class="form-label">Correo electrónico</label>
-          <input type="email" id="login-email" class="form-input" placeholder="tucorreo@ejemplo.com">
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Iniciar sesión</button>
+          <button class="auth-tab" id="tab-registro" onclick="switchTab('registro')">Registrarse</button>
         </div>
-        <div class="form-field">
-          <label class="form-label">Contraseña</label>
-          <input type="password" id="login-pass" class="form-input" placeholder="••••••••">
-        </div>
-        <button class="btn-primary-full" id="btn-login-email">Iniciar sesión</button>
-        <div style="text-align:center;margin-top:10px;">
-          <button class="btn-link" id="btn-forgot">¿Olvidaste tu contraseña?</button>
-        </div>
-      </div>
 
-      <!-- PANEL: Registrarse -->
-      <div id="panel-registro" style="display:none">
-        <p class="login-card-desc">Crea tu cuenta con correo y contraseña para acceder al sistema.</p>
-        <div class="form-field">
-          <label class="form-label">Nombre completo</label>
-          <input type="text" id="reg-nombre" class="form-input" placeholder="Tu nombre completo">
+        <!-- Login -->
+        <div id="panel-login">
+          <p class="login-card-desc">Accede con tu cuenta Google o con correo y contraseña.</p>
+          <button class="btn-google" id="btn-google">
+            <svg width="18" height="18" viewBox="0 0 48 48">
+              <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 33.1 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C33.8 6.5 29.1 4.5 24 4.5 12.7 4.5 3.5 13.7 3.5 25S12.7 45.5 24 45.5c11 0 20.5-8 20.5-20.5 0-1.4-.1-2.7-.4-3.5z"/>
+              <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.1 19 12 24 12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C33.8 6.5 29.1 4.5 24 4.5c-7.7 0-14.3 4.4-17.7 10.2z"/>
+              <path fill="#4CAF50" d="M24 45.5c5 0 9.6-1.9 13.1-5l-6.1-5.1C29.1 37 26.6 38 24 38c-5.2 0-9.6-2.9-11.3-7.1l-6.5 5C9.6 41 16.4 45.5 24 45.5z"/>
+              <path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.1 5.1C40.7 35.4 44 30.6 44 25c0-1.4-.1-2.7-.4-3.5z"/>
+            </svg>
+            Acceder con Google
+          </button>
+          <div class="auth-divider"><span>o</span></div>
+          <div class="form-field">
+            <label class="form-label">Correo electrónico</label>
+            <input type="email" id="login-email" class="form-input" placeholder="tucorreo@ejemplo.com">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Contraseña</label>
+            <input type="password" id="login-pass" class="form-input" placeholder="••••••••">
+          </div>
+          <button class="btn-primary-full" id="btn-login-email">Iniciar sesión</button>
+          <div style="text-align:center;margin-top:10px;">
+            <button class="btn-link" id="btn-forgot">¿Olvidaste tu contraseña?</button>
+          </div>
         </div>
-        <div class="form-field">
-          <label class="form-label">Correo electrónico</label>
-          <input type="email" id="reg-email" class="form-input" placeholder="tucorreo@ejemplo.com">
+
+        <!-- Registro -->
+        <div id="panel-registro" style="display:none">
+          <p class="login-card-desc">Crea tu cuenta con correo y contraseña para acceder al sistema.</p>
+          <div class="form-field">
+            <label class="form-label">Nombre completo</label>
+            <input type="text" id="reg-nombre" class="form-input" placeholder="Tu nombre completo">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Correo electrónico</label>
+            <input type="email" id="reg-email" class="form-input" placeholder="tucorreo@ejemplo.com">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Contraseña</label>
+            <input type="password" id="reg-pass" class="form-input" placeholder="Mínimo 6 caracteres">
+          </div>
+          <button class="btn-primary-full" id="btn-registrar">Crear cuenta</button>
         </div>
-        <div class="form-field">
-          <label class="form-label">Contraseña</label>
-          <input type="password" id="reg-pass" class="form-input" placeholder="Mínimo 6 caracteres">
-        </div>
-        <button class="btn-primary-full" id="btn-registrar">Crear cuenta</button>
-      </div>
 
         <div class="info-note" style="margin-top:16px">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Al enviar recibirás un correo de confirmación automático.
+          Al enviar recibirás un correo de confirmación automático con cada envío.
         </div>
-      </div><!-- /login-panel-right -->
-    </div><!-- /login-card -->
+      </div>
+    </div>
   </div>
 
   <!-- ═══════════════════════════════
-       VISTA SUBIR  (modelo Lovable)
+       VISTA SUBIR
   ═══════════════════════════════ -->
   <div id="vista-subir" class="vista" style="display:none">
-
-    <!-- HERO AZUL -->
     <div class="page-hero">
       <h1 class="page-hero-titulo">Registro de Documentos Excel</h1>
       <p class="page-hero-sub">Hola, <strong id="hero-nombre"></strong>. Sube tu archivo Excel y registrá los detalles de cada envío.</p>
     </div>
-
-    <!-- CONTENIDO CENTRADO -->
     <div class="page-body">
 
-      <!-- Card: Nuevo Envío -->
       <div class="envio-card">
         <div class="envio-card-header">
           <div class="envio-card-header-ico">
@@ -172,7 +160,7 @@
           </div>
         </div>
 
-        <!-- Detalles del envío (textarea descriptiva) -->
+        <!-- Detalles -->
         <div class="form-field">
           <label class="form-label">Detalles del Envío</label>
           <textarea id="detalle-envio" class="form-textarea" placeholder="Describí los detalles del envío..."></textarea>
@@ -194,10 +182,9 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             </div>
             <span class="dz-label">Hacé clic para seleccionar</span>
-            <span class="dz-hint">Solo .xlsx o .xlsx</span>
+            <span class="dz-hint">Solo .xlsx o .xls</span>
           </div>
           <input type="file" id="file-input" accept=".xlsx,.xls">
-
           <div id="file-preview" class="file-preview">
             <div class="fp-ico">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -211,7 +198,39 @@
           </div>
         </div>
 
-        <!-- Barra de progreso -->
+        <!-- Acta PDF -->
+        <div class="form-field">
+          <label class="form-label">
+            Acta PDF
+            <span id="acta-label-oblig" style="color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px;background:#d97706;">OPCIONAL hasta el día 10</span>
+          </label>
+          <div id="acta-dropzone" class="dropzone" onclick="abrirSelectorActa()"
+               ondragover="event.preventDefault();this.classList.add('dz-over')"
+               ondragleave="this.classList.remove('dz-over')"
+               ondrop="event.preventDefault();this.classList.remove('dz-over');if(event.dataTransfer.files[0])seleccionarActa(event.dataTransfer.files[0])">
+            <div class="dz-upload-ico">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>
+            </div>
+            <span class="dz-label">Hacé clic para seleccionar el Acta</span>
+            <span class="dz-hint">Solo .pdf</span>
+          </div>
+          <input type="file" id="acta-input" accept=".pdf" style="display:none" onchange="if(this.files[0])seleccionarActa(this.files[0])">
+          <p id="acta-plazo-info" style="font-size:11px;color:#92400e;margin-top:7px;font-weight:500;"></p>
+
+          <div id="acta-preview" class="file-preview" style="display:none">
+            <div class="fp-ico">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="fp-info">
+              <div id="acta-nombre" class="fp-nombre"></div>
+              <div id="acta-peso" class="fp-peso"></div>
+              <div class="fp-modo">📄 Acta PDF</div>
+            </div>
+            <button id="btn-cambiar-acta" class="fp-cambiar" onclick="quitarActa()">✕</button>
+          </div>
+        </div>
+
+        <!-- Progreso -->
         <div id="progress-wrap" class="progress-wrap">
           <div class="progress-header">
             <span id="progress-label-txt">Subiendo...</span>
@@ -221,27 +240,24 @@
           <div class="progress-nota">No cierres esta ventana hasta completar.</div>
         </div>
 
-        <!-- Botón principal -->
-        <button class="btn-registrar" id="btn-enviar">
+        <!-- Botón -->
+        <button class="btn-registrar" id="btn-enviar" disabled style="opacity:0.45;cursor:not-allowed;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           Registrar Envío
         </button>
+        <p id="enviar-hint" style="text-align:center;font-size:12px;color:#ef4444;margin-top:6px;">Sube el Excel para habilitar el envío</p>
       </div>
 
-      <!-- ── Separador ── -->
       <div class="mis-envios-sep">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Mis Envíos
       </div>
-
-      <!-- ── Lista historial personal ── -->
       <div id="mis-envios-lista" class="mis-envios-lista">
         <div class="mis-envios-vacio">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
           <p>No hay envíos registrados todavía.</p>
         </div>
       </div>
-
     </div>
   </div>
 
@@ -286,11 +302,10 @@
   <div id="vista-admin" class="vista" style="display:none">
     <div class="page-hero">
       <h1 class="page-hero-titulo">Panel de Administración</h1>
-      <p class="page-hero-sub">Registro de entregas · Firebase Storage + Firestore</p>
+      <p class="page-hero-sub">Registro de entregas · Google Drive + Firestore</p>
     </div>
     <div class="page-body page-body-wide">
 
-      <!-- Acciones admin -->
       <div class="admin-top">
         <div class="admin-acc">
           <button class="btn-acc btn-acc-blue" id="btn-excel">
@@ -307,46 +322,29 @@
           </button>
           <button class="btn-acc btn-acc-red" onclick="abrirModalLimpiarDuplicados()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 4 21 4"/><line x1="19" y1="4" x2="21" y2="6"/><path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></svg>
-            Eliminar registros BD
+            Eliminar Registros BD
           </button>
           <button class="btn-acc btn-acc-ghost" onclick="irSubir()">← Volver a Envíos</button>
         </div>
       </div>
 
-      <!-- Stats -->
       <div class="stats-row">
         <div class="stat-box"><div class="stat-lbl">Total archivos</div><div class="stat-val" id="st-total">—</div></div>
         <div class="stat-box"><div class="stat-lbl">Personas</div><div class="stat-val" id="st-unicos">—</div></div>
         <div class="stat-box stat-box-wide"><div class="stat-lbl">Último envío</div><div class="stat-val stat-val-sm" id="st-ultimo">—</div></div>
       </div>
 
-      <!-- Filtros -->
       <div class="filtros-panel">
         <div class="filtros-titulo">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
           Filtros de búsqueda
         </div>
         <div class="filtros-grid">
-          <div class="filtro-campo">
-            <label>Área</label>
-            <select id="filtro-area" class="filtro-select"></select>
-          </div>
-          <div class="filtro-campo">
-            <label>Nombre</label>
-            <input id="filtro-nombre" type="text" placeholder="Buscar por nombre..." class="filtro-input">
-          </div>
-          <div class="filtro-campo">
-            <label>Correo</label>
-            <input id="filtro-email" type="text" placeholder="Buscar por correo..." class="filtro-input">
-          </div>
-          <div class="filtro-campo">
-            <label>Desde</label>
-            <input id="filtro-fecha-desde" type="date" class="filtro-input">
-          </div>
-          <div class="filtro-campo">
-            <label>Hasta</label>
-            <input id="filtro-fecha-hasta" type="date" class="filtro-input">
-          </div>
+          <div class="filtro-campo"><label>Área</label><select id="filtro-area" class="filtro-select"></select></div>
+          <div class="filtro-campo"><label>Nombre</label><input id="filtro-nombre" type="text" placeholder="Buscar por nombre..." class="filtro-input"></div>
+          <div class="filtro-campo"><label>Correo</label><input id="filtro-email" type="text" placeholder="Buscar por correo..." class="filtro-input"></div>
+          <div class="filtro-campo"><label>Desde</label><input id="filtro-fecha-desde" type="date" class="filtro-input"></div>
+          <div class="filtro-campo"><label>Hasta</label><input id="filtro-fecha-hasta" type="date" class="filtro-input"></div>
         </div>
         <div class="filtros-footer">
           <span id="filtro-resultado" class="filtro-resultado"></span>
@@ -357,13 +355,11 @@
         </div>
       </div>
 
-      <!-- Personas -->
       <div class="sec-titulo">Quiénes enviaron archivos</div>
       <div class="panel-white" style="margin-bottom:20px">
         <div id="admin-personas"><p class="cargando-txt">Cargando...</p></div>
       </div>
 
-      <!-- Tabla -->
       <div class="sec-titulo">Todos los archivos recibidos</div>
       <div class="panel-white">
         <div style="overflow-x:auto">
@@ -377,14 +373,13 @@
           </table>
         </div>
       </div>
-
     </div>
   </div>
 
 </div><!-- #app -->
 
 <!-- ═══════════════════════════════
-     MODAL LIMPIAR DUPLICADOS
+     MODAL ELIMINAR REGISTROS BD
 ═══════════════════════════════ -->
 <div id="modal-limpiar-duplicados" class="modal-overlay" style="display:none">
   <div class="modal-card">
@@ -394,18 +389,40 @@
       </div>
       <div>
         <div class="modal-titulo">Eliminar registros BD</div>
-        <div class="modal-sub">Elimina registros de la base de datos (no afecta Google Drive)</div>
+        <div class="modal-sub">Elimina registros de Firestore (no afecta Google Drive)</div>
       </div>
       <button class="modal-cerrar" onclick="cerrarModalLimpiarDuplicados()">✕</button>
     </div>
 
     <div id="limpieza-contenido" class="modal-body">
-      <p class="modal-desc">Este proceso eliminará registros duplicados de la base de datos (Firestore). Los archivos en Google Drive no serán afectados.</p>
-      
+      <p class="modal-desc">Este proceso eliminará registros de la base de datos (Firestore). Los archivos en Google Drive no serán afectados.</p>
+
+      <div class="elim-aviso-rojo">
+        <span>⚠️</span>
+        <strong>Esta acción es IRREVERSIBLE — elige bien el rango</strong>
+      </div>
+
+      <div class="elim-fechas">
+        <div class="elim-fecha-campo">
+          <label>Desde</label>
+          <input type="date" id="elim-fecha-desde" class="filtro-input">
+        </div>
+        <div class="elim-fecha-campo">
+          <label>Hasta</label>
+          <input type="date" id="elim-fecha-hasta" class="filtro-input">
+        </div>
+      </div>
+
+      <button class="btn-elim-preview" id="btn-preview-eliminar" onclick="previsualizarEliminacion()">
+        Ver cuántos registros se borrarán
+      </button>
+
+      <div id="elim-preview-result" style="display:none;margin-top:10px;padding:10px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;color:#15803d;font-weight:600;"></div>
+
       <div style="margin-top:16px">
-        <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--txt2)">
-          <input type="checkbox" id="check-confirmar" onchange="verificarCheckLimpieza()" style="width:18px;height:18px">
-          <span>Entiendo que se eliminarán registros de la base de datos (Firestore), no de Google Drive</span>
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--txt2);cursor:pointer;line-height:1.5;">
+          <input type="checkbox" id="check-confirmar" onchange="verificarCheckLimpieza()" style="width:16px;height:16px;flex-shrink:0;margin-top:2px;">
+          <span>Entiendo que se eliminarán registros de Firestore permanentemente (no afecta Google Drive)</span>
         </label>
       </div>
 
@@ -445,7 +462,7 @@
 
     <!-- Paso 1 -->
     <div id="arch-paso1" class="modal-body">
-      <p class="modal-desc">Selecciona el mes a archivar. Los archivos se descargarán a tu PC y luego podrás eliminar los binarios de la base de datos. El historial queda siempre.</p>
+      <p class="modal-desc">Selecciona el mes a archivar. Los archivos se abrirán desde Drive y luego podrás marcarlos como archivados. El historial queda siempre.</p>
       <div class="form-field" style="margin-top:14px">
         <label class="form-label">Mes a archivar</label>
         <select id="arch-mes-select" class="form-select" onchange="seleccionarMesArchivado()">
@@ -469,9 +486,9 @@
         </div>
       </div>
       <div class="checklist">
-        <label class="check-item"><input type="checkbox" id="check1" onchange="verificarChecks()"><span>Entiendo que los archivos se descargarán a mi PC</span></label>
+        <label class="check-item"><input type="checkbox" id="check1" onchange="verificarChecks()"><span>Entiendo que los archivos se abrirán desde Google Drive</span></label>
         <label class="check-item"><input type="checkbox" id="check2" onchange="verificarChecks()"><span>Guardaré los archivos descargados en un lugar seguro</span></label>
-        <label class="check-item"><input type="checkbox" id="check3" onchange="verificarChecks()"><span>Los binarios se eliminarán de Firestore (el historial queda)</span></label>
+        <label class="check-item"><input type="checkbox" id="check3" onchange="verificarChecks()"><span>Los registros quedarán marcados como archivados (el historial permanece)</span></label>
       </div>
       <div class="modal-footer">
         <button class="btn-modal-cancel" onclick="$('arch-paso2').style.display='none';$('arch-paso1').style.display='block'">← Volver</button>
@@ -489,11 +506,11 @@
       </div>
       <div class="aviso-azul">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span>El historial (nombre, correo, área, fecha) se conserva permanentemente. Solo se eliminan los archivos binarios.</span>
+        <span>El historial (nombre, correo, área, fecha) se conserva permanentemente. Solo se marcan como archivados.</span>
       </div>
       <div class="modal-footer">
         <button class="btn-modal-danger" id="arch-btn-archivar" style="display:none">
-          Confirmar archivado (eliminar binarios)
+          Confirmar archivado
         </button>
       </div>
     </div>
@@ -501,6 +518,20 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- EmailJS cargado como script clásico para disponibilidad global inmediata -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>
+  (function(){
+    if(window.emailjs){
+      emailjs.init({ publicKey: "gaScEoguCEcx7aFYT" });
+      console.log("✓ EmailJS inicializado");
+    } else {
+      console.error("❌ EmailJS no se pudo cargar");
+    }
+  })();
+</script>
+
 <script type="module" src="app.js"></script>
 </body>
 </html>
