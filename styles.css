@@ -490,3 +490,20 @@ tbody tr:hover td{background:#fafafa;}
 .btn-elim-preview{width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s;}
 .btn-elim-preview:hover:not(:disabled){background:#b91c1c;}
 .btn-elim-preview:disabled{opacity:.6;cursor:not-allowed;}
+/* ── Agregar al final de styles.css ── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+#btn-refresh-global:hover {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+#btn-refresh-mis-envios:hover {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
