@@ -79,61 +79,24 @@
         </div>
       </div>
 
-      <!-- Panel derecho -->
+      <!-- Panel derecho — SOLO GOOGLE -->
       <div class="login-panel-right">
-        <div class="auth-tabs">
-          <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Iniciar sesión</button>
-          <button class="auth-tab" id="tab-registro" onclick="switchTab('registro')">Registrarse</button>
-        </div>
+        <div class="lpr-bienvenida">Bienvenido</div>
+        <p class="login-card-desc">Accede con tu cuenta de Google para continuar.</p>
 
-        <!-- Login -->
-        <div id="panel-login">
-          <p class="login-card-desc">Accede con tu cuenta Google o con correo y contraseña.</p>
-          <button class="btn-google" id="btn-google">
-            <svg width="18" height="18" viewBox="0 0 48 48">
-              <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 33.1 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C33.8 6.5 29.1 4.5 24 4.5 12.7 4.5 3.5 13.7 3.5 25S12.7 45.5 24 45.5c11 0 20.5-8 20.5-20.5 0-1.4-.1-2.7-.4-3.5z"/>
-              <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.1 19 12 24 12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C33.8 6.5 29.1 4.5 24 4.5c-7.7 0-14.3 4.4-17.7 10.2z"/>
-              <path fill="#4CAF50" d="M24 45.5c5 0 9.6-1.9 13.1-5l-6.1-5.1C29.1 37 26.6 38 24 38c-5.2 0-9.6-2.9-11.3-7.1l-6.5 5C9.6 41 16.4 45.5 24 45.5z"/>
-              <path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.1 5.1C40.7 35.4 44 30.6 44 25c0-1.4-.1-2.7-.4-3.5z"/>
-            </svg>
-            Acceder con Google
-          </button>
-          <div class="auth-divider"><span>o</span></div>
-          <div class="form-field">
-            <label class="form-label">Correo electrónico</label>
-            <input type="email" id="login-email" class="form-input" placeholder="tucorreo@ejemplo.com">
-          </div>
-          <div class="form-field">
-            <label class="form-label">Contraseña</label>
-            <input type="password" id="login-pass" class="form-input" placeholder="••••••••">
-          </div>
-          <button class="btn-primary-full" id="btn-login-email">Iniciar sesión</button>
-          <div style="text-align:center;margin-top:10px;">
-            <button class="btn-link" id="btn-forgot">¿Olvidaste tu contraseña?</button>
-          </div>
-        </div>
+        <button class="btn-google" id="btn-google">
+          <svg width="18" height="18" viewBox="0 0 48 48">
+            <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 33.1 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C33.8 6.5 29.1 4.5 24 4.5 12.7 4.5 3.5 13.7 3.5 25S12.7 45.5 24 45.5c11 0 20.5-8 20.5-20.5 0-1.4-.1-2.7-.4-3.5z"/>
+            <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.1 19 12 24 12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C33.8 6.5 29.1 4.5 24 4.5c-7.7 0-14.3 4.4-17.7 10.2z"/>
+            <path fill="#4CAF50" d="M24 45.5c5 0 9.6-1.9 13.1-5l-6.1-5.1C29.1 37 26.6 38 24 38c-5.2 0-9.6-2.9-11.3-7.1l-6.5 5C9.6 41 16.4 45.5 24 45.5z"/>
+            <path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.1 5.1C40.7 35.4 44 30.6 44 25c0-1.4-.1-2.7-.4-3.5z"/>
+          </svg>
+          Acceder con Google
+        </button>
 
-        <!-- Registro -->
-        <div id="panel-registro" style="display:none">
-          <p class="login-card-desc">Crea tu cuenta con correo y contraseña para acceder al sistema.</p>
-          <div class="form-field">
-            <label class="form-label">Nombre completo</label>
-            <input type="text" id="reg-nombre" class="form-input" placeholder="Tu nombre completo">
-          </div>
-          <div class="form-field">
-            <label class="form-label">Correo electrónico</label>
-            <input type="email" id="reg-email" class="form-input" placeholder="tucorreo@ejemplo.com">
-          </div>
-          <div class="form-field">
-            <label class="form-label">Contraseña</label>
-            <input type="password" id="reg-pass" class="form-input" placeholder="Mínimo 6 caracteres">
-          </div>
-          <button class="btn-primary-full" id="btn-registrar">Crear cuenta</button>
-        </div>
-
-        <div class="info-note" style="margin-top:16px">
+        <div class="info-note" style="margin-top:20px">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Al enviar recibirás un correo de confirmación automático con cada envío.
+          Al ingresar recibirás un correo de confirmación automático con cada envío.
         </div>
       </div>
     </div>
@@ -160,13 +123,11 @@
           </div>
         </div>
 
-        <!-- Detalles -->
         <div class="form-field">
           <label class="form-label">Detalles del Envío</label>
           <textarea id="detalle-envio" class="form-textarea" placeholder="Describí los detalles del envío..."></textarea>
         </div>
 
-        <!-- Área -->
         <div class="form-field">
           <label class="form-label">Área <span class="req">*</span></label>
           <select id="area-select" class="form-select">
@@ -174,7 +135,6 @@
           </select>
         </div>
 
-        <!-- Archivo Excel -->
         <div class="form-field">
           <label class="form-label">Archivo Excel</label>
           <div id="dropzone" class="dropzone">
@@ -198,7 +158,6 @@
           </div>
         </div>
 
-        <!-- Acta PDF -->
         <div class="form-field">
           <label class="form-label">
             Acta PDF
@@ -230,7 +189,6 @@
           </div>
         </div>
 
-        <!-- Progreso -->
         <div id="progress-wrap" class="progress-wrap">
           <div class="progress-header">
             <span id="progress-label-txt">Subiendo...</span>
@@ -240,7 +198,6 @@
           <div class="progress-nota">No cierres esta ventana hasta completar.</div>
         </div>
 
-        <!-- Botón -->
         <button class="btn-registrar" id="btn-enviar" disabled style="opacity:0.45;cursor:not-allowed;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           Registrar Envío
@@ -460,7 +417,6 @@
       <button class="modal-cerrar" onclick="cerrarModalArchivado()">✕</button>
     </div>
 
-    <!-- Paso 1 -->
     <div id="arch-paso1" class="modal-body">
       <p class="modal-desc">Selecciona el mes a archivar. Los archivos se abrirán desde Drive y luego podrás marcarlos como archivados. El historial queda siempre.</p>
       <div class="form-field" style="margin-top:14px">
@@ -476,7 +432,6 @@
       </div>
     </div>
 
-    <!-- Paso 2 -->
     <div id="arch-paso2" class="modal-body" style="display:none">
       <div class="aviso-amarillo">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -498,7 +453,6 @@
       </div>
     </div>
 
-    <!-- Paso 3 -->
     <div id="arch-paso3" class="modal-body" style="display:none">
       <div style="padding:8px 0 16px">
         <div class="progress-track"><div id="arch-progreso-bar" class="arch-progreso-bar"></div></div>
@@ -519,7 +473,6 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- EmailJS cargado como script clásico para disponibilidad global inmediata -->
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
   (function(){
