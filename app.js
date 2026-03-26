@@ -1,12 +1,14 @@
 /* ══════════════════════════════════════════════════════════
    PORTAL SISCTE — app.js  v5.1
-   ─ Base: v5.0 (Firebase sis-cte1, Drive 1EBYsT..., login email+Google)
+   ─ Base: v5.0 (Firebase sis-cte1, Drive 1EBYsT..., login solo Google)
    ─ Incorporado de v4.4:
        • Acta PDF obligatoria después del día 10 del mes
        • Comprobante PDF generado y subido a Drive (carpeta NOTIFICACIONES_USUARIOS)
        • EmailJS doble: correo usuario + alerta admin con link comprobante
        • Reemplazo de archivos duplicados en Firestore + Drive
        • Lógica de plazo / mensaje de retraso en UI
+   ─ Fix v5.1:
+       • acta_link muestra "No aplica — enviado dentro del plazo" cuando no hay acta
 ══════════════════════════════════════════════════════════ */
 
 /* ── Firebase ────────────────────────────────────────── */
@@ -27,8 +29,8 @@ const EMAILJS_CONFIG = {
 };
 
 /* ── EmailJS — Alerta al ADMIN ───────────────────────── */
-const EMAILJS_ADMIN_SERVICE  = "service_olg4mtm";  // Gmail sis.cte1
-const EMAILJS_ADMIN_TEMPLATE = "template_kxdf3rr"; // template admin
+const EMAILJS_ADMIN_SERVICE  = "service_olg4mtm";
+const EMAILJS_ADMIN_TEMPLATE = "template_kxdf3rr";
 
 /* ── Google Drive ────────────────────────────────────── */
 const GDRIVE_CONFIG = {
@@ -36,8 +38,8 @@ const GDRIVE_CONFIG = {
   scope: 'https://www.googleapis.com/auth/drive'
 };
 
-const GDRIVE_CARPETA_GENERAL      = '1EBYsTtNi7JMTOYqKSnjFWnipmaq1L_LU'; // raíz archivos Excel
-const GDRIVE_CARPETA_COMPROBANTES = '1sZnOusOY3mT-nidmdlveKaj3FxX5WG5_'; // NOTIFICACIONES_USUARIOS
+const GDRIVE_CARPETA_GENERAL      = '1EBYsTtNi7JMTOYqKSnjFWnipmaq1L_LU';
+const GDRIVE_CARPETA_COMPROBANTES = '1sZnOusOY3mT-nidmdlveKaj3FxX5WG5_';
 
 /* ── Admin ───────────────────────────────────────────── */
 const ADMIN_EMAILS = [
@@ -120,7 +122,7 @@ async function initFirebase() {
 }
 
 /* ══════════════════════════════════
-   AUTH
+   AUTH — solo Google
 ══════════════════════════════════ */
 async function login() {
   try {
@@ -148,65 +150,6 @@ async function logout() {
   _driveTokenCache = null; _driveTokenExpiry = 0;
   try { await window._fb.signOut(auth); } catch(e) {}
 }
-
-async function loginEmail() {
-  await _firebaseReady;
-  const email = $('login-email')?.value?.trim();
-  const pass  = $('login-pass')?.value;
-  if (!email || !pass) { toast('Ingresa correo y contraseña','err'); return; }
-  try {
-    const cred = await window._fb.signInWithEmailAndPassword(auth, email, pass);
-    await cred.user.reload();
-  } catch(e) {
-    const msg = e.code === 'auth/invalid-credential' ? 'Correo o contraseña incorrectos'
-              : e.code === 'auth/user-not-found'     ? 'No existe una cuenta con ese correo'
-              : e.code === 'auth/wrong-password'     ? 'Contraseña incorrecta'
-              : 'Error: ' + e.message;
-    toast(msg, 'err');
-  }
-}
-
-async function registrarEmail() {
-  await _firebaseReady;
-  const nombre = $('reg-nombre')?.value?.trim();
-  const email  = $('reg-email')?.value?.trim();
-  const pass   = $('reg-pass')?.value;
-  if (!nombre) { toast('Ingresa tu nombre completo','err'); return; }
-  if (!email)  { toast('Ingresa tu correo','err'); return; }
-  if (!pass || pass.length < 6) { toast('La contraseña debe tener al menos 6 caracteres','err'); return; }
-  try {
-    const cred = await window._fb.createUserWithEmailAndPassword(auth, email, pass);
-    await window._fb.updateProfile(cred.user, { displayName: nombre });
-    await cred.user.reload();
-    usuario = { uid: cred.user.uid, nombre, email: cred.user.email, foto: cred.user.photoURL };
-    actualizarNav();
-    toast('Cuenta creada exitosamente ✓');
-  } catch(e) {
-    const msg = e.code === 'auth/email-already-in-use' ? 'Ya existe una cuenta con ese correo'
-              : e.code === 'auth/invalid-email'        ? 'Correo no válido'
-              : e.code === 'auth/weak-password'        ? 'La contraseña es muy débil'
-              : 'Error: ' + e.message;
-    toast(msg, 'err');
-  }
-}
-
-async function olvidoContrasena() {
-  const email = $('login-email')?.value?.trim();
-  if (!email) { toast('Ingresa primero tu correo en el campo de arriba','err'); return; }
-  try {
-    await window._fb.sendPasswordResetEmail(auth, email);
-    toast('Correo de recuperación enviado — revisa tu bandeja ✓');
-  } catch(e) {
-    toast('No se encontró una cuenta con ese correo','err');
-  }
-}
-
-window.switchTab = function(tab) {
-  $('panel-login').style.display    = tab === 'login'    ? 'block' : 'none';
-  $('panel-registro').style.display = tab === 'registro' ? 'block' : 'none';
-  $('tab-login').classList.toggle('active',    tab === 'login');
-  $('tab-registro').classList.toggle('active', tab === 'registro');
-};
 
 const esAdmin = () =>
   usuario && ADMIN_EMAILS.map(x => x.toLowerCase()).includes(usuario.email.toLowerCase());
@@ -356,11 +299,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   poblarAreas('filtro-area', 'Todas las áreas');
   await new Promise(r => setTimeout(r, 100));
 
-  /* botones estáticos */
+  /* botones */
   $('btn-google')?.addEventListener('click', login);
-  $('btn-login-email')?.addEventListener('click', loginEmail);
-  $('btn-registrar')?.addEventListener('click', registrarEmail);
-  $('btn-forgot')?.addEventListener('click', olvidoContrasena);
   document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', logout));
   $('nb-subir')?.addEventListener('click', () => usuario ? irSubir() : ir('vista-login'));
   $('nb-admin')?.addEventListener('click', () => { if(esAdmin()){ ir('vista-admin'); cargarAdmin(); } });
@@ -480,7 +420,6 @@ function actualizarBotonEnviar() {
   btn.style.opacity = listo ? '1' : '0.45';
   btn.style.cursor  = listo ? 'pointer' : 'not-allowed';
 
-  /* badge de acta */
   const actaLabel = $('acta-label-oblig');
   if (actaLabel) {
     if (actaObligatoria) {
@@ -492,11 +431,9 @@ function actualizarBotonEnviar() {
     }
   }
 
-  /* aviso de plazo */
   const plazoEl = $('acta-plazo-info');
   if (plazoEl) plazoEl.textContent = info.mensaje;
 
-  /* hint bajo el botón */
   const hint = $('enviar-hint');
   if (hint) {
     if (!archivoSeleccionado && actaObligatoria)
@@ -583,7 +520,7 @@ async function obtenerOCrearSubcarpeta(token, nombreArea) {
 }
 
 /* ══════════════════════════════════
-   GOOGLE DRIVE — SUBIR ARCHIVO (Excel o Acta)
+   GOOGLE DRIVE — SUBIR ARCHIVO
 ══════════════════════════════════ */
 async function subirAGoogleDrive(archivo, onProgress) {
   const token = await obtenerTokenDrive();
@@ -628,7 +565,6 @@ async function subirAGoogleDrive(archivo, onProgress) {
 
 /* ══════════════════════════════════
    GOOGLE DRIVE — SUBIR COMPROBANTE PDF
-   (carpeta NOTIFICACIONES_USUARIOS)
 ══════════════════════════════════ */
 async function subirComprobantePDFaDrive(dataUrl, registro) {
   try {
@@ -728,7 +664,7 @@ async function enviarArchivo() {
       actaLink:  actaURL || ''
     });
 
-    /* 4. Subir comprobante a Drive (NOTIFICACIONES_USUARIOS) */
+    /* 4. Subir comprobante a Drive */
     setProgreso(72, 'Subiendo comprobante PDF...');
     let comprobanteURL = null;
     if (comprobanteDataUrl) {
@@ -792,7 +728,7 @@ async function enviarArchivo() {
         hora:           horaTexto,
         registro:       numRegistro,
         driveLink:      storageURL,
-        actaLink:       actaURL || '',
+        actaLink:       actaURL || null,       // null si no hay acta
         comprobanteUrl: comprobanteURL || ''
       });
     } catch(mailErr) {
@@ -822,7 +758,7 @@ function mostrarExito(area, fecha, hora) {
 }
 
 /* ══════════════════════════════════
-   GENERAR COMPROBANTE PDF (retorna dataURL)
+   GENERAR COMPROBANTE PDF
 ══════════════════════════════════ */
 async function generarComprobantePDFComoURL(d) {
   try {
@@ -936,6 +872,7 @@ async function cargarEmailJS() {
 
 /* ══════════════════════════════════
    EMAILJS — Correo al USUARIO
+   FIX: acta_link muestra texto descriptivo si no hay acta
 ══════════════════════════════════ */
 async function enviarCorreoUsuario(datos) {
   try {
@@ -948,14 +885,14 @@ async function enviarCorreoUsuario(datos) {
         to_name:         datos.nombre,
         area:            datos.area,
         archivo:         datos.archivo,
-        acta:            datos.acta||'—',
+        acta:            datos.acta || '—',
         tamano:          datos.tamano,
         fecha:           datos.fecha,
         hora:            datos.hora,
         registro:        datos.registro,
-        drive_link:      datos.driveLink||'',
-        acta_link:       datos.actaLink||'',
-        comprobante_url: datos.comprobanteUrl||''
+        drive_link:      datos.driveLink || '',
+        acta_link:       datos.actaLink  || 'No aplica — enviado dentro del plazo',
+        comprobante_url: datos.comprobanteUrl || ''
       }
     );
     console.log('✓ Correo usuario enviado — status:', result.status);
@@ -968,6 +905,7 @@ async function enviarCorreoUsuario(datos) {
 
 /* ══════════════════════════════════
    EMAILJS — Alerta al ADMIN
+   FIX: link_acta muestra texto descriptivo si no hay acta
 ══════════════════════════════════ */
 async function enviarCorreoAdmin(datos) {
   try {
@@ -982,15 +920,15 @@ async function enviarCorreoAdmin(datos) {
         usuario_email:   datos.email,
         area:            datos.area,
         archivo:         datos.archivo,
-        acta:            datos.acta||'—',
+        acta:            datos.acta || '—',
         tamano:          datos.tamano,
         fecha:           datos.fecha,
         hora:            datos.hora,
         registro:        datos.registro,
-        link_archivo:    datos.driveLink||'',
-        link_acta:       datos.actaLink||'',
+        link_archivo:    datos.driveLink || '',
+        link_acta:       datos.actaLink  || 'No aplica — enviado dentro del plazo',
         link_carpeta:    `https://drive.google.com/drive/folders/${GDRIVE_CARPETA_GENERAL}`,
-        comprobante_url: datos.comprobanteUrl||''
+        comprobante_url: datos.comprobanteUrl || ''
       }
     );
     console.log('✓ Alerta admin enviada — status:', result.status);
