@@ -1197,12 +1197,25 @@ window.verificarCheckLimpieza = function() {
 };
 
 async function _obtenerRegistrosEnRango() {
-  const fd = $('elim-fecha-desde').value;
-  const fh = $('elim-fecha-hasta').value;
+  const fd = $('elim-fecha-desde').value; // "YYYY-MM-DD" o vacío
+  const fh = $('elim-fecha-hasta').value; // "YYYY-MM-DD" o vacío
+
   const snap = await window._fb.getDocs(window._fb.collection(db,'entregas'));
   let entregas = snap.docs.map(d => ({id:d.id,...d.data()}));
-  if (fd) entregas = entregas.filter(d => d.timestamp >= new Date(fd).toISOString());
-  if (fh) { const h=new Date(fh); h.setHours(23,59,59,999); entregas=entregas.filter(d=>d.timestamp<=h.toISOString()); }
+
+  // Si no hay ningún filtro de fecha → devolver TODOS los registros
+  if (!fd && !fh) return entregas;
+
+  entregas = entregas.filter(d => {
+    if (!d.timestamp) return true; // si no tiene timestamp, incluir siempre
+    // Comparar solo la parte de fecha (primeros 10 chars) del timestamp ISO
+    // Ej: "2026-03-26T06:18:10.193Z" → "2026-03-26"
+    const fechaDoc = d.timestamp.slice(0, 10); // "YYYY-MM-DD"
+    if (fd && fechaDoc < fd) return false;
+    if (fh && fechaDoc > fh) return false;
+    return true;
+  });
+
   return entregas;
 }
 
