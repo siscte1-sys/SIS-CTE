@@ -1,16 +1,9 @@
 /* ══════════════════════════════════════════════════════════
-   PORTAL SISCTE — app.js  v5.1
-   ─ Base: v5.0 (Firebase sis-cte1, Drive 1EBYsT..., login solo Google)
-   ─ Incorporado de v4.4:
-       • Acta PDF obligatoria después del día 10 del mes
-       • Comprobante PDF generado y subido a Drive (carpeta NOTIFICACIONES_USUARIOS)
-       • EmailJS doble: correo usuario + alerta admin con link comprobante
-       • Reemplazo de archivos duplicados en Firestore + Drive
-       • Lógica de plazo / mensaje de retraso en UI
-   ─ Fix v5.1:
-       • acta_link muestra "No aplica — enviado dentro del plazo" cuando no hay acta
-   ─ Fix v5.1.1:
-       • cargarMisEnvios() se llama tras eliminar registros BD para limpiar la UI
+   PORTAL SISCTE — app.js  v5.2
+   Cambios v5.2:
+     • Eliminado botón "Actualizar" del nav y de Mis Envíos
+     • iniciarLimpiezaDuplicados() limpia la UI de forma síncrona y garantizada
+     • Eliminadas funciones refrescarTodo / refrescarMisEnvios
 ══════════════════════════════════════════════════════════ */
 
 /* ── Firebase ────────────────────────────────────────── */
@@ -380,8 +373,6 @@ function seleccionarActa(f) {
 
 /* ══════════════════════════════════
    LÓGICA DE PLAZO / ACTA OBLIGATORIA
-   Regla: días 1-10 del mes → acta opcional
-          desde el día 11   → acta obligatoria (envío tardío)
 ══════════════════════════════════ */
 function actaEsObligatoriaHoy() {
   return new Date().getDate() > 10;
@@ -872,10 +863,6 @@ async function cargarEmailJS() {
   }
 }
 
-/* ══════════════════════════════════
-   EMAILJS — Correo al USUARIO
-   FIX: acta_link muestra texto descriptivo si no hay acta
-══════════════════════════════════ */
 async function enviarCorreoUsuario(datos) {
   try {
     await cargarEmailJS();
@@ -905,10 +892,6 @@ async function enviarCorreoUsuario(datos) {
   }
 }
 
-/* ══════════════════════════════════
-   EMAILJS — Alerta al ADMIN
-   FIX: link_acta muestra texto descriptivo si no hay acta
-══════════════════════════════════ */
 async function enviarCorreoAdmin(datos) {
   try {
     await cargarEmailJS();
@@ -940,9 +923,6 @@ async function enviarCorreoAdmin(datos) {
   }
 }
 
-/* ══════════════════════════════════
-   EMAILJS — ORQUESTADOR
-══════════════════════════════════ */
 async function enviarCorreosNotificacion(datos) {
   const resultados = await Promise.allSettled([
     enviarCorreoAdmin(datos),
@@ -1197,6 +1177,7 @@ function cerrarModalArchivado() { $('modal-archivado').style.display = 'none'; }
 
 /* ══════════════════════════════════
    ELIMINAR REGISTROS BD
+   FIX v5.2: limpia UI inmediatamente tras borrar
 ══════════════════════════════════ */
 function abrirModalLimpiarDuplicados() {
   $('limpieza-contenido').style.display = 'block';
@@ -1282,59 +1263,35 @@ async function iniciarLimpiezaDuplicados() {
     $('limpieza-progreso-txt').textContent='✓ Eliminación completada';
     log(`\n✅ ${eliminados} registro${eliminados!==1?'s':''} eliminado${eliminados!==1?'s':''} de Firestore.`);
     log('ℹ️ Los archivos en Google Drive no fueron afectados.');
-    log('🔄 Actualizando pantalla...');
+
+    // ── FIX v5.2: limpiar UI inmediatamente, sin esperar ──
     docsAdmin = [];
-    $('tabla-body').innerHTML = `<tr><td colspan="9" class="td-vacio">Actualizando...</td></tr>`;
-    $('admin-personas').innerHTML = `<p class="cargando-txt">Actualizando...</p>`;
-    await new Promise(r => setTimeout(r, 1500));
     cerrarModalLimpiarDuplicados();
-    await cargarAdmin();
-    // ── FIX v5.1.1: refrescar "Mis Envíos" del usuario para limpiar la UI ──
-    await cargarMisEnvios();
+
+    // Limpiar panel admin si está visible
+    const vistaAdmin = $('vista-admin');
+    if (vistaAdmin && vistaAdmin.style.display !== 'none') {
+      $('tabla-body').innerHTML = `<tr><td colspan="9" class="td-vacio">No hay registros</td></tr>`;
+      $('admin-personas').innerHTML = `<p class="cargando-txt">Sin entregas</p>`;
+      $('st-total').textContent  = '0';
+      $('st-unicos').textContent = '0';
+      $('st-ultimo').textContent = 'Sin entregas aún';
+      $('filtro-resultado').textContent = '0 registros encontrados';
+    }
+
+    // Limpiar "Mis Envíos" del usuario
+    const listaMisEnvios = $('mis-envios-lista');
+    if (listaMisEnvios) {
+      listaMisEnvios.innerHTML = `<div class="mis-envios-vacio">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        <p>No hay envíos registrados todavía.</p></div>`;
+    }
+
     toast(`✓ ${eliminados} registro${eliminados!==1?'s':''} eliminado${eliminados!==1?'s':''}`);
+
   } catch(e) {
     log(`\n❌ Error: ${e.message}`);
     toast('Error: '+e.message,'err');
-  }
-}
-
-/* ══════════════════════════════════
-   REFRESCO GLOBAL
-   Sincroniza TODO con Firestore
-══════════════════════════════════ */
-async function refrescarTodo() {
-  const btn = $('btn-refresh-global');
-  const ico = $('refresh-ico');
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
-  if (ico) ico.style.animation = 'spin 0.7s linear infinite';
-  try {
-    const vistaAdmin = $('vista-admin');
-    if (vistaAdmin && vistaAdmin.style.display !== 'none') {
-      await cargarAdmin();
-    }
-    await cargarMisEnvios();
-    toast('✓ Pantalla actualizada desde la base de datos');
-  } catch(e) {
-    toast('Error al actualizar: ' + e.message, 'err');
-  } finally {
-    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
-    if (ico) ico.style.animation = '';
-  }
-}
-
-async function refrescarMisEnvios() {
-  const btn = $('btn-refresh-mis-envios');
-  const ico = $('refresh-mis-ico');
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
-  if (ico) ico.style.animation = 'spin 0.7s linear infinite';
-  try {
-    await cargarMisEnvios();
-    toast('✓ Mis Envíos actualizados');
-  } catch(e) {
-    toast('Error: ' + e.message, 'err');
-  } finally {
-    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
-    if (ico) ico.style.animation = '';
   }
 }
 
@@ -1355,8 +1312,6 @@ window.irSubir                      = irSubir;
 window.seleccionarMesArchivado      = seleccionarMesArchivado;
 window.archPaso2                    = archPaso2;
 window.descargarMesCompleto         = descargarMesCompleto;
-window.refrescarTodo                = refrescarTodo;
-window.refrescarMisEnvios           = refrescarMisEnvios;
 window.ir                           = ir;
 window.show                         = show;
 window.hide                         = hide;
