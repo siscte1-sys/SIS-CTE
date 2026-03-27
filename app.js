@@ -1,5 +1,9 @@
 /* ══════════════════════════════════════════════════════════
-   PORTAL SISCTE — app.js  v5.2
+   PORTAL SISCTE — app.js  v5.3
+   Cambios v5.3:
+     • Reemplazado EmailJS por Google Apps Script Mailer
+     • Sin dependencias externas para correos
+     • Correos HTML enriquecidos enviados desde sis.cte1@gmail.com
    Cambios v5.2:
      • Eliminado botón "Actualizar" del nav y de Mis Envíos
      • iniciarLimpiezaDuplicados() limpia la UI de forma síncrona y garantizada
@@ -16,16 +20,8 @@ const FIREBASE_CONFIG = {
   appId:             "1:861145504172:web:daa073aec7e6478709c209"
 };
 
-/* ── EmailJS — Correo de confirmación al USUARIO ─────── */
-const EMAILJS_CONFIG = {
-  publicKey:  "gaScEoguCEcx7aFYT",
-  serviceId:  "service_ybvnh3i",
-  templateId: "template_8d6u82j"
-};
-
-/* ── EmailJS — Alerta al ADMIN ───────────────────────── */
-const EMAILJS_ADMIN_SERVICE  = "service_olg4mtm";
-const EMAILJS_ADMIN_TEMPLATE = "template_kxdf3rr";
+/* ── GAS Mailer — Notificaciones por correo ──────────── */
+const GAS_MAILER_URL = 'https://script.google.com/macros/s/AKfycbzUo2lgPFksSlxAMm_gMsYRwCnbXeNopLajZoSmVeR_peA1p0S84DvNJaM8Cwthbb-r/exec';
 
 /* ── Google Drive ────────────────────────────────────── */
 const GDRIVE_CONFIG = {
@@ -849,76 +845,62 @@ async function generarComprobantePDFComoURL(d) {
 }
 
 /* ══════════════════════════════════
-   EMAILJS — INIT
+   GAS MAILER — Notificaciones
 ══════════════════════════════════ */
-async function cargarEmailJS() {
-  if (!window.emailjs) {
-    await new Promise((res,rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js';
-      s.onload=res; s.onerror=rej;
-      document.head.appendChild(s);
-    });
-    emailjs.init(EMAILJS_CONFIG.publicKey);
-  }
+async function _gasSend(payload) {
+  const res = await fetch(GAS_MAILER_URL, {
+    method:  'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body:    JSON.stringify(payload)
+  });
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'GAS mailer error');
+  return json;
 }
 
 async function enviarCorreoUsuario(datos) {
   try {
-    await cargarEmailJS();
-    const result = await emailjs.send(
-      EMAILJS_CONFIG.serviceId,
-      EMAILJS_CONFIG.templateId,
-      {
-        to_email:        datos.email,
-        to_name:         datos.nombre,
-        area:            datos.area,
-        archivo:         datos.archivo,
-        acta:            datos.acta || '—',
-        tamano:          datos.tamano,
-        fecha:           datos.fecha,
-        hora:            datos.hora,
-        registro:        datos.registro,
-        drive_link:      datos.driveLink || '',
-        acta_link:       datos.actaLink  || 'No aplica — enviado dentro del plazo',
-        comprobante_url: datos.comprobanteUrl || ''
-      }
-    );
-    console.log('✓ Correo usuario enviado — status:', result.status);
+    await _gasSend({
+      tipo:          'usuario',
+      email:         datos.email,
+      nombre:        datos.nombre,
+      area:          datos.area,
+      archivo:       datos.archivo,
+      acta:          datos.acta || null,
+      tamano:        datos.tamano,
+      fecha:         datos.fecha,
+      hora:          datos.hora,
+      registro:      datos.registro,
+      comprobanteUrl: datos.comprobanteUrl || ''
+    });
+    console.log('✓ Correo usuario enviado via GAS');
     toast('Correo de confirmación enviado ✓');
   } catch(e) {
-    console.error('❌ EmailJS usuario falló:', e.status||'', e.text||e.message||e);
+    console.error('❌ GAS mailer usuario falló:', e.message);
     throw e;
   }
 }
 
 async function enviarCorreoAdmin(datos) {
   try {
-    await cargarEmailJS();
-    const result = await emailjs.send(
-      EMAILJS_ADMIN_SERVICE,
-      EMAILJS_ADMIN_TEMPLATE,
-      {
-        to_email:        ADMIN_EMAILS[0],
-        to_name:         'Administrador SISCTE',
-        usuario_nombre:  datos.nombre,
-        usuario_email:   datos.email,
-        area:            datos.area,
-        archivo:         datos.archivo,
-        acta:            datos.acta || '—',
-        tamano:          datos.tamano,
-        fecha:           datos.fecha,
-        hora:            datos.hora,
-        registro:        datos.registro,
-        link_archivo:    datos.driveLink || '',
-        link_acta:       datos.actaLink  || 'No aplica — enviado dentro del plazo',
-        link_carpeta:    `https://drive.google.com/drive/folders/${GDRIVE_CARPETA_GENERAL}`,
-        comprobante_url: datos.comprobanteUrl || ''
-      }
-    );
-    console.log('✓ Alerta admin enviada — status:', result.status);
+    await _gasSend({
+      tipo:       'admin',
+      nombre:     datos.nombre,
+      email:      datos.email,
+      area:       datos.area,
+      archivo:    datos.archivo,
+      acta:       datos.acta || null,
+      tamano:     datos.tamano,
+      fecha:      datos.fecha,
+      hora:       datos.hora,
+      registro:   datos.registro,
+      driveLink:  datos.driveLink  || '',
+      actaLink:   datos.actaLink   || '',
+      linkCarpeta: `https://drive.google.com/drive/folders/${GDRIVE_CARPETA_GENERAL}`
+    });
+    console.log('✓ Alerta admin enviada via GAS');
   } catch(e) {
-    console.error('❌ EmailJS admin falló:', e.status||'', e.text||e.message||e);
+    console.error('❌ GAS mailer admin falló:', e.message);
     throw e;
   }
 }
