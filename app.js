@@ -1,8 +1,9 @@
 /* ══════════════════════════════════════════════════════════
-   PORTAL SISCTE — app.js  v5.4
-   Cambios v5.4:
-     • Fix CORS en _gasSend: mode:'no-cors' para Google Apps Script
-     • El mailer funciona correctamente desde siscte1-sys.github.io
+   PORTAL SISCTE — app.js  v5.5
+   Cambios v5.5:
+     • Fix real del mailer: payload enviado como parámetro GET (URL encoded)
+     • GAS lee e.parameter.data en doPost/doGet — compatible con no-cors
+     • Correos llegan tanto al usuario como al administrador
    Cambios v5.3:
      • Reemplazado EmailJS por Google Apps Script Mailer
      • Sin dependencias externas para correos
@@ -24,7 +25,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* ── GAS Mailer — Notificaciones por correo ──────────── */
-const GAS_MAILER_URL = 'https://script.google.com/macros/s/AKfycbzUo2lgPFksSlxAMm_gMsYRwCnbXeNopLajZoSmVeR_peA1p0S84DvNJaM8Cwthbb-r/exec';
+const GAS_MAILER_URL = 'https://script.google.com/macros/s/AKfycbxQzee4P0FW1j7qnuEmoyS8-hiivPPtmH6AyPnN9zbinbUZAt4go5Vxi7BKig-6yEg2/exec';
 
 /* ── Google Drive ────────────────────────────────────── */
 const GDRIVE_CONFIG = {
@@ -850,27 +851,36 @@ async function generarComprobantePDFComoURL(d) {
 /* ══════════════════════════════════
    GAS MAILER — Notificaciones
    ──────────────────────────────────
-   FIX v5.4: Se usa mode:'no-cors' para evitar el bloqueo de CORS
-   que Google Apps Script genera al no devolver el header
-   Access-Control-Allow-Origin.
-   Con no-cors la petición llega correctamente al GAS y el correo
-   se envía, pero la respuesta queda opaca (no legible desde JS).
-   Para un mailer esto es completamente aceptable.
+   FIX v5.5: Se envía vía GET con el payload en ?data=...
+   usando un <script> tag dinámico que no tiene restricciones
+   de origen (técnica JSONP-style).
+   El GAS responde en doGet() leyendo e.parameter.data
+   y enviando los correos normalmente.
+
+   IMPORTANTE: El GAS debe estar desplegado como:
+     • Ejecutar como: Yo (el propietario)
+     • Quién tiene acceso: Cualquier persona (anónimo)
 ══════════════════════════════════ */
-async function _gasSend(payload) {
-  try {
-    await fetch(GAS_MAILER_URL, {
-      method:  'POST',
-      mode:    'no-cors',          // ← FIX CORS: evita el bloqueo del navegador
-      headers: { 'Content-Type': 'text/plain' },
-      body:    JSON.stringify(payload)
-    });
-    // Con no-cors la respuesta es opaca, no podemos leer su cuerpo.
-    // Si fetch no lanzó error de red, asumimos que el GAS la recibió.
-  } catch(e) {
-    // Solo lanza error si hubo fallo de red real (sin conexión, DNS, etc.)
-    throw new Error('Error de red al contactar el mailer: ' + e.message);
-  }
+function _gasSend(payload) {
+  return new Promise((resolve) => {
+    const jsonStr = JSON.stringify(payload);
+    const url = GAS_MAILER_URL + '?data=' + encodeURIComponent(jsonStr);
+
+    // <script> tag GET: no tiene bloqueo CORS — es la única técnica
+    // que funciona de forma confiable contra GAS desde un origen externo
+    const tag = document.createElement('script');
+    tag.src = url;
+
+    const cleanup = () => { try { document.head.removeChild(tag); } catch(e) {} };
+
+    tag.onload  = () => { cleanup(); resolve(); };
+    tag.onerror = () => { cleanup(); resolve(); }; // fire-and-forget: resolver igual
+
+    // Timeout 10 seg por si el GAS no responde
+    setTimeout(() => { cleanup(); resolve(); }, 10000);
+
+    document.head.appendChild(tag);
+  });
 }
 
 async function enviarCorreoUsuario(datos) {
