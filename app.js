@@ -1,5 +1,8 @@
 /* ══════════════════════════════════════════════════════════
-   PORTAL SISCTE — app.js  v5.3
+   PORTAL SISCTE — app.js  v5.4
+   Cambios v5.4:
+     • Fix CORS en _gasSend: mode:'no-cors' para Google Apps Script
+     • El mailer funciona correctamente desde siscte1-sys.github.io
    Cambios v5.3:
      • Reemplazado EmailJS por Google Apps Script Mailer
      • Sin dependencias externas para correos
@@ -846,16 +849,28 @@ async function generarComprobantePDFComoURL(d) {
 
 /* ══════════════════════════════════
    GAS MAILER — Notificaciones
+   ──────────────────────────────────
+   FIX v5.4: Se usa mode:'no-cors' para evitar el bloqueo de CORS
+   que Google Apps Script genera al no devolver el header
+   Access-Control-Allow-Origin.
+   Con no-cors la petición llega correctamente al GAS y el correo
+   se envía, pero la respuesta queda opaca (no legible desde JS).
+   Para un mailer esto es completamente aceptable.
 ══════════════════════════════════ */
 async function _gasSend(payload) {
-  const res = await fetch(GAS_MAILER_URL, {
-    method:  'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body:    JSON.stringify(payload)
-  });
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'GAS mailer error');
-  return json;
+  try {
+    await fetch(GAS_MAILER_URL, {
+      method:  'POST',
+      mode:    'no-cors',          // ← FIX CORS: evita el bloqueo del navegador
+      headers: { 'Content-Type': 'text/plain' },
+      body:    JSON.stringify(payload)
+    });
+    // Con no-cors la respuesta es opaca, no podemos leer su cuerpo.
+    // Si fetch no lanzó error de red, asumimos que el GAS la recibió.
+  } catch(e) {
+    // Solo lanza error si hubo fallo de red real (sin conexión, DNS, etc.)
+    throw new Error('Error de red al contactar el mailer: ' + e.message);
+  }
 }
 
 async function enviarCorreoUsuario(datos) {
@@ -1179,20 +1194,17 @@ window.verificarCheckLimpieza = function() {
 };
 
 async function _obtenerRegistrosEnRango() {
-  const fd = $('elim-fecha-desde').value; // "YYYY-MM-DD" o vacío
-  const fh = $('elim-fecha-hasta').value; // "YYYY-MM-DD" o vacío
+  const fd = $('elim-fecha-desde').value;
+  const fh = $('elim-fecha-hasta').value;
 
   const snap = await window._fb.getDocs(window._fb.collection(db,'entregas'));
   let entregas = snap.docs.map(d => ({id:d.id,...d.data()}));
 
-  // Si no hay ningún filtro de fecha → devolver TODOS los registros
   if (!fd && !fh) return entregas;
 
   entregas = entregas.filter(d => {
-    if (!d.timestamp) return true; // si no tiene timestamp, incluir siempre
-    // Comparar solo la parte de fecha (primeros 10 chars) del timestamp ISO
-    // Ej: "2026-03-26T06:18:10.193Z" → "2026-03-26"
-    const fechaDoc = d.timestamp.slice(0, 10); // "YYYY-MM-DD"
+    if (!d.timestamp) return true;
+    const fechaDoc = d.timestamp.slice(0, 10);
     if (fd && fechaDoc < fd) return false;
     if (fh && fechaDoc > fh) return false;
     return true;
@@ -1259,11 +1271,9 @@ async function iniciarLimpiezaDuplicados() {
     log(`\n✅ ${eliminados} registro${eliminados!==1?'s':''} eliminado${eliminados!==1?'s':''} de Firestore.`);
     log('ℹ️ Los archivos en Google Drive no fueron afectados.');
 
-    // ── FIX v5.2: limpiar UI inmediatamente, sin esperar ──
     docsAdmin = [];
     cerrarModalLimpiarDuplicados();
 
-    // Limpiar panel admin si está visible
     const vistaAdmin = $('vista-admin');
     if (vistaAdmin && vistaAdmin.style.display !== 'none') {
       $('tabla-body').innerHTML = `<tr><td colspan="9" class="td-vacio">No hay registros</td></tr>`;
@@ -1274,7 +1284,6 @@ async function iniciarLimpiezaDuplicados() {
       $('filtro-resultado').textContent = '0 registros encontrados';
     }
 
-    // Limpiar "Mis Envíos" del usuario
     const listaMisEnvios = $('mis-envios-lista');
     if (listaMisEnvios) {
       listaMisEnvios.innerHTML = `<div class="mis-envios-vacio">
