@@ -192,6 +192,8 @@ nav{background:var(--white);border-bottom:1px solid var(--border);height:48px;pa
 .btn-acc-green:hover{background:var(--green);color:#fff;}
 .btn-acc-orange{background:var(--orange-l);color:var(--orange);border-color:var(--orange-m);}
 .btn-acc-orange:hover{background:var(--orange);color:#fff;}
+.btn-acc-red{background:#fef2f2;color:var(--red);border-color:#fecaca;}
+.btn-acc-red:hover{background:var(--red);color:#fff;}
 .btn-acc-ghost{background:var(--white);color:var(--txt2);border-color:var(--border);}
 .btn-acc-ghost:hover{border-color:var(--red);color:var(--red);}
 .stats-row{display:grid;grid-template-columns:1fr 1fr 2fr;gap:12px;margin-bottom:20px;}
@@ -311,50 +313,29 @@ tbody tr:hover td{background:#fafafa;}
    RESPONSIVE — TABLET  ≤ 768px
 ══════════════════════════════ */
 @media(max-width:768px){
-  /* Nav */
   nav{padding:0 14px;height:52px;}
-  .nav-nombre{display:none;}           /* oculta nombre, deja foto */
+  .nav-nombre{display:none;}
   .nav-brand{font-size:12px;}
-
-  /* Hero */
   .page-hero{padding:24px 16px 36px;}
   .page-hero-titulo{font-size:19px;}
   .page-hero-sub{font-size:12px;}
-
-  /* Body */
   .page-body{padding:0 12px 48px;}
   .page-body-wide{padding:0 12px 48px;}
-
-  /* Card envío */
   .envio-card{padding:18px;}
-
-  /* Stats */
   .stats-row{grid-template-columns:1fr 1fr;}
   .stat-box-wide{grid-column:1/-1;}
   .stat-val{font-size:26px;}
-
-  /* Filtros */
   .filtros-grid{grid-template-columns:1fr 1fr;}
   .filtros-panel{padding:14px;}
-
-  /* Admin acciones */
   .admin-top{flex-direction:column;align-items:stretch;}
   .admin-acc{flex-wrap:wrap;gap:6px;}
   .btn-acc{font-size:11px;padding:7px 10px;}
-
-  /* Tabla: scroll horizontal ya está, pero reducimos padding */
   th,td{padding:8px 10px;}
-
-  /* Éxito */
   .exito-card{padding:24px 18px;}
   .exito-datos{grid-template-columns:1fr;}
   .exito-row.full{grid-column:auto;}
-
-  /* Login */
   .login-card{padding:24px 20px;}
   .vista-login-wrap{padding:24px 14px;}
-
-  /* Modal */
   .modal-card{max-width:100%;margin:8px;}
 }
 
@@ -362,89 +343,56 @@ tbody tr:hover td{background:#fafafa;}
    RESPONSIVE — MÓVIL  ≤ 480px
 ══════════════════════════════ */
 @media(max-width:480px){
-  /* Nav compacto */
   nav{padding:0 12px;height:50px;}
-  .nav-brand{display:none;}            /* solo ícono en móvil */
+  .nav-brand{display:none;}
   .nav-btn{padding:5px 8px;font-size:11px;}
-  .nav-salir span{display:none;}       /* solo ícono salir */
+  .nav-salir span{display:none;}
   .nav-salir{padding:5px 8px;}
-
-  /* Hero */
   .page-hero{padding:20px 12px 32px;}
   .page-hero-titulo{font-size:17px;}
   .page-hero-sub{font-size:11px;}
   .page-hero::after{height:18px;}
-
-  /* Body */
   .page-body{padding:0 10px 40px;}
   .page-body-wide{padding:0 10px 40px;}
-
-  /* Login */
   .vista-login-wrap{padding:20px 12px;}
   #vista-login{padding:20px 12px;justify-content:center;}
-  .login-hero-ico{width:50px;height:50px;}
-  .login-titulo{font-size:20px;}
   .login-card{padding:20px 16px;border-radius:12px;}
   .login-card h2{font-size:16px;}
   .btn-google{font-size:13px;padding:11px 14px;}
-
-  /* Card envío */
   .envio-card{padding:14px;border-radius:10px;}
   .envio-card-header{gap:8px;margin-bottom:16px;padding-bottom:12px;}
   .envio-card-titulo{font-size:13px;}
-  .form-textarea{font-size:14px;}       /* evita zoom en iOS */
-  .form-select{font-size:14px;}         /* evita zoom en iOS */
-
-  /* Dropzone */
+  .form-textarea{font-size:14px;}
+  .form-select{font-size:14px;}
   .dropzone{padding:20px 12px;}
   .dz-label{font-size:12px;}
-
-  /* Botón registrar */
   .btn-registrar{font-size:14px;padding:13px;}
-
-  /* Mis envíos */
   .mis-envios-sep{font-size:12px;}
   .mis-envio-item{padding:10px 12px;}
-
-  /* Stats — 1 columna */
   .stats-row{grid-template-columns:1fr;}
   .stat-box-wide{grid-column:auto;}
   .stat-val{font-size:28px;}
-
-  /* Filtros — 1 columna */
   .filtros-grid{grid-template-columns:1fr;}
   .filtros-footer{flex-direction:column;align-items:stretch;}
   .filtros-footer > div{display:flex;gap:8px;}
   .btn-filtrar,.btn-limpiar{flex:1;text-align:center;justify-content:center;}
-
-  /* Admin botones */
   .admin-acc{gap:6px;}
   .btn-acc{flex:1;justify-content:center;font-size:11px;padding:8px 6px;}
-
-  /* Personas */
   .persona-badge{padding:2px 8px;font-size:10px;}
-  .persona-ultima{display:none;}       /* simplifica en móvil */
-
-  /* Tabla */
+  .persona-ultima{display:none;}
   th,td{padding:7px 8px;font-size:11px;}
   .td-n{width:24px;}
-  .td-email{display:none;}             /* oculta email en tabla móvil */
-
-  /* Éxito */
+  .td-email{display:none;}
   .exito-card{padding:20px 14px;}
   .exito-ico{width:52px;height:52px;}
   .exito-titulo{font-size:16px;}
   .exito-datos{gap:6px;}
-
-  /* Modal */
   .modal-overlay{padding:8px;}
   .modal-card{border-radius:12px;margin:0;}
   .modal-header{padding:14px 16px 12px;}
   .modal-body{padding:14px 16px;}
   .modal-footer{flex-direction:column;gap:6px;}
   .btn-modal-cancel,.btn-modal-primary,.btn-modal-danger{width:100%;justify-content:center;text-align:center;}
-
-  /* Toast */
   .toast{font-size:11px;padding:8px 16px;max-width:calc(100vw - 32px);white-space:normal;text-align:center;}
 }
 
@@ -454,7 +402,7 @@ tbody tr:hover td{background:#fafafa;}
 @media(hover:none) and (pointer:coarse){
   .form-textarea,.form-select,.filtro-input,.filtro-select{font-size:16px;}
   .btn-registrar,.btn-google,.btn-acc,.btn-modal-primary,.btn-modal-danger{
-    min-height:44px; /* área táctil mínima recomendada */
+    min-height:44px;
   }
 }
 
@@ -481,6 +429,7 @@ tbody tr:hover td{background:#fafafa;}
   .login-panel-right{padding:24px 20px;}
   .lpl-sub{display:none;}
 }
+
 /* ══════════════════════════════
    MODAL ELIMINAR REGISTROS BD
 ══════════════════════════════ */
@@ -490,20 +439,9 @@ tbody tr:hover td{background:#fafafa;}
 .btn-elim-preview{width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s;}
 .btn-elim-preview:hover:not(:disabled){background:#b91c1c;}
 .btn-elim-preview:disabled{opacity:.6;cursor:not-allowed;}
-/* ── Agregar al final de styles.css ── */
+
+/* ── Animación spin global ── */
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
-}
-
-#btn-refresh-global:hover {
-  background: #e2e8f0;
-  border-color: #cbd5e1;
-  color: #1e293b;
-}
-
-#btn-refresh-mis-envios:hover {
-  background: #e2e8f0;
-  border-color: #cbd5e1;
-  color: #1e293b;
 }
