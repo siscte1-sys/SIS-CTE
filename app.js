@@ -849,96 +849,89 @@ async function generarComprobantePDFComoURL(d) {
 }
 
 /* ══════════════════════════════════
-   GAS MAILER — Notificaciones
+   GAS MAILER — Notificaciones  v5.6
    ──────────────────────────────────
-   FIX v5.5: Se envía vía GET con el payload en ?data=...
-   usando un <script> tag dinámico que no tiene restricciones
-   de origen (técnica JSONP-style).
-   El GAS responde en doGet() leyendo e.parameter.data
-   y enviando los correos normalmente.
+   CORRECCIONES:
+   1. Se abandona el <script> tag (JSONP): GAS redirige a login
+      de Google cuando el payload es grande → onload nunca
+      dispara con los datos correctos, onerror se ignora.
+   2. Se usa fetch() con mode:'no-cors' + method POST.
+      • no-cors permite enviar la petición sin preflight.
+      • La respuesta es opaca (no se puede leer), pero el
+        GAS la recibe y ejecuta _procesarEnvio() sin problema.
+   3. El payload ya NO va en la URL (límite ~2000 chars).
+      Va en el body como texto plano — GAS lo lee en
+      e.postData.contents dentro de doPost().
+   4. Se envían los dos correos en secuencia (no en paralelo)
+      para evitar que GAS rechace peticiones simultáneas del
+      mismo deployment.
 
    IMPORTANTE: El GAS debe estar desplegado como:
      • Ejecutar como: Yo (el propietario)
      • Quién tiene acceso: Cualquier persona (anónimo)
 ══════════════════════════════════ */
-function _gasSend(payload) {
-  return new Promise((resolve) => {
-    const jsonStr = JSON.stringify(payload);
-    const url = GAS_MAILER_URL + '?data=' + encodeURIComponent(jsonStr);
+async function _gasSend(payload) {
+  const jsonStr = JSON.stringify(payload);
 
-    // <script> tag GET: no tiene bloqueo CORS — es la única técnica
-    // que funciona de forma confiable contra GAS desde un origen externo
-    const tag = document.createElement('script');
-    tag.src = url;
-
-    const cleanup = () => { try { document.head.removeChild(tag); } catch(e) {} };
-
-    tag.onload  = () => { cleanup(); resolve(); };
-    tag.onerror = () => { cleanup(); resolve(); }; // fire-and-forget: resolver igual
-
-    // Timeout 10 seg por si el GAS no responde
-    setTimeout(() => { cleanup(); resolve(); }, 10000);
-
-    document.head.appendChild(tag);
+  // fetch no-cors + POST: sin CORS bloqueante, sin límite de URL
+  await fetch(GAS_MAILER_URL, {
+    method:  'POST',
+    mode:    'no-cors',   // respuesta opaca — aceptable, solo nos importa que llegue
+    headers: { 'Content-Type': 'text/plain' },  // 'application/json' dispara preflight en no-cors
+    body:    jsonStr
   });
+  // no-cors nunca rechaza aunque el servidor devuelva error HTTP —
+  // cualquier fallo de red lanzará TypeError, que el caller captura
 }
 
 async function enviarCorreoUsuario(datos) {
-  try {
-    await _gasSend({
-      tipo:          'usuario',
-      email:         datos.email,
-      nombre:        datos.nombre,
-      area:          datos.area,
-      archivo:       datos.archivo,
-      acta:          datos.acta || null,
-      tamano:        datos.tamano,
-      fecha:         datos.fecha,
-      hora:          datos.hora,
-      registro:      datos.registro,
-      comprobanteUrl: datos.comprobanteUrl || ''
-    });
-    console.log('✓ Correo usuario enviado via GAS');
-    toast('Correo de confirmación enviado ✓');
-  } catch(e) {
-    console.error('❌ GAS mailer usuario falló:', e.message);
-    throw e;
-  }
+  await _gasSend({
+    tipo:           'usuario',
+    email:          datos.email,
+    nombre:         datos.nombre,
+    area:           datos.area,
+    archivo:        datos.archivo,
+    acta:           datos.acta || '—',
+    tamano:         datos.tamano,
+    fecha:          datos.fecha,
+    hora:           datos.hora,
+    registro:       datos.registro,
+    comprobanteUrl: datos.comprobanteUrl || ''
+  });
+  console.log('✓ Correo usuario enviado via GAS');
+  toast('Correo de confirmación enviado ✓');
 }
 
 async function enviarCorreoAdmin(datos) {
-  try {
-    await _gasSend({
-      tipo:       'admin',
-      nombre:     datos.nombre,
-      email:      datos.email,
-      area:       datos.area,
-      archivo:    datos.archivo,
-      acta:       datos.acta || null,
-      tamano:     datos.tamano,
-      fecha:      datos.fecha,
-      hora:       datos.hora,
-      registro:   datos.registro,
-      driveLink:  datos.driveLink  || '',
-      actaLink:   datos.actaLink   || '',
-      linkCarpeta: `https://drive.google.com/drive/folders/${GDRIVE_CARPETA_GENERAL}`
-    });
-    console.log('✓ Alerta admin enviada via GAS');
-  } catch(e) {
-    console.error('❌ GAS mailer admin falló:', e.message);
-    throw e;
-  }
+  await _gasSend({
+    tipo:        'admin',
+    nombre:      datos.nombre,
+    email:       datos.email,
+    area:        datos.area,
+    archivo:     datos.archivo,
+    acta:        datos.acta || '—',
+    tamano:      datos.tamano,
+    fecha:       datos.fecha,
+    hora:        datos.hora,
+    registro:    datos.registro,
+    driveLink:   datos.driveLink   || '',
+    actaLink:    datos.actaLink    || '',
+    linkCarpeta: `https://drive.google.com/drive/folders/${GDRIVE_CARPETA_GENERAL}`
+  });
+  console.log('✓ Alerta admin enviada via GAS');
 }
 
 async function enviarCorreosNotificacion(datos) {
-  const resultados = await Promise.allSettled([
-    enviarCorreoAdmin(datos),
-    enviarCorreoUsuario(datos)
-  ]);
-  if (resultados[0].status === 'rejected')
-    console.error('❌ Correo ADMIN no enviado:', resultados[0].reason);
-  if (resultados[1].status === 'rejected') {
-    console.error('❌ Correo USUARIO no enviado:', resultados[1].reason);
+  // Secuencial: evita que GAS rechace dos peticiones simultáneas
+  try {
+    await enviarCorreoAdmin(datos);
+  } catch(e) {
+    console.error('❌ Correo ADMIN no enviado:', e.message);
+  }
+  try {
+    await enviarCorreoUsuario(datos);
+  } catch(e) {
+    console.error('❌ Correo USUARIO no enviado:', e.message);
     toast('⚠️ No se pudo enviar el correo de confirmación', 'err');
   }
 }
