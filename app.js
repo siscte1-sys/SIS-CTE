@@ -312,6 +312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   poblarAreas('filtro-area', 'Todas las áreas');
 
   /* botones */
+  $('btn-google')?.addEventListener('click', login);
   document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', logout));
   $('nb-subir')?.addEventListener('click', () => usuario ? irSubir() : ir('vista-login'));
   $('nb-admin')?.addEventListener('click', () => { if(esAdmin()){ ir('vista-admin'); cargarAdmin(); } });
