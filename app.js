@@ -54,7 +54,6 @@ const AREAS = [
 let db, auth, usuario = null;
 let archivoSeleccionado = null;
 let actaSeleccionada    = null;
-let informeSeleccionado = null;
 let docsAdmin           = [];
 let _firebaseReady      = null;
 let _driveTokenCache    = null;
@@ -141,6 +140,7 @@ async function login() {
       toast('Error: ' + (e.message || e.code), 'err');
   }
 }
+
 async function logout() {
   _driveTokenCache = null; _driveTokenExpiry = 0;
   try { await window._fb.signOut(auth); } catch(e) {}
@@ -166,13 +166,7 @@ function ir(v) {
   if (v==='vista-admin') $('nb-admin')?.classList.add('active');
 }
 
-function _actualizarIconoModo(isDark) {
-  document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(b => {
-    if (b) b.textContent = isDark ? '☀️ Modo' : '🌙 Modo';
-  });
-}
-
-function toast(msg, tipo = 'ok') {
+function toast(msg, tipo='ok') {
   const t = $('toast');
   t.textContent = msg;
   t.className = `toast toast--${tipo} toast--on`;
@@ -233,16 +227,12 @@ function poblarAreas(selectId, placeholder='— Selecciona tu área —') {
 function irSubir() {
   archivoSeleccionado = null;
   actaSeleccionada    = null;
-  informeSeleccionado = null;
   const fi=$('file-input'); if(fi) fi.value='';
   const ai=$('acta-input'); if(ai) ai.value='';
-  const ii=$('informe-input'); if(ii) ii.value='';
   $('dropzone').style.display    = 'flex';
   $('file-preview').style.display = 'none';
   const ad=$('acta-dropzone'); if(ad) ad.style.display='flex';
   const ap=$('acta-preview');  if(ap) ap.style.display='none';
-  const idz=$('informe-dropzone'); if(idz) idz.style.display='flex';
-  const ipv=$('informe-preview');  if(ipv) ipv.style.display='none';
   $('progress-wrap').style.display = 'none';
   $('area-select').value = '';
   const det=$('detalle-envio'); if(det) det.value='';
@@ -358,30 +348,6 @@ function quitarActa() {
   actualizarBotonEnviar();
 }
 
-function abrirSelectorInforme() {
-  const i=document.createElement('input'); i.type='file'; i.accept='.pdf'; i.style.display='none';
-  i.addEventListener('change', () => { if(i.files[0]) seleccionarInforme(i.files[0]); i.remove(); });
-  document.body.appendChild(i); i.click();
-}
-
-function seleccionarInforme(f) {
-  if (!f) return;
-  if (f.name.split('.').pop().toLowerCase() !== 'pdf') { toast('El Informe de Entrega debe ser PDF (.pdf)','err'); return; }
-  informeSeleccionado = f;
-  const iin=$('informe-nombre'); if(iin) iin.textContent=f.name;
-  const ip=$('informe-peso');   if(ip) ip.textContent=formatSize(f.size);
-  const idz=$('informe-dropzone'); if(idz) idz.style.display='none';
-  const ipv=$('informe-preview');  if(ipv) ipv.style.display='flex';
-  actualizarBotonEnviar();
-}
-
-function quitarInforme() {
-  informeSeleccionado = null;
-  const idz=$('informe-dropzone'); if(idz) idz.style.display='flex';
-  const ipv=$('informe-preview');  if(ipv) ipv.style.display='none';
-  actualizarBotonEnviar();
-}
-
 function seleccionar(f) {
   const ext = f.name.split('.').pop().toLowerCase();
   if (!['xlsx','xls'].includes(ext)) { toast('Solo se aceptan archivos Excel (.xlsx o .xls)','err'); return; }
@@ -442,9 +408,7 @@ function actualizarBotonEnviar() {
   const btn = $('btn-enviar'); if (!btn) return;
   const actaObligatoria = actaEsObligatoriaHoy();
   const info = infoPlazoPorFecha();
-  // Informe de Entrega: siempre obligatorio
-  // Informativo de Atraso: obligatorio solo si pasó el día 10
-  const listo = !!(archivoSeleccionado && informeSeleccionado && (actaSeleccionada || !actaObligatoria));
+  const listo = !!(archivoSeleccionado && (actaSeleccionada || !actaObligatoria));
   btn.disabled = !listo;
   btn.style.opacity = listo ? '1' : '0.45';
   btn.style.cursor  = listo ? 'pointer' : 'not-allowed';
@@ -465,12 +429,12 @@ function actualizarBotonEnviar() {
 
   const hint = $('enviar-hint');
   if (hint) {
-    if (!archivoSeleccionado)
+    if (!archivoSeleccionado && actaObligatoria)
+      hint.textContent = 'Sube el Excel y el Acta PDF (retraso — acta obligatoria)';
+    else if (!archivoSeleccionado)
       hint.textContent = 'Sube el Excel para habilitar el envío';
-    else if (!informeSeleccionado)
-      hint.textContent = '⚠️ El Informe de Entrega PDF es obligatorio siempre';
     else if (!actaSeleccionada && actaObligatoria)
-      hint.textContent = '⚠️ El Informativo de Atraso es obligatorio — envío tardío (pasó el día 10)';
+      hint.textContent = '⚠️ El Acta PDF es obligatoria — envío tardío (pasó el día 10)';
     else
       hint.textContent = '';
   }
@@ -639,12 +603,11 @@ async function subirComprobantePDFaDrive(dataUrl, registro) {
 ══════════════════════════════════ */
 async function enviarArchivo() {
   if (!archivoSeleccionado) { toast('Selecciona un archivo Excel primero','err'); return; }
-  if (!informeSeleccionado) { toast('⚠️ El Informe de Entrega PDF es obligatorio', 'err'); return; }
 
   const actaObligatoria = actaEsObligatoriaHoy();
   if (actaObligatoria && !actaSeleccionada) {
     const _info = infoPlazoPorFecha();
-    toast(`⚠️ Envío tardío del reporte de ${_info.mesReporte} — el Informativo de Atraso PDF es obligatorio`, 'err');
+    toast(`⚠️ Envío tardío del reporte de ${_info.mesReporte} — el Acta PDF es obligatoria`, 'err');
     return;
   }
 
@@ -666,49 +629,42 @@ async function enviarArchivo() {
     /* 1. Subir Excel */
     setProgreso(10, 'Subiendo Excel a Google Drive...');
     const storageURL = await subirAGoogleDrive(archivoSeleccionado,
-      p => setProgreso(10 + Math.round(p*0.2), `Subiendo Excel... ${Math.round(p)}%`));
+      p => setProgreso(10 + Math.round(p*0.25), `Subiendo Excel... ${Math.round(p)}%`));
 
-    /* 2. Subir Informe de Entrega PDF (siempre obligatorio) */
-    setProgreso(32, 'Subiendo Informe de Entrega PDF...');
-    const informeURL = await subirAGoogleDrive(informeSeleccionado,
-      p => setProgreso(32 + Math.round(p*0.12), `Subiendo Informe... ${Math.round(p)}%`));
-
-    /* 3. Subir Informativo de Atraso PDF (si existe) */
+    /* 2. Subir Acta PDF (si existe) */
     let actaURL = null;
     if (actaSeleccionada) {
-      setProgreso(46, 'Subiendo Informativo de Atraso PDF...');
+      setProgreso(40, 'Subiendo Acta PDF...');
       actaURL = await subirAGoogleDrive(actaSeleccionada,
-        p => setProgreso(46 + Math.round(p*0.12), `Subiendo Informativo... ${Math.round(p)}%`));
+        p => setProgreso(40 + Math.round(p*0.15), `Subiendo Acta... ${Math.round(p)}%`));
     }
 
     const numRegistro = 'SISCTE-' + Date.now().toString(36).toUpperCase();
 
-    /* 4. Generar comprobante PDF */
+    /* 3. Generar comprobante PDF */
     setProgreso(60, 'Generando comprobante PDF...');
     const comprobanteDataUrl = await generarComprobantePDFComoURL({
-      nombre:      usuario.nombre,
-      email:       usuario.email,
-      area:        areaVal,
-      archivo:     archivoSeleccionado.name,
-      informe:     informeSeleccionado.name,
-      acta:        actaSeleccionada?.name || '—',
-      tamano:      formatSize(archivoSeleccionado.size),
-      fecha:       fechaTexto,
-      hora:        horaTexto,
-      registro:    numRegistro,
-      driveLink:   storageURL,
-      informeLink: informeURL || '',
-      actaLink:    actaURL || ''
+      nombre:    usuario.nombre,
+      email:     usuario.email,
+      area:      areaVal,
+      archivo:   archivoSeleccionado.name,
+      acta:      actaSeleccionada?.name || '—',
+      tamano:    formatSize(archivoSeleccionado.size),
+      fecha:     fechaTexto,
+      hora:      horaTexto,
+      registro:  numRegistro,
+      driveLink: storageURL,
+      actaLink:  actaURL || ''
     });
 
-    /* 5. Subir comprobante a Drive */
+    /* 4. Subir comprobante a Drive */
     setProgreso(72, 'Subiendo comprobante PDF...');
     let comprobanteURL = null;
     if (comprobanteDataUrl) {
       comprobanteURL = await subirComprobantePDFaDrive(comprobanteDataUrl, numRegistro);
     }
 
-    /* 6. Registrar en Firestore (con deduplicación) */
+    /* 5. Registrar en Firestore (con deduplicación) */
     setProgreso(84, 'Registrando en Firestore...');
     const { where, deleteDoc, doc: docRef } =
       await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
@@ -736,13 +692,11 @@ async function enviarArchivo() {
       foto:          usuario.foto,
       area:          areaVal,
       nombreArchivo: archivoSeleccionado.name,
-      nombreInforme: informeSeleccionado.name,
       nombreActa:    actaSeleccionada?.name || null,
       tamanoBytes:   archivoSeleccionado.size,
       tamanoTexto:   formatSize(archivoSeleccionado.size),
       metodo:        'google_drive',
       storageURL,
-      informeURL,
       actaURL,
       comprobanteURL,
       driveFileId,
@@ -753,7 +707,7 @@ async function enviarArchivo() {
       timestamp:     ahora.toISOString()
     });
 
-    /* 7. Correos */
+    /* 6. Correos */
     setProgreso(93, 'Enviando correos de notificación...');
     try {
       await enviarCorreosNotificacion({
@@ -761,14 +715,12 @@ async function enviarArchivo() {
         email:          usuario.email,
         area:           areaVal,
         archivo:        archivoSeleccionado.name,
-        informe:        informeSeleccionado.name,
         acta:           actaSeleccionada?.name || '—',
         tamano:         formatSize(archivoSeleccionado.size),
         fecha:          fechaTexto,
         hora:           horaTexto,
         registro:       numRegistro,
         driveLink:      storageURL,
-        informeLink:    informeURL || null,
         actaLink:       actaURL || null,
         comprobanteUrl: comprobanteURL || ''
       });
@@ -842,8 +794,7 @@ async function generarComprobantePDFComoURL(d) {
       ['CORREO',      d.email],
       ['ÁREA',        d.area],
       ['ARCHIVO',     d.archivo],
-      ['INFORME',     d.informe||'—'],
-      ['INFORMATIVO', d.acta||'—'],
+      ['ACTA PDF',    d.acta||'—'],
       ['TAMAÑO',      d.tamano],
       ['FECHA',       d.fecha],
       ['HORA',        d.hora],
@@ -1359,9 +1310,6 @@ window.abrirSelectorArchivo         = abrirSelectorArchivo;
 window.abrirSelectorActa            = abrirSelectorActa;
 window.seleccionarActa              = seleccionarActa;
 window.quitarActa                   = quitarActa;
-window.abrirSelectorInforme         = abrirSelectorInforme;
-window.seleccionarInforme           = seleccionarInforme;
-window.quitarInforme                = quitarInforme;
 window.abrirModalArchivado          = abrirModalArchivado;
 window.cerrarModalArchivado         = cerrarModalArchivado;
 window.abrirModalLimpiarDuplicados  = abrirModalLimpiarDuplicados;
@@ -1376,3 +1324,29 @@ window.show                         = show;
 window.hide                         = hide;
 window.toast                        = toast;
 window.$                            = $;
+/* ══════════════════════════════════
+   MODO OSCURO / CLARO
+══════════════════════════════════ */
+function toggleModo() {
+  const isDark = document.body.classList.toggle('dark-mode');
+  localStorage.setItem('siscte-modo', isDark ? 'dark' : 'light');
+  document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(b => {
+    if (b) b.textContent = isDark ? '☀️' : '🌙';
+  });
+}
+window.toggleModo = toggleModo;
+
+// Conectar botones de modo al cargar
+document.addEventListener('DOMContentLoaded', () => {
+  // Restaurar modo guardado
+  if (localStorage.getItem('siscte-modo') === 'dark') {
+    document.body.classList.add('dark-mode');
+  }
+  const isDark = document.body.classList.contains('dark-mode');
+  document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(b => {
+    if (b) {
+      b.textContent = isDark ? '☀️' : '🌙';
+      b.addEventListener('click', toggleModo);
+    }
+  });
+});
