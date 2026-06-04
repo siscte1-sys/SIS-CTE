@@ -1376,4 +1376,3 @@ window.show                         = show;
 window.hide                         = hide;
 window.toast                        = toast;
 window.$                            = $;
-
