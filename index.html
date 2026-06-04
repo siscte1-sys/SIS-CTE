@@ -1,275 +1,512 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Gestión de Envíos – CTE</title>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="styles.css"/>
-
-<!-- Firebase SDKs -->
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal de Archivos — SISCTE</title>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<!-- ==================== PANTALLA DE LOGIN ==================== -->
-<div id="screen-login" style="min-height:100vh;display:flex;flex-direction:column;background:linear-gradient(145deg,#0a1628 0%,#122040 55%,#1a3060 100%);position:relative;overflow:hidden">
-  <div style="height:5px;background:#c8a84b;width:100%;position:relative;z-index:2"></div>
-  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:2rem;position:relative;z-index:2">
-    <div style="background:rgba(255,255,255,.06);border:1px solid rgba(200,168,75,.25);border-radius:12px;padding:2.5rem 2.8rem;width:100%;max-width:420px;backdrop-filter:blur(8px)">
+<!-- ════════════════════════════════
+     NAVBAR
+════════════════════════════════ -->
+<nav>
+  <div class="nav-left">
+    <div class="nav-logo-ico">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+    </div>
+    <span class="nav-brand">Gestión de Envíos</span>
+  </div>
+  <div class="nav-right" id="nav-sesion" style="display:none">
+    <button class="btn-modo" id="btn-modo" onclick="toggleModo()" title="Cambiar modo">🌙 Modo</button>
+    <button class="nav-btn" id="nb-subir">📤 Envíos</button>
+    <button class="nav-btn nav-btn-admin" id="nb-admin" style="display:none">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Panel de control
+    </button>
 
-      <!-- Logo -->
-      <div style="text-align:center;margin-bottom:2rem">
-        <div style="width:68px;height:68px;background:#c8a84b;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-weight:700;font-size:1.1rem;color:#0a1628;margin-bottom:1rem;border:3px solid rgba(255,255,255,.2)">CTE</div>
-        <h1 style="font-family:'Oswald',sans-serif;font-size:1.2rem;font-weight:700;color:#fff;letter-spacing:.08em;text-transform:uppercase;line-height:1.2">Gestión de Envíos</h1>
-        <p style="font-size:.75rem;color:#e8c96a;margin-top:.3rem;letter-spacing:.1em;text-transform:uppercase">Unidad de Personal · CTE</p>
+    <div class="nav-user">
+      <img id="nav-foto" class="nav-foto" src="" alt="">
+      <span id="nav-nombre" class="nav-nombre"></span>
+    </div>
+    <button class="nav-salir btn-logout">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Salir
+    </button>
+  </div>
+  <div id="nav-guest" style="display:flex;align-items:center;gap:8px;">
+    <button class="btn-modo" id="btn-modo-guest" onclick="toggleModo()" title="Cambiar modo">🌙 Modo</button>
+    <span class="nav-guest-txt">Portal SISCTE</span>
+  </div>
+</nav>
+
+<div id="app">
+
+  <!-- ═══════════════════════════════
+       VISTA LOGIN
+  ═══════════════════════════════ -->
+  <div id="vista-login" class="vista vista-login-wrap">
+    <div class="login-card">
+
+      <!-- Panel izquierdo -->
+      <div class="login-panel-left">
+        <div>
+          <div class="lpl-badge">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Sistema Oficial
+          </div>
+          <div class="lpl-logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div class="lpl-title">SISCTE</div>
+          <p class="lpl-sub">Portal de Gestión de Envíos · Personal CTE</p>
+        </div>
+        <div>
+          <p style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:8px;">Registro seguro · Confirmación automática · Historial completo</p>
+          <div class="lpl-dots">
+            <div class="lpl-dot active"></div>
+            <div class="lpl-dot"></div>
+            <div class="lpl-dot"></div>
+          </div>
+          <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.1);padding-top:12px;">
+            <p style="font-size:10px;color:rgba(255,255,255,.4);margin:0;line-height:1.6;">v5.4 · © 2026 SISCTE<br>Todos los derechos reservados</p>
+          </div>
+        </div>
       </div>
 
-      <!-- Botón Google -->
-      <button onclick="loginConGoogle()" style="width:100%;padding:.85rem 1rem;background:#fff;color:#1a2035;font-size:.95rem;font-weight:600;border:none;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.7rem;transition:background .2s" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='#fff'">
-        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-        INGRESAR CON GOOGLE
-      </button>
+      <!-- Panel derecho — SOLO GOOGLE -->
+      <div class="login-panel-right">
+        <div class="lpr-bienvenida">Bienvenido</div>
+        <p class="login-card-desc">Accede con tu cuenta de Google para continuar.</p>
 
-      <div style="text-align:center;margin-top:1.5rem;font-size:.72rem;color:rgba(255,255,255,.3)">COMISIÓN DE TRÁNSITO DEL ECUADOR</div>
+        <button class="btn-google" id="btn-google">
+          <svg width="18" height="18" viewBox="0 0 48 48">
+            <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 33.1 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C33.8 6.5 29.1 4.5 24 4.5 12.7 4.5 3.5 13.7 3.5 25S12.7 45.5 24 45.5c11 0 20.5-8 20.5-20.5 0-1.4-.1-2.7-.4-3.5z"/>
+            <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.1 19 12 24 12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C33.8 6.5 29.1 4.5 24 4.5c-7.7 0-14.3 4.4-17.7 10.2z"/>
+            <path fill="#4CAF50" d="M24 45.5c5 0 9.6-1.9 13.1-5l-6.1-5.1C29.1 37 26.6 38 24 38c-5.2 0-9.6-2.9-11.3-7.1l-6.5 5C9.6 41 16.4 45.5 24 45.5z"/>
+            <path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.6l6.1 5.1C40.7 35.4 44 30.6 44 25c0-1.4-.1-2.7-.4-3.5z"/>
+          </svg>
+          Acceder con Google
+        </button>
+
+        <div class="info-note" style="margin-top:20px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Al ingresar recibirás un correo de confirmación automático con cada envío.
+        </div>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- ==================== PANTALLA PRINCIPAL ==================== -->
-<div id="screen-main" style="display:none">
-
-  <!-- Header stripe -->
-  <div class="header-stripe"></div>
-
-  <!-- Header -->
-  <header>
-    <div class="header-inner">
-      <div class="escudo">CTE</div>
-      <div class="header-text">
-        <h1>Gestión de Envíos</h1>
-        <p>Unidad de Personal · Cuerpo de Vigilancia · CTE</p>
-      </div>
-      <div class="header-right">
-        <button class="theme-toggle" id="theme-btn" onclick="toggleDarkMode()">🌙 MODO OSCURO</button>
-        <div class="user-info-badge">
-          <span>Sesión:</span>
-          <strong id="display-user">—</strong>
-        </div>
-        <button class="btn-logout" onclick="doLogout()">⎋ SALIR</button>
-      </div>
+  <!-- ═══════════════════════════════
+       VISTA SUBIR
+  ═══════════════════════════════ -->
+  <div id="vista-subir" class="vista" style="display:none">
+    <div class="page-hero">
+      <h1 class="page-hero-titulo">Registro de Documentos Excel</h1>
+      <p class="page-hero-sub">Hola, <strong id="hero-nombre"></strong>. Sube tu archivo Excel y registrá los detalles de cada envío.</p>
     </div>
-  </header>
-
-  <!-- Nav -->
-  <nav>
-    <div class="nav-inner">
-      <a class="active" onclick="mostrarTab('envio',this)">📤 NUEVO ENVÍO</a>
-      <a onclick="mostrarTab('historial',this)">📋 HISTORIAL</a>
-      <a onclick="mostrarTab('panel',this)">📊 PANEL DE CONTROL</a>
-    </div>
-  </nav>
-
-  <!-- Main -->
-  <main>
-
-    <!-- ===== TAB: NUEVO ENVÍO ===== -->
-    <div id="tab-envio" class="tab-content active">
-
-      <div class="section-title">Nuevo Envío Mensual</div>
+    <div class="page-body">
 
       <div class="envio-card">
-        <div class="envio-card-head">
-          <h2>📤 Registrar Envío</h2>
+        <div class="envio-card-header">
+          <div class="envio-card-header-ico">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div>
+            <div class="envio-card-titulo">Nuevo Envío</div>
+            <div class="envio-card-sub">Completá los datos y adjuntá el archivo Excel correspondiente.</div>
+          </div>
         </div>
-        <div class="envio-card-body">
 
-          <!-- Área -->
-          <label class="field-label" for="select-area">Selecciona tu área</label>
-          <select class="area-select" id="select-area">
-            <option value="">— Selecciona tu área —</option>
-            <option value="OPERACIONES">OPERACIONES</option>
-            <option value="PERSONAL">PERSONAL</option>
-            <option value="LOGÍSTICA">LOGÍSTICA</option>
-            <option value="ADMINISTRACIÓN">ADMINISTRACIÓN</option>
-            <option value="TECNOLOGÍA">TECNOLOGÍA</option>
-            <option value="JURÍDICO">JURÍDICO</option>
-            <option value="COMUNICACIÓN">COMUNICACIÓN</option>
-            <option value="PLANIFICACIÓN">PLANIFICACIÓN</option>
-            <option value="CONTROL INTERNO">CONTROL INTERNO</option>
-            <option value="FINANCIERO">FINANCIERO</option>
+        <div class="form-field">
+          <label class="form-label">Detalles del Envío</label>
+          <textarea id="detalle-envio" class="form-textarea" placeholder="Describí los detalles del envío..."></textarea>
+        </div>
+
+        <div class="form-field">
+          <label class="form-label">Área <span class="req">*</span></label>
+          <select id="area-select" class="form-select">
+            <option value="">Seleccioná un área</option>
           </select>
+        </div>
 
-          <!-- ===== ARCHIVO EXCEL (OBLIGATORIO) ===== -->
-          <div class="upload-section">
-            <div class="upload-label-row">
-              <label class="field-label">Archivo Excel</label>
-              <span class="badge-req obligatorio">OBLIGATORIO</span>
+        <div class="form-field">
+          <label class="form-label">Archivo Excel</label>
+          <div id="dropzone" class="dropzone">
+            <div class="dz-upload-ico">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             </div>
-            <div class="upload-zone" id="zona-excel">
-              <input type="file" id="input-excel" accept=".xlsx,.xls"/>
-              <div class="upload-zone-icon">📊</div>
-              <div class="upload-zone-text">Hacé clic para seleccionar</div>
-              <div class="upload-zone-hint">Solo .xlsx o .xls</div>
-            </div>
-            <div class="file-selected-info" id="info-excel">
-              <span id="name-excel">archivo.xlsx</span>
-              <button onclick="quitarArchivo('excel')" title="Quitar archivo">✕</button>
-            </div>
+            <span class="dz-label">Hacé clic para seleccionar</span>
+            <span class="dz-hint">Solo .xlsx o .xls</span>
           </div>
-
-          <!-- ===== INFORME DE ENTREGA (OBLIGATORIO) ===== -->
-          <div class="upload-section">
-            <div class="upload-label-row">
-              <label class="field-label">Informe de Entrega</label>
-              <span class="badge-req obligatorio">OBLIGATORIO</span>
+          <input type="file" id="file-input" accept=".xlsx,.xls">
+          <div id="file-preview" class="file-preview">
+            <div class="fp-ico">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             </div>
-            <div class="upload-zone" id="zona-informe">
-              <input type="file" id="input-informe" accept=".pdf"/>
-              <div class="upload-zone-icon">📄</div>
-              <div class="upload-zone-text">Hacé clic para seleccionar el Informe</div>
-              <div class="upload-zone-hint">Solo .pdf</div>
+            <div class="fp-info">
+              <div id="fp-nombre" class="fp-nombre"></div>
+              <div id="fp-peso" class="fp-peso"></div>
+              <div id="fp-modo" class="fp-modo"></div>
             </div>
-            <div class="file-selected-info" id="info-informe">
-              <span id="name-informe">informe.pdf</span>
-              <button onclick="quitarArchivo('informe')" title="Quitar archivo">✕</button>
-            </div>
+            <button id="btn-cambiar" class="fp-cambiar">✕</button>
           </div>
+        </div>
 
-          <!-- ===== INFORMATIVO DE ATRASO (OPCIONAL / OBLIGATORIO SI >DÍA 10) ===== -->
-          <div class="upload-section">
-            <div class="upload-label-row">
-              <label class="field-label">Informativo de Atraso</label>
-              <span class="badge-req opcional" id="badge-acta">OPCIONAL HASTA EL DÍA 10</span>
+        <div class="form-field">
+          <label class="form-label">
+            Informe de Entrega <span class="req">*</span>
+            <span style="color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px;background:#1e3a6e;">OBLIGATORIO</span>
+          </label>
+          <div id="informe-dropzone" class="dropzone" onclick="abrirSelectorInforme()"
+               ondragover="event.preventDefault();this.classList.add('dz-over')"
+               ondragleave="this.classList.remove('dz-over')"
+               ondrop="event.preventDefault();this.classList.remove('dz-over');if(event.dataTransfer.files[0])seleccionarInforme(event.dataTransfer.files[0])">
+            <div class="dz-upload-ico">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>
             </div>
-            <div class="upload-zone" id="zona-acta">
-              <input type="file" id="input-acta" accept=".pdf"/>
-              <div class="upload-zone-icon">📋</div>
-              <div class="upload-zone-text">Hacé clic para seleccionar el Informativo</div>
-              <div class="upload-zone-hint">Solo .pdf</div>
-            </div>
-            <div class="file-selected-info" id="info-acta">
-              <span id="name-acta">informativo.pdf</span>
-              <button onclick="quitarArchivo('acta')" title="Quitar archivo">✕</button>
-            </div>
-            <div class="aviso-dias ok" id="aviso-dias"></div>
+            <span class="dz-label">Hacé clic para seleccionar el Informe de Entrega</span>
+            <span class="dz-hint">Solo .pdf — Siempre obligatorio</span>
           </div>
+          <input type="file" id="informe-input" accept=".pdf" style="display:none" onchange="if(this.files[0])seleccionarInforme(this.files[0])">
 
-          <!-- Botón -->
-          <button class="btn-registrar" id="btn-registrar" onclick="registrarEnvio()" disabled>
-            📤 REGISTRAR ENVÍO
-          </button>
-          <div class="btn-hint" id="btn-hint">Sube el Excel e Informe de Entrega para habilitar el envío</div>
+          <div id="informe-preview" class="file-preview" style="display:none">
+            <div class="fp-ico">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1e3a6e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="fp-info">
+              <div id="informe-nombre" class="fp-nombre"></div>
+              <div id="informe-peso" class="fp-peso"></div>
+              <div class="fp-modo">📋 Informe de Entrega PDF</div>
+            </div>
+            <button id="btn-cambiar-informe" class="fp-cambiar" onclick="quitarInforme()">✕</button>
+          </div>
+        </div>
 
-          <div id="mes-envio" style="text-align:center;font-size:.78rem;color:var(--muted);margin-top:.6rem"></div>
+        <div class="form-field">
+          <label class="form-label">
+            Informativo de Atraso
+            <span id="acta-label-oblig" style="color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px;background:#d97706;">OPCIONAL hasta el día 10</span>
+          </label>
+          <div id="acta-dropzone" class="dropzone" onclick="abrirSelectorActa()"
+               ondragover="event.preventDefault();this.classList.add('dz-over')"
+               ondragleave="this.classList.remove('dz-over')"
+               ondrop="event.preventDefault();this.classList.remove('dz-over');if(event.dataTransfer.files[0])seleccionarActa(event.dataTransfer.files[0])">
+            <div class="dz-upload-ico">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>
+            </div>
+            <span class="dz-label">Hacé clic para seleccionar el Informativo de Atraso</span>
+            <span class="dz-hint">Solo .pdf</span>
+          </div>
+          <input type="file" id="acta-input" accept=".pdf" style="display:none" onchange="if(this.files[0])seleccionarActa(this.files[0])">
+          <p id="acta-plazo-info" style="font-size:11px;color:#92400e;margin-top:7px;font-weight:500;"></p>
 
+          <div id="acta-preview" class="file-preview" style="display:none">
+            <div class="fp-ico">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="fp-info">
+              <div id="acta-nombre" class="fp-nombre"></div>
+              <div id="acta-peso" class="fp-peso"></div>
+              <div class="fp-modo">📄 Informativo de Atraso PDF</div>
+            </div>
+            <button id="btn-cambiar-acta" class="fp-cambiar" onclick="quitarActa()">✕</button>
+          </div>
+        </div>
+
+        <div id="progress-wrap" class="progress-wrap">
+          <div class="progress-header">
+            <span id="progress-label-txt">Subiendo...</span>
+            <span id="progress-txt">0%</span>
+          </div>
+          <div class="progress-track"><div id="progress-bar"></div></div>
+          <div class="progress-nota">No cierres esta ventana hasta completar.</div>
+        </div>
+
+        <button class="btn-registrar" id="btn-enviar" disabled style="opacity:0.45;cursor:not-allowed;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Registrar Envío
+        </button>
+        <p id="enviar-hint" style="text-align:center;font-size:12px;color:#ef4444;margin-top:6px;">Sube el Excel para habilitar el envío</p>
+      </div>
+
+      <!-- ── MIS ENVÍOS ── -->
+      <div class="mis-envios-sep">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Mis Envíos
+      </div>
+      <div id="mis-envios-lista" class="mis-envios-lista">
+        <div class="mis-envios-vacio">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          <p>No hay envíos registrados todavía.</p>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- ===== TAB: HISTORIAL ===== -->
-    <div id="tab-historial" class="tab-content" style="display:none">
-      <div class="section-title">Historial de Envíos</div>
-      <div class="envios-table-wrap">
-        <div class="envios-table-head">
-          <h3>📋 Registros</h3>
+  <!-- ═══════════════════════════════
+       VISTA ÉXITO
+  ═══════════════════════════════ -->
+  <div id="vista-exito" class="vista" style="display:none">
+    <div class="page-hero">
+      <h1 class="page-hero-titulo">Registro de Documentos Excel</h1>
+      <p class="page-hero-sub">Tu envío fue registrado exitosamente.</p>
+    </div>
+    <div class="page-body">
+      <div class="exito-card">
+        <div class="exito-ico">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
+        <h2 class="exito-titulo">¡Archivo registrado!</h2>
+        <p class="exito-desc">Tu entrega fue guardada correctamente. Revisa tu correo para el comprobante.</p>
+        <div class="exito-datos">
+          <div class="exito-row full"><label>Enviado por</label><span id="ex-nombre"></span></div>
+          <div class="exito-row full"><label>Correo</label><span id="ex-email"></span></div>
+          <div class="exito-row full"><label>Área</label><span id="ex-area"></span></div>
+          <div class="exito-row full"><label>Archivo</label><span id="ex-archivo"></span></div>
+          <div class="exito-row"><label>Tamaño</label><span id="ex-tamano"></span></div>
+          <div class="exito-row"><label>Fecha</label><span id="ex-fecha"></span></div>
+          <div class="exito-row full"><label>Hora</label><span id="ex-hora"></span></div>
+        </div>
+        <div class="exito-correo-aviso">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Se envió un correo de confirmación a tu cuenta como respaldo.
+        </div>
+        <button class="btn-registrar" id="btn-enviar-otro" style="margin-top:8px">
+          Registrar otro envío
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════
+       VISTA ADMIN
+  ═══════════════════════════════ -->
+  <div id="vista-admin" class="vista" style="display:none">
+    <div class="page-hero">
+      <h1 class="page-hero-titulo">Panel de Administración</h1>
+      <p class="page-hero-sub">Registro de entregas · Google Drive + Firestore</p>
+    </div>
+    <div class="page-body page-body-wide">
+
+      <div class="admin-top">
+        <div class="admin-acc">
+          <button class="btn-acc btn-acc-blue" id="btn-excel">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exportar todo
+          </button>
+          <button class="btn-acc btn-acc-green" id="btn-excel-filtrado">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            Exportar filtrado
+          </button>
+          <button class="btn-acc btn-acc-orange" onclick="abrirModalArchivado()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            Archivar mes
+          </button>
+          <button class="btn-acc btn-acc-red" onclick="abrirModalLimpiarDuplicados()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 4 21 4"/><line x1="19" y1="4" x2="21" y2="6"/><path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></svg>
+            Eliminar Registros BD
+          </button>
+          <button class="btn-acc btn-acc-ghost" onclick="irSubir()">← Volver a Envíos</button>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-box"><div class="stat-lbl">Total archivos</div><div class="stat-val" id="st-total">—</div></div>
+        <div class="stat-box"><div class="stat-lbl">Personas</div><div class="stat-val" id="st-unicos">—</div></div>
+        <div class="stat-box stat-box-wide"><div class="stat-lbl">Último envío</div><div class="stat-val stat-val-sm" id="st-ultimo">—</div></div>
+      </div>
+
+      <div class="filtros-panel">
+        <div class="filtros-titulo">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filtros de búsqueda
+        </div>
+        <div class="filtros-grid">
+          <div class="filtro-campo"><label>Área</label><select id="filtro-area" class="filtro-select"></select></div>
+          <div class="filtro-campo"><label>Nombre</label><input id="filtro-nombre" type="text" placeholder="Buscar por nombre..." class="filtro-input"></div>
+          <div class="filtro-campo"><label>Correo</label><input id="filtro-email" type="text" placeholder="Buscar por correo..." class="filtro-input"></div>
+          <div class="filtro-campo"><label>Desde</label><input id="filtro-fecha-desde" type="date" class="filtro-input"></div>
+          <div class="filtro-campo"><label>Hasta</label><input id="filtro-fecha-hasta" type="date" class="filtro-input"></div>
+        </div>
+        <div class="filtros-footer">
+          <span id="filtro-resultado" class="filtro-resultado"></span>
+          <div style="display:flex;gap:8px">
+            <button class="btn-filtrar" id="btn-filtrar">Aplicar</button>
+            <button class="btn-limpiar" id="btn-limpiar">Limpiar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-titulo">Quiénes enviaron archivos</div>
+      <div class="panel-white" style="margin-bottom:20px">
+        <div id="admin-personas"><p class="cargando-txt">Cargando...</p></div>
+      </div>
+
+      <div class="sec-titulo">Todos los archivos recibidos</div>
+      <div class="panel-white">
         <div style="overflow-x:auto">
-          <table class="envios-table">
+          <table>
             <thead>
-              <tr>
-                <th>Área</th>
-                <th>Mes</th>
-                <th>Fecha Envío</th>
-                <th>Excel</th>
-                <th>Informe Entrega</th>
-                <th>Informativo Atraso</th>
-                <th>Estado</th>
-              </tr>
+              <tr><th>#</th><th>Quien envió</th><th>Área</th><th>Archivo</th><th>Descripción</th><th>Peso</th><th>Fecha</th><th>Hora</th><th>Estado</th></tr>
             </thead>
-            <tbody id="historial-tbody">
-              <tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--muted)">Cargando...</td></tr>
+            <tbody id="tabla-body">
+              <tr><td colspan="9" class="td-vacio">Cargando datos...</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- ===== TAB: PANEL DE CONTROL ===== -->
-    <div id="tab-panel" class="tab-content" style="display:none">
-      <div class="section-title">Panel de Control</div>
-      <div class="panel-stats">
-        <div class="panel-control">
-          <h3>Total Envíos</h3>
-          <div class="stat-val" id="stat-total">—</div>
+</div><!-- #app -->
+
+<!-- ═══════════════════════════════
+     MODAL ELIMINAR REGISTROS BD
+═══════════════════════════════ -->
+<div id="modal-limpiar-duplicados" class="modal-overlay" style="display:none">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-ico">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 4 21 4"/><line x1="19" y1="4" x2="21" y2="6"/><path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></svg>
+      </div>
+      <div>
+        <div class="modal-titulo">Eliminar registros BD</div>
+        <div class="modal-sub">Elimina registros de Firestore (no afecta Google Drive)</div>
+      </div>
+      <button class="modal-cerrar" onclick="cerrarModalLimpiarDuplicados()">✕</button>
+    </div>
+
+    <div id="limpieza-contenido" class="modal-body">
+      <p class="modal-desc">Este proceso eliminará registros de la base de datos (Firestore). Los archivos en Google Drive no serán afectados.</p>
+
+      <div class="elim-aviso-rojo">
+        <span>⚠️</span>
+        <strong>Esta acción es IRREVERSIBLE — elige bien el rango</strong>
+      </div>
+
+      <div class="elim-fechas">
+        <div class="elim-fecha-campo">
+          <label>Desde</label>
+          <input type="date" id="elim-fecha-desde" class="filtro-input">
         </div>
-        <div class="panel-control">
-          <h3>Con Informativo</h3>
-          <div class="stat-val" id="stat-acta">—</div>
+        <div class="elim-fecha-campo">
+          <label>Hasta</label>
+          <input type="date" id="elim-fecha-hasta" class="filtro-input">
         </div>
-        <div class="panel-control">
-          <h3>Sin Informativo</h3>
-          <div class="stat-val" id="stat-sin-acta">—</div>
-        </div>
+      </div>
+
+      <button class="btn-elim-preview" id="btn-preview-eliminar" onclick="previsualizarEliminacion()">
+        Ver cuántos registros se borrarán
+      </button>
+
+      <div id="elim-preview-result" style="display:none;margin-top:10px;padding:10px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;color:#15803d;font-weight:600;"></div>
+
+      <div style="margin-top:16px">
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--txt2);cursor:pointer;line-height:1.5;">
+          <input type="checkbox" id="check-confirmar" onchange="verificarCheckLimpieza()" style="width:16px;height:16px;flex-shrink:0;margin-top:2px;">
+          <span>Entiendo que se eliminarán registros de Firestore permanentemente (no afecta Google Drive)</span>
+        </label>
+      </div>
+
+      <div class="modal-footer" style="margin-top:20px">
+        <button class="btn-modal-cancel" onclick="cerrarModalLimpiarDuplicados()">Cancelar</button>
+        <button class="btn-modal-danger" id="btn-iniciar-limpieza" disabled onclick="iniciarLimpiezaDuplicados()">
+          Iniciar limpieza
+        </button>
       </div>
     </div>
 
-  </main>
-
-  <div class="footer-stripe"></div>
-  <footer>
-    <p><strong>Gestión de Envíos – Unidad de Personal y Movilidad</strong><br>
-    Cuerpo de Vigilancia · Comisión de Tránsito del Ecuador</p>
-  </footer>
-</div>
-
-<!-- Modal de confirmación -->
-<div class="modal-overlay" id="confirm-modal">
-  <div class="modal-box">
-    <h3 id="modal-title">Confirmar</h3>
-    <p  id="modal-msg">¿Estás seguro?</p>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
-      <button class="btn-confirm" id="modal-ok-btn">Confirmar</button>
+    <div id="limpieza-progreso" class="modal-body" style="display:none">
+      <div style="padding:8px 0 16px">
+        <div class="progress-track"><div id="limpieza-progreso-bar" class="arch-progreso-bar"></div></div>
+        <div id="limpieza-progreso-txt" style="font-size:12px;color:var(--txt2);margin-top:8px;font-weight:500;text-align:center;"></div>
+      </div>
+      <div id="limpieza-resultados" style="max-height:300px;overflow-y:auto;background:#f5f5f5;border-radius:8px;padding:12px;font-size:12px;font-family:monospace;color:#333"></div>
     </div>
   </div>
 </div>
 
-<div id="toast-container"></div>
+<!-- ═══════════════════════════════
+     MODAL ARCHIVADO MENSUAL
+═══════════════════════════════ -->
+<div id="modal-archivado" class="modal-overlay" style="display:none">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-ico">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+      </div>
+      <div>
+        <div class="modal-titulo">Archivar mes</div>
+        <div class="modal-sub">Descarga archivos y libera espacio en Firestore</div>
+      </div>
+      <button class="modal-cerrar" onclick="cerrarModalArchivado()">✕</button>
+    </div>
 
-<script src="app.js"></script>
+    <div id="arch-paso1" class="modal-body">
+      <p class="modal-desc">Selecciona el mes a archivar. Los archivos se abrirán desde Drive y luego podrás marcarlos como archivados. El historial queda siempre.</p>
+      <div class="form-field" style="margin-top:14px">
+        <label class="form-label">Mes a archivar</label>
+        <select id="arch-mes-select" class="form-select" onchange="seleccionarMesArchivado()">
+          <option value="">— Selecciona el mes —</option>
+        </select>
+      </div>
+      <div id="arch-resumen" style="margin-top:12px;max-height:250px;overflow-y:auto;"></div>
+      <div class="modal-footer">
+        <button class="btn-modal-cancel" onclick="cerrarModalArchivado()">Cancelar</button>
+        <button class="btn-modal-primary" id="arch-btn-siguiente" disabled onclick="archPaso2()">Continuar →</button>
+      </div>
+    </div>
 
-<script>
-// ==================== TAB NAVIGATION ====================
-function mostrarTab(id, linkEl) {
-  document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
-  document.getElementById('tab-' + id).style.display = 'block';
-  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
-  if (linkEl) linkEl.classList.add('active');
-  if (id === 'historial') renderHistorial();
-  if (id === 'panel') renderStats();
-}
+    <div id="arch-paso2" class="modal-body" style="display:none">
+      <div class="aviso-amarillo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div>
+          <div style="font-weight:700;font-size:13px;color:#92400e;margin-bottom:3px">¿Estás seguro?</div>
+          <div id="arch-advertencia-detalle" style="font-size:12px;color:#78350f;line-height:1.5"></div>
+        </div>
+      </div>
+      <div class="checklist">
+        <label class="check-item"><input type="checkbox" id="check1" onchange="verificarChecks()"><span>Entiendo que los archivos se abrirán desde Google Drive</span></label>
+        <label class="check-item"><input type="checkbox" id="check2" onchange="verificarChecks()"><span>Guardaré los archivos descargados en un lugar seguro</span></label>
+        <label class="check-item"><input type="checkbox" id="check3" onchange="verificarChecks()"><span>Los registros quedarán marcados como archivados (el historial permanece)</span></label>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-modal-cancel" onclick="$('arch-paso2').style.display='none';$('arch-paso1').style.display='block'">← Volver</button>
+        <button class="btn-modal-danger" id="arch-btn-descargar" disabled onclick="descargarMesCompleto()">
+          Descargar y archivar
+        </button>
+      </div>
+    </div>
 
-// ==================== MODAL ====================
-let _modalCb = null;
-function openModal(title, msg, cb) {
-  document.getElementById('modal-title').textContent = title;
-  document.getElementById('modal-msg').textContent   = msg;
-  _modalCb = cb;
-  document.getElementById('confirm-modal').classList.add('open');
-}
-function closeModal() {
-  document.getElementById('confirm-modal').classList.remove('open');
-  _modalCb = null;
-}
-document.getElementById('modal-ok-btn').onclick = () => { if (_modalCb) _modalCb(); closeModal(); };
-document.getElementById('confirm-modal').addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeModal();
-});
-</script>
+    <div id="arch-paso3" class="modal-body" style="display:none">
+      <div style="padding:8px 0 16px">
+        <div class="progress-track"><div id="arch-progreso-bar" class="arch-progreso-bar"></div></div>
+        <div id="arch-progreso-txt" style="font-size:12px;color:var(--txt2);margin-top:8px;font-weight:500;text-align:center;"></div>
+      </div>
+      <div class="aviso-azul">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>El historial (nombre, correo, área, fecha) se conserva permanentemente. Solo se marcan como archivados.</span>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-modal-danger" id="arch-btn-archivar" style="display:none">
+          Confirmar archivado
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
+<div class="toast" id="toast"></div>
+
+<script type="module" src="app.js"></script>
 </body>
 </html>
