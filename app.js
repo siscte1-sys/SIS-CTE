@@ -167,28 +167,11 @@ function ir(v) {
   if (v==='vista-admin') $('nb-admin')?.classList.add('active');
 }
 
-function toggleModo() {
-  const isDark = document.body.classList.toggle('dark-mode');
-  localStorage.setItem('siscte-modo', isDark ? 'dark' : 'light');
-  _actualizarIconoModo(isDark);
-}
-
 function _actualizarIconoModo(isDark) {
   document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(b => {
     if (b) b.textContent = isDark ? '☀️ Modo' : '🌙 Modo';
   });
 }
-
-// Restaurar modo guardado al cargar
-(function() {
-  const saved = localStorage.getItem('siscte-modo');
-  if (saved === 'dark') {
-    document.body.classList.add('dark-mode');
-  }
-})();
-
-// Exponer toggleModo globalmente de inmediato (antes del DOMContentLoaded)
-window.toggleModo = toggleModo;
   const t = $('toast');
   t.textContent = msg;
   t.className = `toast toast--${tipo} toast--on`;
@@ -315,17 +298,9 @@ async function cargarMisEnvios() {
    DOM READY
 ══════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
-  // Sincronizar ícono del botón modo al cargar
-  _actualizarIconoModo(document.body.classList.contains('dark-mode'));
-
-  // Botones modo oscuro/claro
-  $('btn-modo')?.addEventListener('click', toggleModo);
-  $('btn-modo-guest')?.addEventListener('click', toggleModo);
-
   initFirebase().catch(e => console.error(e));
   poblarAreas('area-select');
   poblarAreas('filtro-area', 'Todas las áreas');
-  await new Promise(r => setTimeout(r, 100));
 
   /* botones */
   $('btn-google')?.addEventListener('click', login);
@@ -1378,7 +1353,6 @@ async function iniciarLimpiezaDuplicados() {
    EXPONER AL HTML
 ══════════════════════════════════ */
 window.login                        = login;
-window.toggleModo                   = toggleModo;
 window.abrirSelectorArchivo         = abrirSelectorArchivo;
 window.abrirSelectorActa            = abrirSelectorActa;
 window.seleccionarActa              = seleccionarActa;

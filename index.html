@@ -507,6 +507,37 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Script inline: modo oscuro/claro — carga ANTES del módulo -->
+<script>
+  // Restaurar modo guardado inmediatamente (evita flash)
+  (function(){
+    if(localStorage.getItem('siscte-modo')==='dark'){
+      document.body.classList.add('dark-mode');
+    }
+  })();
+
+  // toggleModo disponible globalmente desde el inicio
+  function toggleModo(){
+    var isDark = document.body.classList.toggle('dark-mode');
+    localStorage.setItem('siscte-modo', isDark ? 'dark' : 'light');
+    document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(function(b){
+      if(b) b.textContent = isDark ? '☀️ Modo' : '🌙 Modo';
+    });
+  }
+  window.toggleModo = toggleModo;
+
+  // Actualizar ícono al cargar DOM
+  document.addEventListener('DOMContentLoaded', function(){
+    var isDark = document.body.classList.contains('dark-mode');
+    document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(function(b){
+      if(b){
+        b.textContent = isDark ? '☀️ Modo' : '🌙 Modo';
+        b.addEventListener('click', toggleModo);
+      }
+    });
+  });
+</script>
+
 <script type="module" src="app.js"></script>
 </body>
 </html>
