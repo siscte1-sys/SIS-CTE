@@ -52,19 +52,19 @@ nav{background:linear-gradient(135deg,#0d1b3e 0%,#1a2f5e 60%,#1e3a6e 100%);borde
 body.dark-mode nav{background:linear-gradient(135deg,#08101f 0%,#0f1a35 60%,#131f40 100%);border-bottom-color:#e8b84b;}
 .nav-left{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .nav-logo-ico{width:26px;height:26px;background:rgba(201,162,39,.25);border:1px solid #c9a227;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.nav-brand{font-size:13px;font-weight:700;color:#ffffff;letter-spacing:.02em;white-space:nowrap;}
+.nav-brand{font-size:13px;font-weight:700;color:#f5d76e;letter-spacing:.02em;white-space:nowrap;}
 .nav-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
-.nav-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.85);padding:5px 11px;border-radius:7px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0;}
+.nav-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#f5d76e;padding:5px 11px;border-radius:7px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0;}
 .nav-btn:hover{background:rgba(201,162,39,.2);border-color:#c9a227;color:#fff;}
 .nav-btn.active{background:rgba(201,162,39,.25);border-color:#c9a227;color:#f5d76e;}
 .nav-btn-admin{background:rgba(201,162,39,.15);color:#f5d76e;border-color:rgba(201,162,39,.4);}
 .nav-user{display:flex;align-items:center;gap:6px;flex-shrink:0;}
 .nav-foto{width:26px;height:26px;border-radius:50%;object-fit:cover;border:2px solid #c9a227;flex-shrink:0;}
-.nav-nombre{font-size:12px;font-weight:600;color:rgba(255,255,255,.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px;}
+.nav-nombre{font-size:12px;font-weight:600;color:#f5d76e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px;}
 .nav-salir{background:rgba(220,38,38,.15);border:1.5px solid rgba(220,38,38,.35);color:#fca5a5;padding:5px 10px;border-radius:7px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;white-space:nowrap;flex-shrink:0;}
 .nav-salir:hover{background:rgba(220,38,38,.3);border-color:#dc2626;color:#fff;}
-.nav-guest-txt{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;white-space:nowrap;}
-.btn-modo{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.9);width:32px;height:32px;border-radius:7px;font-size:15px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;}
+.nav-guest-txt{font-size:12px;color:#f5d76e;font-weight:500;white-space:nowrap;}
+.btn-modo{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#f5d76e;width:32px;height:32px;border-radius:7px;font-size:15px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;}
 .btn-modo:hover{background:rgba(201,162,39,.25);border-color:#c9a227;}
 .nav-divider{width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 2px;flex-shrink:0;}
 
@@ -119,7 +119,7 @@ body.dark-mode .login-panel-left{background:linear-gradient(145deg,#060d1a 0%,#0
 ══════════════════════════════ */
 .page-hero{background:linear-gradient(135deg,#0d1b3e 0%,#1a2f5e 50%,#1e3a6e 100%);padding:32px 24px 40px;text-align:center;position:relative;border-bottom:3px solid #c9a227;}
 body.dark-mode .page-hero{background:linear-gradient(135deg,#08101f 0%,#0f1a35 50%,#131f40 100%);border-bottom-color:#e8b84b;}
-.page-hero::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:24px;background:var(--bg);border-radius:20px 20px 0 0;}
+.page-hero::after{display:none;}
 .page-hero-titulo{font-size:22px;font-weight:800;color:#fff;margin-bottom:6px;letter-spacing:-.02em;}
 .page-hero-sub{font-size:13px;color:rgba(255,255,255,.8);line-height:1.5;}
 .page-hero-sub strong{color:#f5d76e;}
@@ -484,4 +484,118 @@ tbody tr:hover td{background:#fafafa;}
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+/* ══════════════════════════════
+   MODO CLARO — overrides para nav y hero
+   (cuando NO tiene clase dark-mode)
+══════════════════════════════ */
+body:not(.dark-mode) nav{
+  background:linear-gradient(135deg,#1e3a6e 0%,#1a4080 60%,#1e3a6e 100%);
+}
+body:not(.dark-mode) .page-hero{
+  background:linear-gradient(135deg,#1e3a6e 0%,#254d9e 50%,#1e3a6e 100%);
+}
+
+/* En modo claro el fondo de página y cards usan las variables claras */
+body:not(.dark-mode){
+  background:#f0f2f7;
+  color:#1a1f2e;
+}
+body:not(.dark-mode) .envio-card,
+body:not(.dark-mode) .stat-box,
+body:not(.dark-mode) .panel-white,
+body:not(.dark-mode) .filtros-panel,
+body:not(.dark-mode) .modal-card,
+body:not(.dark-mode) .exito-card{
+  background:#ffffff;
+  border-color:#dde3ef;
+  color:#1a1f2e;
+}
+body:not(.dark-mode) .form-textarea,
+body:not(.dark-mode) .form-select,
+body:not(.dark-mode) .filtro-input,
+body:not(.dark-mode) .filtro-select{
+  background:#ffffff;
+  border-color:#dde3ef;
+  color:#1a1f2e;
+}
+body:not(.dark-mode) td, body:not(.dark-mode) th{
+  background:#ffffff;
+  border-color:#dde3ef;
+  color:#1a1f2e;
+}
+body:not(.dark-mode) tr:nth-child(even) td{
+  background:#f8f9fc;
+}
+
+/* Dark mode — fondo oscuro total */
+body.dark-mode{
+  background:#0f1523;
+  color:#e8ecf4;
+}
+body.dark-mode .envio-card,
+body.dark-mode .stat-box,
+body.dark-mode .panel-white,
+body.dark-mode .filtros-panel,
+body.dark-mode .modal-card,
+body.dark-mode .exito-card{
+  background:#1a2540;
+  border-color:#2a3550;
+  color:#e8ecf4;
+}
+body.dark-mode .form-textarea,
+body.dark-mode .form-select,
+body.dark-mode .filtro-input,
+body.dark-mode .filtro-select{
+  background:#243352;
+  border-color:#2a3550;
+  color:#e8ecf4;
+}
+body.dark-mode td, body.dark-mode th{
+  background:#1a2540;
+  border-color:#2a3550;
+  color:#e8ecf4;
+}
+body.dark-mode tr:nth-child(even) td{
+  background:#1e2d4a;
+}
+
+/* Tipografía nav más bold y definida */
+.nav-btn, .nav-brand, .nav-nombre, .nav-salir{
+  letter-spacing:.03em;
+  font-weight:700;
+}
+
+/* Dark mode — textos que no heredan correctamente */
+body.dark-mode .stat-box *,
+body.dark-mode .panel-white *,
+body.dark-mode .filtros-panel *,
+body.dark-mode .persona-row,
+body.dark-mode .persona-nombre,
+body.dark-mode .mis-envio-item,
+body.dark-mode .arch-persona-nombre,
+body.dark-mode .seccion-titulo,
+body.dark-mode h2, body.dark-mode h3,
+body.dark-mode label,
+body.dark-mode p{
+  color:#e8ecf4;
+}
+body.dark-mode .txt2, body.dark-mode .persona-mail,
+body.dark-mode .persona-area, body.dark-mode .filtros-titulo,
+body.dark-mode small{
+  color:#8fa3c8;
+}
+body.dark-mode .mis-envio-item{
+  background:#1a2540;
+  border-color:#2a3550;
+}
+body.dark-mode .persona-row{
+  background:#1a2540;
+  border-color:#2a3550;
+}
+/* Fondos de secciones admin en dark */
+body.dark-mode .vista-admin > *,
+body.dark-mode [id="vista-admin"] > *{
+  background:#0f1523;
 }
