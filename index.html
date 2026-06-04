@@ -22,25 +22,25 @@
     <span class="nav-brand">Gestión de Envíos</span>
   </div>
   <div class="nav-right" id="nav-sesion" style="display:none">
-    <button class="btn-modo" id="btn-modo" title="Cambiar modo">🌙 Modo</button>
     <button class="nav-btn" id="nb-subir">📤 Envíos</button>
     <button class="nav-btn nav-btn-admin" id="nb-admin" style="display:none">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       Panel de control
     </button>
-
+    <div class="nav-divider"></div>
     <div class="nav-user">
       <img id="nav-foto" class="nav-foto" src="" alt="">
       <span id="nav-nombre" class="nav-nombre"></span>
     </div>
+    <button class="btn-modo" id="btn-modo" title="Cambiar modo">🌙</button>
     <button class="nav-salir btn-logout">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       Salir
     </button>
   </div>
   <div id="nav-guest" style="display:flex;align-items:center;gap:8px;">
-    <button class="btn-modo" id="btn-modo-guest" title="Cambiar modo">🌙 Modo</button>
     <span class="nav-guest-txt">Portal SISCTE</span>
+    <button class="btn-modo" id="btn-modo-guest" title="Cambiar modo">🌙</button>
   </div>
 </nav>
 
@@ -521,7 +521,7 @@
     var isDark = document.body.classList.toggle('dark-mode');
     localStorage.setItem('siscte-modo', isDark ? 'dark' : 'light');
     document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(function(b){
-      if(b) b.textContent = isDark ? '☀️ Modo' : '🌙 Modo';
+      if(b) b.textContent = isDark ? '☀️' : '🌙';
     });
   }
   window.toggleModo = toggleModo;
@@ -531,7 +531,7 @@
     var isDark = document.body.classList.contains('dark-mode');
     document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(function(b){
       if(b){
-        b.textContent = isDark ? '☀️ Modo' : '🌙 Modo';
+        b.textContent = isDark ? '☀️' : '🌙';
         b.addEventListener('click', toggleModo);
       }
     });
