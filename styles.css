@@ -48,27 +48,27 @@ td,th,table
 /* ══════════════════════════════
    NAVBAR — azul marino + dorado (Personal CTE)
 ══════════════════════════════ */
-nav{background:linear-gradient(135deg,#0d1b3e 0%,#1a2f5e 60%,#1e3a6e 100%);border-bottom:3px solid #c9a227;height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(0,0,0,.35);}
+nav{background:linear-gradient(135deg,#0d1b3e 0%,#1a2f5e 60%,#1e3a6e 100%);border-bottom:3px solid #c9a227;height:52px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(0,0,0,.35);gap:8px;}
 body.dark-mode nav{background:linear-gradient(135deg,#08101f 0%,#0f1a35 60%,#131f40 100%);border-bottom-color:#e8b84b;}
-.nav-left{display:flex;align-items:center;gap:8px;}
+.nav-left{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .nav-logo-ico{width:26px;height:26px;background:rgba(201,162,39,.25);border:1px solid #c9a227;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.nav-brand{font-size:13px;font-weight:700;color:#ffffff;letter-spacing:.02em;}
-.nav-right{display:flex;align-items:center;gap:6px;}
-.nav-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.85);padding:5px 12px;border-radius:7px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;}
+.nav-brand{font-size:13px;font-weight:700;color:#ffffff;letter-spacing:.02em;white-space:nowrap;}
+.nav-right{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+.nav-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.85);padding:5px 10px;border-radius:7px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;white-space:nowrap;}
 .nav-btn:hover{background:rgba(201,162,39,.2);border-color:#c9a227;color:#fff;}
 .nav-btn.active{background:rgba(201,162,39,.25);border-color:#c9a227;color:#f5d76e;}
 .nav-btn-admin{background:rgba(201,162,39,.15);color:#f5d76e;border-color:rgba(201,162,39,.4);}
-.nav-user{display:flex;align-items:center;gap:6px;}
-.nav-foto{width:26px;height:26px;border-radius:50%;object-fit:cover;border:2px solid #c9a227;}
-.nav-nombre{font-size:12px;font-weight:600;color:rgba(255,255,255,.9);}
-.nav-salir{background:rgba(220,38,38,.15);border:1.5px solid rgba(220,38,38,.35);color:#fca5a5;padding:5px 12px;border-radius:7px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;}
+.nav-user{display:flex;align-items:center;gap:6px;max-width:120px;}
+.nav-foto{width:26px;height:26px;border-radius:50%;object-fit:cover;border:2px solid #c9a227;flex-shrink:0;}
+.nav-nombre{font-size:12px;font-weight:600;color:rgba(255,255,255,.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;}
+.nav-salir{background:rgba(220,38,38,.15);border:1.5px solid rgba(220,38,38,.35);color:#fca5a5;padding:5px 10px;border-radius:7px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;white-space:nowrap;}
 .nav-salir:hover{background:rgba(220,38,38,.3);border-color:#dc2626;color:#fff;}
-.nav-guest-txt{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;}
+.nav-guest-txt{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;white-space:nowrap;}
 
 /* Botón Modo Oscuro/Claro */
-.btn-modo{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.85);padding:5px 8px;border-radius:7px;font-family:'Inter',sans-serif;font-size:15px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;white-space:nowrap;line-height:1;min-width:30px;}
-.btn-modo:hover{background:rgba(201,162,39,.2);border-color:#c9a227;}
-.nav-divider{width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 2px;flex-shrink:0;}
+.btn-modo{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.9);width:32px;height:32px;border-radius:7px;font-size:15px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;}
+.btn-modo:hover{background:rgba(201,162,39,.25);border-color:#c9a227;}
+.nav-divider{width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 3px;flex-shrink:0;}
 
 /* ══════════════════════════════
    VISTAS
