@@ -171,6 +171,8 @@ function _actualizarIconoModo(isDark) {
     if (b) b.textContent = isDark ? '☀️ Modo' : '🌙 Modo';
   });
 }
+
+function toast(msg, tipo = 'ok') {
   const t = $('toast');
   t.textContent = msg;
   t.className = `toast toast--${tipo} toast--on`;
@@ -1374,3 +1376,4 @@ window.show                         = show;
 window.hide                         = hide;
 window.toast                        = toast;
 window.$                            = $;
+
