@@ -60,6 +60,13 @@ let _firebaseReady      = null;
 let _driveTokenCache    = null;
 let _driveTokenExpiry   = 0;
 
+// Exponer login al window INMEDIATAMENTE para que el script inline lo encuentre
+// Se define aquí como placeholder y se sobreescribe una vez que Firebase esté listo
+window._appLogin = async function() {
+  // Espera a que Firebase esté listo antes de intentar login
+  if (typeof login === 'function') return login();
+};
+
 /* ══════════════════════════════════
    FIREBASE INIT
 ══════════════════════════════════ */
@@ -141,6 +148,8 @@ async function login() {
       toast('Error: ' + (e.message || e.code), 'err');
   }
 }
+// Registrar login en window ni bien se define
+window._appLogin = login;
 
 async function logout() {
   _driveTokenCache = null; _driveTokenExpiry = 0;
@@ -303,7 +312,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   poblarAreas('filtro-area', 'Todas las áreas');
 
   /* botones */
-  $('btn-google')?.addEventListener('click', login);
   document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', logout));
   $('nb-subir')?.addEventListener('click', () => usuario ? irSubir() : ir('vista-login'));
   $('nb-admin')?.addEventListener('click', () => { if(esAdmin()){ ir('vista-admin'); cargarAdmin(); } });

@@ -526,7 +526,7 @@
   }
   window.toggleModo = toggleModo;
 
-  // Actualizar ícono al cargar DOM
+  // Actualizar ícono al cargar DOM y conectar botones
   document.addEventListener('DOMContentLoaded', function(){
     var isDark = document.body.classList.contains('dark-mode');
     document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(function(b){
@@ -535,6 +535,23 @@
         b.addEventListener('click', toggleModo);
       }
     });
+
+    // Botón Google: espera a que el módulo exponga window.login
+    var btnGoogle = document.getElementById('btn-google');
+    if(btnGoogle){
+      btnGoogle.addEventListener('click', function(){
+        // Reintenta hasta que el módulo haya cargado login
+        var tries = 0;
+        function intentar(){
+          if(typeof window._appLogin === 'function'){
+            window._appLogin();
+          } else if(tries++ < 50){
+            setTimeout(intentar, 100);
+          }
+        }
+        intentar();
+      });
+    }
   });
 </script>
 
