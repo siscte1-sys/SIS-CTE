@@ -170,19 +170,25 @@ function ir(v) {
 function toggleModo() {
   const isDark = document.body.classList.toggle('dark-mode');
   localStorage.setItem('siscte-modo', isDark ? 'dark' : 'light');
-  const iconos = document.querySelectorAll('#btn-modo,#btn-modo-guest');
-  iconos.forEach(b => { if(b) b.textContent = isDark ? '☀️ Modo' : '🌙 Modo'; });
+  _actualizarIconoModo(isDark);
+}
+
+function _actualizarIconoModo(isDark) {
+  document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(b => {
+    if (b) b.textContent = isDark ? '☀️ Modo' : '🌙 Modo';
+  });
 }
 
 // Restaurar modo guardado al cargar
 (function() {
-  if (localStorage.getItem('siscte-modo') === 'dark') {
+  const saved = localStorage.getItem('siscte-modo');
+  if (saved === 'dark') {
     document.body.classList.add('dark-mode');
-    document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('#btn-modo,#btn-modo-guest').forEach(b => { if(b) b.textContent = '☀️ Modo'; });
-    });
   }
 })();
+
+// Exponer toggleModo globalmente de inmediato (antes del DOMContentLoaded)
+window.toggleModo = toggleModo;
   const t = $('toast');
   t.textContent = msg;
   t.className = `toast toast--${tipo} toast--on`;
@@ -309,6 +315,13 @@ async function cargarMisEnvios() {
    DOM READY
 ══════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
+  // Sincronizar ícono del botón modo al cargar
+  _actualizarIconoModo(document.body.classList.contains('dark-mode'));
+
+  // Botones modo oscuro/claro
+  $('btn-modo')?.addEventListener('click', toggleModo);
+  $('btn-modo-guest')?.addEventListener('click', toggleModo);
+
   initFirebase().catch(e => console.error(e));
   poblarAreas('area-select');
   poblarAreas('filtro-area', 'Todas las áreas');

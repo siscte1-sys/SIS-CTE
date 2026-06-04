@@ -35,6 +35,16 @@ body.dark-mode{
 
 body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;font-size:14px;line-height:1.5;transition:background .25s,color .25s;}
 
+/* Transición suave en dark mode para elementos comunes */
+nav,
+.login-card,.login-panel-right,
+.envio-card,.exito-card,.stat-box,.panel-white,
+.filtros-panel,.modal-card,
+.form-textarea,.form-select,.filtro-input,.filtro-select,
+.mis-envio-item,.persona-row,
+td,th,table
+{ transition:background .25s,border-color .25s,color .25s; }
+
 /* ══════════════════════════════
    NAVBAR — azul marino + dorado (Personal CTE)
 ══════════════════════════════ */
@@ -82,27 +92,28 @@ body.dark-mode nav{background:linear-gradient(135deg,#08101f 0%,#0f1a35 60%,#131
 .login-hero{display:none;}
 .login-titulo{display:none;}
 .login-sub{display:none;}
-.login-card{background:var(--white);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shl);padding:0;width:100%;max-width:860px;animation:up .35s ease;display:flex;overflow:hidden;min-height:520px;}
+.login-card{background:var(--white);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shl);padding:0;width:100%;max-width:860px;animation:up .35s ease;display:flex;overflow:hidden;min-height:520px;transition:background .25s,border-color .25s;}
 .login-card h2{font-size:20px;font-weight:800;margin-bottom:6px;color:var(--txt);}
 .login-card-desc{font-size:12px;color:var(--txt2);margin-bottom:20px;line-height:1.6;}
 
 /* Panel izquierdo — identidad */
-.login-panel-left{background:linear-gradient(145deg,#1e3a8a 0%,#2563eb 60%,#3b82f6 100%);padding:48px 40px;display:flex;flex-direction:column;justify-content:space-between;min-width:280px;max-width:320px;flex-shrink:0;position:relative;overflow:hidden;}
-.login-panel-left::before{content:'';position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:rgba(255,255,255,.06);border-radius:50%;}
-.login-panel-left::after{content:'';position:absolute;bottom:-40px;left:-40px;width:160px;height:160px;background:rgba(255,255,255,.05);border-radius:50%;}
-.lpl-logo{width:48px;height:48px;background:rgba(255,255,255,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:32px;backdrop-filter:blur(4px);}
+.login-panel-left{background:linear-gradient(145deg,#0d1b3e 0%,#1a2f5e 60%,#1e3a6e 100%);border-right:3px solid #c9a227;padding:48px 40px;display:flex;flex-direction:column;justify-content:space-between;min-width:280px;max-width:320px;flex-shrink:0;position:relative;overflow:hidden;}
+body.dark-mode .login-panel-left{background:linear-gradient(145deg,#060d1a 0%,#0d1935 60%,#101f40 100%);border-right-color:#e8b84b;}
+.login-panel-left::before{content:'';position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:rgba(201,162,39,.08);border-radius:50%;}
+.login-panel-left::after{content:'';position:absolute;bottom:-40px;left:-40px;width:160px;height:160px;background:rgba(201,162,39,.06);border-radius:50%;}
+.lpl-logo{width:48px;height:48px;background:rgba(201,162,39,.2);border:1px solid rgba(201,162,39,.4);border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:32px;backdrop-filter:blur(4px);}
 .lpl-title{font-size:28px;font-weight:900;color:#fff;letter-spacing:-0.5px;line-height:1.1;margin-bottom:10px;}
 .lpl-sub{font-size:12px;color:rgba(255,255,255,.7);line-height:1.6;}
 .lpl-dots{display:flex;gap:6px;margin-top:auto;padding-top:40px;}
 .lpl-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.3);}
-.lpl-dot.active{background:#fff;width:18px;border-radius:3px;}
-.lpl-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:5px 12px;font-size:11px;color:rgba(255,255,255,.85);margin-bottom:20px;backdrop-filter:blur(4px);}
+.lpl-dot.active{background:#c9a227;width:18px;border-radius:3px;}
+.lpl-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(201,162,39,.15);border:1px solid rgba(201,162,39,.35);border-radius:20px;padding:5px 12px;font-size:11px;color:rgba(255,255,255,.9);margin-bottom:20px;backdrop-filter:blur(4px);}
 
 /* Panel derecho — formulario */
-.login-panel-right{flex:1;padding:40px 36px;display:flex;flex-direction:column;justify-content:center;}
+.login-panel-right{flex:1;padding:40px 36px;display:flex;flex-direction:column;justify-content:center;background:var(--white);transition:background .25s,color .25s;}
 .btn-google{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--white);color:var(--txt);border:1.5px solid var(--border);border-radius:var(--r);padding:11px 16px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;box-shadow:var(--sh);}
-.btn-google:hover{border-color:#4285f4;box-shadow:0 2px 12px rgba(66,133,244,.2);}
-.info-note{display:flex;align-items:flex-start;gap:8px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;padding:10px 12px;font-size:11px;color:#1e40af;margin-top:16px;line-height:1.5;}
+.btn-google:hover{border-color:#c9a227;box-shadow:0 2px 12px rgba(201,162,39,.25);}
+.info-note{display:flex;align-items:flex-start;gap:8px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--blue);margin-top:16px;line-height:1.5;}
 
 /* ══════════════════════════════
    PAGE HERO (azul marino + dorado)
