@@ -98,8 +98,8 @@ async function initFirebase() {
       if (u) {
         usuario = { uid: u.uid, nombre: u.displayName, email: u.email, foto: u.photoURL };
         actualizarNav();
-        esAdmin() ? show('nb-subir') : hide('nb-subir');
-        esAdmin() ? show('nb-admin') : hide('nb-admin');
+        show('nb-subir');                                  // Envíos: todos los usuarios
+        esAdmin() ? show('nb-admin') : hide('nb-admin');   // Panel de control: solo admin
         irSubir();
       } else {
         usuario = null;
