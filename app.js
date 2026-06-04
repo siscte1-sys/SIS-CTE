@@ -1,1326 +1,395 @@
-/* ══════════════════════════════════════════════════════════
-   PORTAL SISCTE — app.js  v5.5
-   Cambios v5.5:
-     • Fix real del mailer: payload enviado como parámetro GET (URL encoded)
-     • GAS lee e.parameter.data en doPost/doGet — compatible con no-cors
-     • Correos llegan tanto al usuario como al administrador
-   Cambios v5.3:
-     • Reemplazado EmailJS por Google Apps Script Mailer
-     • Sin dependencias externas para correos
-     • Correos HTML enriquecidos enviados desde sis.cte1@gmail.com
-   Cambios v5.2:
-     • Eliminado botón "Actualizar" del nav y de Mis Envíos
-     • iniciarLimpiezaDuplicados() limpia la UI de forma síncrona y garantizada
-     • Eliminadas funciones refrescarTodo / refrescarMisEnvios
-══════════════════════════════════════════════════════════ */
-
-/* ── Firebase ────────────────────────────────────────── */
-const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyDPgK1CBF0sO00j6Rho_e9xkc9Xj2HdPaI",
-  authDomain:        "sis-cte1.firebaseapp.com",
-  projectId:         "sis-cte1",
-  storageBucket:     "sis-cte1.firebasestorage.app",
-  messagingSenderId: "861145504172",
-  appId:             "1:861145504172:web:daa073aec7e6478709c209"
+// ==================== CONFIGURACIÓN FIREBASE ====================
+// Reemplaza estos valores con los de tu proyecto
+const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  projectId: "TU_PROYECTO",
+  storageBucket: "TU_PROYECTO.appspot.com",
+  messagingSenderId: "TU_ID",
+  appId: "TU_APP_ID"
 };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const storage = firebase.storage();
 
-/* ── GAS Mailer — Notificaciones por correo ──────────── */
-const GAS_MAILER_URL = 'https://script.google.com/macros/s/AKfycbzxvr3CTE0I9B8Vc519z9RSMK9LTQ6871MAnaoFQbttrvnlHS3Ma1sljvC22M0nO6x3/exec';
+// ==================== ESTADO GLOBAL ====================
+let currentUser = null;
+let xlsxFile    = null;  // Archivo Excel (obligatorio)
+let informeFile = null;  // Informe de Entrega (obligatorio)
+let actaFile    = null;  // Informativo de Atraso (obligatorio solo >día 10)
 
-/* ── Google Drive ────────────────────────────────────── */
-const GDRIVE_CONFIG = {
-  clientId: '861145504172-qf14jcon0msi3hl3l5cn5j5eard2gdvb.apps.googleusercontent.com',
-  scope: 'https://www.googleapis.com/auth/drive'
-};
+// ==================== UTILIDADES ====================
+function showToast(msg, type = 'info', duration = 3500) {
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `<span>${icons[type] || '•'}</span><span>${msg}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('toast-out');
+    toast.addEventListener('animationend', () => toast.remove());
+  }, duration);
+}
 
-const GDRIVE_CARPETA_GENERAL      = '1EBYsTtNi7JMTOYqKSnjFWnipmaq1L_LU';
-const GDRIVE_CARPETA_COMPROBANTES = '1sZnOusOY3mT-nidmdlveKaj3FxX5WG5_';
+function getDiaMes() {
+  return new Date().getDate();
+}
 
-/* ── Admin ───────────────────────────────────────────── */
-const ADMIN_EMAILS = [
-  "sis.cte1@gmail.com"
-];
+function getNombreMes() {
+  const meses = ['enero','febrero','marzo','abril','mayo','junio',
+                 'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const now = new Date();
+  return `${meses[now.getMonth()]} de ${now.getFullYear()}`;
+}
 
-const AREAS = [
-  "SUB ZONA GUAYAS","ZONA 8",
-  "CEBAF TULCAN","CEBAF NUEVA LOJA","CEBAF HUAQUILLAS",
-  "CEBAF MACARA","CEBAF AREA COMPUTO NACIONAL",
-  "PROV_PICHINCHA","PROV_MANABI","PROV_SANTO DOMINGO",
-  "PROV_LOS RIOS","PROV_BOLIVAR","PROV_SANTA ELENA",
-  "PROV_AZUAY","PROV_EL ORO",
-  "UREM","OIAT","EDU_VIAL","CRV","ECU-911"
-];
+function pasoDia10() {
+  return getDiaMes() > 10;
+}
 
-let db, auth, usuario = null;
-let archivoSeleccionado = null;
-let actaSeleccionada    = null;
-let docsAdmin           = [];
-let _firebaseReady      = null;
-let _driveTokenCache    = null;
-let _driveTokenExpiry   = 0;
+function diasParaDia10() {
+  const dia = getDiaMes();
+  return dia <= 10 ? (10 - dia) : 0;
+}
 
-/* ══════════════════════════════════
-   FIREBASE INIT
-══════════════════════════════════ */
-let _resolveFirebase;
-_firebaseReady = new Promise(res => { _resolveFirebase = res; });
+// ==================== DARK MODE ====================
+function toggleDarkMode() {
+  document.body.classList.toggle('dark-mode');
+  const isDark = document.body.classList.contains('dark-mode');
+  localStorage.setItem('darkMode', isDark);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = isDark ? '☀️ MODO CLARO' : '🌙 MODO OSCURO';
+}
 
-async function initFirebase() {
-  try {
-    const { initializeApp }
-      = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const { getFirestore, collection, addDoc, getDocs, orderBy, query, doc, getDoc }
-      = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-      getRedirectResult, signOut, onAuthStateChanged,
-      createUserWithEmailAndPassword, signInWithEmailAndPassword,
-      sendPasswordResetEmail, updateProfile }
-      = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");
+function initTheme() {
+  const saved = localStorage.getItem('darkMode');
+  if (saved === 'true') {
+    document.body.classList.add('dark-mode');
+    const btn = document.getElementById('theme-btn');
+    if (btn) btn.textContent = '☀️ MODO CLARO';
+  }
+}
 
-    const app = initializeApp(FIREBASE_CONFIG);
-    db   = getFirestore(app);
-    auth = getAuth(app);
-
-    window._fb = {
-      collection, addDoc, getDocs, orderBy, query, doc, getDoc,
-      GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-      getRedirectResult, signOut, onAuthStateChanged,
-      createUserWithEmailAndPassword, signInWithEmailAndPassword,
-      sendPasswordResetEmail, updateProfile
-    };
-
-    try {
-      const result = await getRedirectResult(auth);
-      if (result?.user) console.log('✓ Redirect login:', result.user.email);
-    } catch(e) { console.warn('Redirect result:', e.message); }
-
-    onAuthStateChanged(auth, u => {
-      if (u) {
-        usuario = { uid: u.uid, nombre: u.displayName, email: u.email, foto: u.photoURL };
-        actualizarNav();
-        esAdmin() ? show('nb-subir') : hide('nb-subir');
-        esAdmin() ? show('nb-admin') : hide('nb-admin');
-        irSubir();
-      } else {
-        usuario = null;
-        actualizarNav();
-        ir('vista-login');
-      }
+// ==================== AUTENTICACIÓN (Google) ====================
+function loginConGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider)
+    .then(result => entrarAlSistema(result.user))
+    .catch(err => {
+      console.error(err);
+      showToast('Error al iniciar sesión: ' + err.message, 'error');
     });
-
-    _resolveFirebase();
-  } catch(e) {
-    console.error('❌ Error Firebase:', e);
-    toast('Error iniciando sistema: ' + e.message, 'err');
-    _resolveFirebase();
-  }
 }
 
-/* ══════════════════════════════════
-   AUTH — solo Google
-══════════════════════════════════ */
-async function login() {
-  try {
-    await _firebaseReady;
-    const provider = new window._fb.GoogleAuthProvider();
-    provider.addScope('profile');
-    provider.addScope('email');
-    try {
-      toast('Abriendo ventana de Google...', 'ok');
-      await window._fb.signInWithPopup(auth, provider);
-    } catch(popupErr) {
-      if (['auth/popup-blocked','auth/popup-closed-by-user','auth/cancelled-popup-request']
-          .includes(popupErr.code)) {
-        toast('Redirigiendo a Google...', 'ok');
-        await window._fb.signInWithRedirect(auth, provider);
-      } else { throw popupErr; }
-    }
-  } catch(e) {
-    if (!['auth/popup-closed-by-user','auth/cancelled-popup-request'].includes(e.code))
-      toast('Error: ' + (e.message || e.code), 'err');
-  }
-}
-
-async function logout() {
-  _driveTokenCache = null; _driveTokenExpiry = 0;
-  try { await window._fb.signOut(auth); } catch(e) {}
-}
-
-const esAdmin = () =>
-  usuario && ADMIN_EMAILS.map(x => x.toLowerCase()).includes(usuario.email.toLowerCase());
-
-/* ══════════════════════════════════
-   DOM HELPERS
-══════════════════════════════════ */
-const $       = id => document.getElementById(id);
-const show    = id => { const e=$(id); if(e) e.style.display='block'; };
-const hide    = id => { const e=$(id); if(e) e.style.display='none'; };
-const hideAll = () => ['vista-login','vista-subir','vista-exito','vista-admin'].forEach(hide);
-
-function ir(v) {
-  hideAll();
-  const el = $(v); if (!el) return;
-  el.style.display = v === 'vista-login' ? 'flex' : 'block';
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  if (v==='vista-subir'||v==='vista-exito') $('nb-subir')?.classList.add('active');
-  if (v==='vista-admin') $('nb-admin')?.classList.add('active');
-}
-
-function toast(msg, tipo='ok') {
-  const t = $('toast');
-  t.textContent = msg;
-  t.className = `toast toast--${tipo} toast--on`;
-  clearTimeout(t._t);
-  t._t = setTimeout(() => t.className = 'toast', 4200);
-}
-
-function actualizarNav() {
-  if (usuario) {
-    const fotoEl = $('nav-foto');
-    if (usuario.foto) {
-      fotoEl.src = usuario.foto; fotoEl.style.display = 'block';
-      const ie = $('nav-iniciales'); if (ie) ie.style.display = 'none';
-    } else {
-      fotoEl.style.display = 'none';
-      let ie = $('nav-iniciales');
-      if (!ie) {
-        ie = document.createElement('div'); ie.id = 'nav-iniciales';
-        ie.style.cssText = 'width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
-        fotoEl.parentNode.insertBefore(ie, fotoEl.nextSibling);
-      }
-      const nombre = usuario.nombre || usuario.email || '?';
-      const p = nombre.trim().split(' ');
-      ie.textContent = p.length >= 2 ? (p[0][0]+p[1][0]).toUpperCase() : nombre.slice(0,2).toUpperCase();
-      ie.style.display = 'flex';
-    }
-    $('nav-nombre').textContent = usuario.nombre?.split(' ')[0] || usuario.email;
-    show('nav-sesion'); hide('nav-guest');
-    esAdmin() ? show('nb-subir') : hide('nb-subir');
-    esAdmin() ? show('nb-admin') : hide('nb-admin');
-  } else {
-    hide('nav-sesion'); show('nav-guest'); hide('nb-admin');
-  }
-}
-
-function resetBtn() {
-  const btn = $('btn-enviar'); if (!btn) return;
-  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-    </svg> Registrar Envío`;
-  actualizarBotonEnviar();
-}
-
-/* ══════════════════════════════════
-   AREAS
-══════════════════════════════════ */
-function poblarAreas(selectId, placeholder='— Selecciona tu área —') {
-  const sel = $(selectId); if (!sel) return;
-  sel.innerHTML = `<option value="">${placeholder}</option>`;
-  AREAS.forEach(a => { const o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o); });
-}
-
-/* ══════════════════════════════════
-   VISTA SUBIR
-══════════════════════════════════ */
-function irSubir() {
-  archivoSeleccionado = null;
-  actaSeleccionada    = null;
-  const fi=$('file-input'); if(fi) fi.value='';
-  const ai=$('acta-input'); if(ai) ai.value='';
-  $('dropzone').style.display    = 'flex';
-  $('file-preview').style.display = 'none';
-  const ad=$('acta-dropzone'); if(ad) ad.style.display='flex';
-  const ap=$('acta-preview');  if(ap) ap.style.display='none';
-  $('progress-wrap').style.display = 'none';
-  $('area-select').value = '';
-  const det=$('detalle-envio'); if(det) det.value='';
-  const bar=$('progress-bar'); if(bar) bar.style.width='0%';
-  const ptxt=$('progress-txt'); if(ptxt) ptxt.textContent='0%';
-  resetBtn();
-  const hn=$('hero-nombre'); if(hn) hn.textContent=usuario?.nombre||usuario?.email||'';
-  ir('vista-subir');
-  cargarMisEnvios();
-}
-
-/* ══════════════════════════════════
-   MIS ENVÍOS
-══════════════════════════════════ */
-async function cargarMisEnvios() {
-  const lista=$('mis-envios-lista'); if(!lista||!usuario) return;
-  lista.innerHTML=`<div class="mis-envios-vacio"><p style="font-size:12px;color:var(--txt3);">Cargando tus envíos...</p></div>`;
-  try {
-    const {where}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const q=window._fb.query(window._fb.collection(db,'entregas'),where('uid','==',usuario.uid));
-    const snap=await window._fb.getDocs(q);
-    const docs=snap.docs.map(d=>({id:d.id,...d.data()}))
-      .sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||''));
-    if(!docs.length){
-      lista.innerHTML=`<div class="mis-envios-vacio">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-        <p>No hay envíos registrados todavía.</p></div>`;
-      return;
-    }
-    lista.innerHTML=docs.map(d=>`
-      <div class="mis-envio-item${d.archivado?' mei-archivado':''}" id="mei-${d.id}">
-        <div class="mei-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
-        <div class="mei-info">
-          <div class="mei-nombre">${d.nombreArchivo}</div>
-          <div class="mei-meta">
-            <span class="mei-area">${d.area||'—'}</span>
-            &nbsp;·&nbsp;${d.fechaTexto} · ${d.horaTexto}
-            &nbsp;·&nbsp;${d.tamanoTexto||'—'}
-            ${d.archivado
-              ? '&nbsp;·&nbsp;<span style="color:var(--txt3);font-size:10px;font-weight:600;">Archivado</span>'
-              : '&nbsp;·&nbsp;<span style="color:var(--blue);font-size:10px;font-weight:500;">↩ Para reemplazar, sube el mismo nombre</span>'}
-            ${d.comprobanteURL
-              ? `&nbsp;·&nbsp;<a href="${d.comprobanteURL}" target="_blank" style="color:#16a34a;font-size:10px;font-weight:600;">🧾 Ver comprobante</a>`
-              : ''}
-          </div>
-        </div>
-      </div>`).join('');
-  } catch(e) {
-    lista.innerHTML=`<div class="mis-envios-vacio"><p style="color:var(--red);font-size:11px;">Error: ${e.message}</p></div>`;
-  }
-}
-
-/* ══════════════════════════════════
-   DOM READY
-══════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', async () => {
-  initFirebase().catch(e => console.error(e));
-  poblarAreas('area-select');
-  poblarAreas('filtro-area', 'Todas las áreas');
-  await new Promise(r => setTimeout(r, 100));
-
-  /* botones */
-  $('btn-google')?.addEventListener('click', login);
-  document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', logout));
-  $('nb-subir')?.addEventListener('click', () => usuario ? irSubir() : ir('vista-login'));
-  $('nb-admin')?.addEventListener('click', () => { if(esAdmin()){ ir('vista-admin'); cargarAdmin(); } });
-  $('btn-enviar-otro')?.addEventListener('click', irSubir);
-  $('btn-enviar')?.addEventListener('click', enviarArchivo);
-  $('btn-filtrar')?.addEventListener('click', aplicarFiltros);
-  $('btn-limpiar')?.addEventListener('click', limpiarFiltros);
-  $('btn-excel')?.addEventListener('click', () => exportarExcel(docsAdmin, false));
-  $('btn-excel-filtrado')?.addEventListener('click', exportarFiltrado);
-
-  /* dropzone Excel */
-  const dz = $('dropzone');
-  if (dz) {
-    dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dz-over'); });
-    dz.addEventListener('dragleave', () => dz.classList.remove('dz-over'));
-    dz.addEventListener('drop',      e => { e.preventDefault(); dz.classList.remove('dz-over'); if(e.dataTransfer.files[0]) seleccionar(e.dataTransfer.files[0]); });
-    dz.addEventListener('click',     abrirSelectorArchivo);
-  }
-  $('file-input')?.addEventListener('change', () => { if($('file-input').files[0]) seleccionar($('file-input').files[0]); });
-
-  /* botón cambiar Excel */
-  $('btn-cambiar')?.addEventListener('click', () => {
-    archivoSeleccionado = null;
-    $('file-preview').style.display = 'none';
-    $('dropzone').style.display = 'flex';
-    const fi=$('file-input'); if(fi) fi.value='';
-    actualizarBotonEnviar();
+function doLogout() {
+  firebase.auth().signOut().then(() => {
+    currentUser = null;
+    document.getElementById('screen-login').style.display = 'flex';
+    document.getElementById('screen-main').style.display  = 'none';
   });
+}
+
+function entrarAlSistema(user) {
+  currentUser = user;
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-main').style.display  = 'block';
+  document.getElementById('display-user').textContent = user.displayName || user.email;
+  renderEnvioForm();
+  renderHistorial();
+}
+
+firebase.auth().onAuthStateChanged(user => {
+  if (user) entrarAlSistema(user);
 });
 
-/* ══════════════════════════════════
-   SELECTORES DE ARCHIVO
-══════════════════════════════════ */
-function abrirSelectorArchivo() {
-  const i=document.createElement('input'); i.type='file'; i.accept='.xlsx,.xls'; i.style.display='none';
-  i.addEventListener('change', () => { if(i.files[0]) seleccionar(i.files[0]); i.remove(); });
-  document.body.appendChild(i); i.click();
+// ==================== PANEL DE CONTROL (STATS) ====================
+async function renderStats() {
+  try {
+    const snap = await db.collection('envios').get();
+    const total = snap.size;
+    const conActa = snap.docs.filter(d => d.data().actaUrl).length;
+    document.getElementById('stat-total').textContent  = total;
+    document.getElementById('stat-acta').textContent   = conActa;
+    document.getElementById('stat-sin-acta').textContent = total - conActa;
+  } catch(e) { /* sin conexión */ }
 }
 
-function abrirSelectorActa() {
-  const i=document.createElement('input'); i.type='file'; i.accept='.pdf'; i.style.display='none';
-  i.addEventListener('change', () => { if(i.files[0]) seleccionarActa(i.files[0]); i.remove(); });
-  document.body.appendChild(i); i.click();
-}
+// ==================== FORMULARIO DE ENVÍO ====================
+function renderEnvioForm() {
+  const dia  = getDiaMes();
+  const mes  = getNombreMes();
+  const tard = pasoDia10();
 
-function quitarActa() {
-  actaSeleccionada = null;
-  const ad=$('acta-dropzone'); if(ad) ad.style.display='flex';
-  const ap=$('acta-preview');  if(ap) ap.style.display='none';
-  actualizarBotonEnviar();
-}
-
-function seleccionar(f) {
-  const ext = f.name.split('.').pop().toLowerCase();
-  if (!['xlsx','xls'].includes(ext)) { toast('Solo se aceptan archivos Excel (.xlsx o .xls)','err'); return; }
-  archivoSeleccionado = f;
-  $('fp-nombre').textContent = f.name;
-  $('fp-peso').textContent   = formatSize(f.size);
-  const m=$('fp-modo'); if(m) m.textContent='☁️ Google Drive';
-  $('dropzone').style.display     = 'none';
-  $('file-preview').style.display = 'flex';
-  actualizarBotonEnviar();
-}
-
-function seleccionarActa(f) {
-  if (!f) return;
-  if (f.name.split('.').pop().toLowerCase() !== 'pdf') { toast('El acta debe ser PDF (.pdf)','err'); return; }
-  actaSeleccionada = f;
-  const an=$('acta-nombre'); if(an) an.textContent=f.name;
-  const ap2=$('acta-peso');  if(ap2) ap2.textContent=formatSize(f.size);
-  const ad=$('acta-dropzone'); if(ad) ad.style.display='none';
-  const ap=$('acta-preview');  if(ap) ap.style.display='flex';
-  actualizarBotonEnviar();
-}
-
-/* ══════════════════════════════════
-   LÓGICA DE PLAZO / ACTA OBLIGATORIA
-══════════════════════════════════ */
-function actaEsObligatoriaHoy() {
-  return new Date().getDate() > 10;
-}
-
-function infoPlazoPorFecha() {
-  const ahora = new Date();
-  const dia   = ahora.getDate();
-  const mesPasado = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1);
-  const nombreMesPasado = mesPasado.toLocaleDateString('es-EC',
-    { month:'long', year:'numeric', timeZone:'America/Guayaquil' });
-
-  if (dia <= 10) {
-    const diasRestantes = 10 - dia;
-    return {
-      tardio: false,
-      mesReporte: nombreMesPasado,
-      mensaje: diasRestantes === 0
-        ? `Hoy vence el plazo para el reporte de ${nombreMesPasado}`
-        : `Envío del reporte de ${nombreMesPasado} · te quedan ${diasRestantes} día${diasRestantes!==1?'s':''} sin acta`
-    };
+  // Aviso Informativo de Atraso
+  const avisoEl = document.getElementById('aviso-dias');
+  if (tard) {
+    avisoEl.textContent = `⚠️ Ya pasó el día 10 — el Informativo de Atraso es OBLIGATORIO`;
+    avisoEl.className   = 'aviso-dias urgente';
   } else {
-    const diasRetraso = dia - 10;
-    return {
-      tardio: true,
-      mesReporte: nombreMesPasado,
-      mensaje: `Envío tardío del reporte de ${nombreMesPasado} · ${diasRetraso} día${diasRetraso!==1?'s':''} de retraso — Acta obligatoria`
-    };
+    const faltan = diasParaDia10();
+    avisoEl.textContent = faltan === 0
+      ? `⚠️ Hoy es el día 10 — último día sin Informativo de Atraso`
+      : `✔ Te quedan ${faltan} días sin Informativo de Atraso`;
+    avisoEl.className   = faltan <= 2 ? 'aviso-dias urgente' : 'aviso-dias ok';
   }
+
+  // Mostrar u ocultar badge del Informativo de Atraso
+  const badgeActa = document.getElementById('badge-acta');
+  if (tard) {
+    badgeActa.textContent = 'OBLIGATORIO';
+    badgeActa.className   = 'badge-req obligatorio';
+  } else {
+    const faltan = diasParaDia10();
+    badgeActa.textContent = `OPCIONAL HASTA EL DÍA 10`;
+    badgeActa.className   = 'badge-req opcional';
+  }
+
+  // Título del mes en curso
+  document.getElementById('mes-envio').textContent = `Envío del reporte de ${mes}`;
+
+  updateBotonEnvio();
+  renderStats();
 }
 
-function actualizarBotonEnviar() {
-  const btn = $('btn-enviar'); if (!btn) return;
-  const actaObligatoria = actaEsObligatoriaHoy();
-  const info = infoPlazoPorFecha();
-  const listo = !!(archivoSeleccionado && (actaSeleccionada || !actaObligatoria));
-  btn.disabled = !listo;
-  btn.style.opacity = listo ? '1' : '0.45';
-  btn.style.cursor  = listo ? 'pointer' : 'not-allowed';
+// ==================== LÓGICA DE ARCHIVOS ====================
 
-  const actaLabel = $('acta-label-oblig');
-  if (actaLabel) {
-    if (actaObligatoria) {
-      actaLabel.textContent = 'OBLIGATORIO — Envío tardío';
-      actaLabel.style.background = '#ef4444';
-    } else {
-      actaLabel.textContent = 'OPCIONAL hasta el día 10';
-      actaLabel.style.background = '#d97706';
+// --- Excel ---
+function setupZonaExcel() {
+  setupZona('zona-excel', 'input-excel', ['.xlsx','.xls'], (file) => {
+    xlsxFile = file;
+    mostrarArchivoSeleccionado('excel', file.name);
+    updateBotonEnvio();
+  });
+}
+
+// --- Informe de Entrega ---
+function setupZonaInforme() {
+  setupZona('zona-informe', 'input-informe', ['.pdf'], (file) => {
+    informeFile = file;
+    mostrarArchivoSeleccionado('informe', file.name);
+    updateBotonEnvio();
+  });
+}
+
+// --- Informativo de Atraso ---
+function setupZonaActa() {
+  setupZona('zona-acta', 'input-acta', ['.pdf'], (file) => {
+    actaFile = file;
+    mostrarArchivoSeleccionado('acta', file.name);
+    updateBotonEnvio();
+  });
+}
+
+function setupZona(zonaId, inputId, accept, onFile) {
+  const zona  = document.getElementById(zonaId);
+  const input = document.getElementById(inputId);
+
+  if (!zona || !input) return;
+
+  input.setAttribute('accept', accept.join(','));
+
+  input.addEventListener('change', () => {
+    const f = input.files[0];
+    if (f && validarExtension(f.name, accept)) {
+      onFile(f);
+      zona.classList.add('has-file');
+      zona.classList.remove('error-zone');
+    } else if (f) {
+      showToast(`Solo se aceptan archivos: ${accept.join(', ')}`, 'error');
+      input.value = '';
     }
-  }
+  });
 
-  const plazoEl = $('acta-plazo-info');
-  if (plazoEl) plazoEl.textContent = info.mensaje;
-
-  const hint = $('enviar-hint');
-  if (hint) {
-    if (!archivoSeleccionado && actaObligatoria)
-      hint.textContent = 'Sube el Excel y el Acta PDF (retraso — acta obligatoria)';
-    else if (!archivoSeleccionado)
-      hint.textContent = 'Sube el Excel para habilitar el envío';
-    else if (!actaSeleccionada && actaObligatoria)
-      hint.textContent = '⚠️ El Acta PDF es obligatoria — envío tardío (pasó el día 10)';
-    else
-      hint.textContent = '';
-  }
-}
-
-function formatSize(b) {
-  return b >= 1024*1024 ? (b/(1024*1024)).toFixed(2)+' MB' : (b/1024).toFixed(1)+' KB';
-}
-
-function setProgreso(pct, label) {
-  $('progress-bar').style.width = pct+'%';
-  $('progress-txt').textContent = pct+'%';
-  const l=$('progress-label-txt'); if(l) l.textContent=label||'';
-}
-
-/* ══════════════════════════════════
-   GOOGLE DRIVE — TOKEN
-══════════════════════════════════ */
-function obtenerTokenDrive(forzarNuevo=false) {
-  if (!forzarNuevo && _driveTokenCache && Date.now() < _driveTokenExpiry)
-    return Promise.resolve(_driveTokenCache);
-  return new Promise((resolve, reject) => {
-    const cargarGIS = () => new Promise((res, rej) => {
-      if (window.google?.accounts?.oauth2) { res(); return; }
-      const s = document.createElement('script');
-      s.src = 'https://accounts.google.com/gsi/client';
-      s.onload = res; s.onerror = () => rej(new Error('No se pudo cargar Google Identity Services'));
-      document.head.appendChild(s);
-    });
-    cargarGIS().then(() => {
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: GDRIVE_CONFIG.clientId,
-        scope: GDRIVE_CONFIG.scope,
-        callback: (resp) => {
-          if (resp.error) { reject(new Error('Error de autorización: ' + resp.error)); return; }
-          _driveTokenCache  = resp.access_token;
-          _driveTokenExpiry = Date.now() + 45 * 60 * 1000;
-          toast('✓ Conectado a Google Drive');
-          resolve(resp.access_token);
-        }
-      });
-      client.requestAccessToken();
-    }).catch(e => reject(e));
+  zona.addEventListener('dragover',  e => { e.preventDefault(); zona.classList.add('drag-over'); });
+  zona.addEventListener('dragleave', ()  => zona.classList.remove('drag-over'));
+  zona.addEventListener('drop', e => {
+    e.preventDefault();
+    zona.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f && validarExtension(f.name, accept)) {
+      onFile(f);
+      zona.classList.add('has-file');
+    } else if (f) {
+      showToast(`Solo se aceptan archivos: ${accept.join(', ')}`, 'error');
+    }
   });
 }
 
-/* ══════════════════════════════════
-   GOOGLE DRIVE — CARPETA POR ÁREA
-══════════════════════════════════ */
-async function obtenerOCrearSubcarpeta(token, nombreArea) {
-  const q = encodeURIComponent(
-    `mimeType='application/vnd.google-apps.folder' and name='${nombreArea}' and '${GDRIVE_CARPETA_GENERAL}' in parents and trashed=false`
-  );
-  const sr = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`,
-    { headers: { 'Authorization': 'Bearer ' + token } }
-  );
-  if (!sr.ok) throw new Error('Error buscando carpeta: HTTP ' + sr.status);
-  const sd = await sr.json();
-  if (sd.files?.length > 0) return sd.files[0].id;
-
-  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: nombreArea, mimeType: 'application/vnd.google-apps.folder', parents: [GDRIVE_CARPETA_GENERAL] })
-  });
-  if (!cr.ok) { const e=await cr.json(); throw new Error(e.error?.message||cr.status); }
-  const carpeta = await cr.json();
-  await fetch(`https://www.googleapis.com/drive/v3/files/${carpeta.id}/permissions`, {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ role: 'reader', type: 'anyone' })
-  });
-  toast(`📁 Carpeta "${nombreArea}" creada ✓`);
-  return carpeta.id;
+function validarExtension(nombre, extensiones) {
+  const lower = nombre.toLowerCase();
+  return extensiones.some(ext => lower.endsWith(ext));
 }
 
-/* ══════════════════════════════════
-   GOOGLE DRIVE — SUBIR ARCHIVO
-══════════════════════════════════ */
-async function subirAGoogleDrive(archivo, onProgress) {
-  const token = await obtenerTokenDrive();
-  const area  = $('area-select')?.value;
-  if (!area) throw new Error('No se seleccionó área');
-  const idSubcarpeta = await obtenerOCrearSubcarpeta(token, area);
-  onProgress(40);
-
-  const fecha       = new Date().toISOString().slice(0,10);
-  const nombreFinal = `${fecha}_${archivo.name}`;
-
-  return new Promise((resolve, reject) => {
-    const metadata = {
-      name:     nombreFinal,
-      mimeType: archivo.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      parents:  [idSubcarpeta]
-    };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', archivo);
-
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink');
-    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-    xhr.upload.onprogress = e => { if(e.lengthComputable) onProgress(Math.round(40 + (e.loaded/e.total)*50)); };
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        const resp = JSON.parse(xhr.responseText);
-        fetch(`https://www.googleapis.com/drive/v3/files/${resp.id}/permissions`, {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: 'reader', type: 'anyone' })
-        }).finally(() => resolve(`https://drive.google.com/file/d/${resp.id}/view`));
-      } else {
-        reject(new Error('HTTP ' + xhr.status + ': ' + xhr.responseText));
-      }
-    };
-    xhr.onerror = () => reject(new Error('Error de red'));
-    xhr.send(form);
-  });
+function mostrarArchivoSeleccionado(tipo, nombre) {
+  const infoEl = document.getElementById(`info-${tipo}`);
+  const nameEl = document.getElementById(`name-${tipo}`);
+  if (infoEl) infoEl.classList.add('visible');
+  if (nameEl) nameEl.textContent = nombre;
 }
 
-/* ══════════════════════════════════
-   GOOGLE DRIVE — SUBIR COMPROBANTE PDF
-══════════════════════════════════ */
-async function subirComprobantePDFaDrive(dataUrl, registro) {
-  try {
-    const token    = await obtenerTokenDrive();
-    const base64   = dataUrl.split(',')[1];
-    const byteChars = atob(base64);
-    const bytes    = new Uint8Array(byteChars.length);
-    for (let i=0; i<byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
-    const blob     = new Blob([bytes], { type: 'application/pdf' });
+function quitarArchivo(tipo) {
+  if (tipo === 'excel')   { xlsxFile    = null; document.getElementById('input-excel').value = ''; }
+  if (tipo === 'informe') { informeFile = null; document.getElementById('input-informe').value = ''; }
+  if (tipo === 'acta')    { actaFile    = null; document.getElementById('input-acta').value = ''; }
 
-    const fecha    = new Date().toISOString().slice(0,10);
-    const nombre   = `COMPROBANTE_${registro}_${fecha}.pdf`;
-    const metadata = { name: nombre, mimeType: 'application/pdf', parents: [GDRIVE_CARPETA_COMPROBANTES] };
-
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', blob, nombre);
-
-    const res = await fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
-      { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: form }
-    );
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-
-    await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'reader', type: 'anyone' })
-    });
-
-    const link = `https://drive.google.com/file/d/${data.id}/view`;
-    console.log('✓ Comprobante PDF subido a Drive:', link);
-    return link;
-  } catch(e) {
-    console.warn('⚠️ No se pudo subir comprobante a Drive:', e.message);
-    return null;
-  }
+  const infoEl = document.getElementById(`info-${tipo}`);
+  const zonaEl = document.getElementById(`zona-${tipo}`);
+  if (infoEl) infoEl.classList.remove('visible');
+  if (zonaEl) zonaEl.classList.remove('has-file');
+  updateBotonEnvio();
 }
 
-/* ══════════════════════════════════
-   ENVIAR ARCHIVO — FLUJO PRINCIPAL
-══════════════════════════════════ */
-async function enviarArchivo() {
-  if (!archivoSeleccionado) { toast('Selecciona un archivo Excel primero','err'); return; }
+// ==================== VALIDACIÓN Y BOTÓN ====================
+function canEnviar() {
+  const tieneExcel   = !!xlsxFile;
+  const tieneInforme = !!informeFile;
+  const tieneActa    = !!actaFile;
+  const tard = pasoDia10();
 
-  const actaObligatoria = actaEsObligatoriaHoy();
-  if (actaObligatoria && !actaSeleccionada) {
-    const _info = infoPlazoPorFecha();
-    toast(`⚠️ Envío tardío del reporte de ${_info.mesReporte} — el Acta PDF es obligatoria`, 'err');
-    return;
-  }
+  if (!tieneExcel)   return { ok: false, msg: 'Sube el archivo Excel para habilitar el envío' };
+  if (!tieneInforme) return { ok: false, msg: 'Sube el Informe de Entrega para habilitar el envío' };
+  if (tard && !tieneActa) return { ok: false, msg: 'Pasó el día 10 — el Informativo de Atraso es obligatorio' };
+  return { ok: true, msg: '' };
+}
 
-  const areaVal    = $('area-select').value;
-  if (!areaVal) { toast('Debes seleccionar tu área','err'); return; }
-  const detalleVal = ($('detalle-envio')?.value||'').trim();
+function updateBotonEnvio() {
+  const btn     = document.getElementById('btn-registrar');
+  const hintEl  = document.getElementById('btn-hint');
+  const result  = canEnviar();
 
-  const btn = $('btn-enviar');
+  if (!btn) return;
+  btn.disabled     = !result.ok;
+  hintEl.textContent = result.ok ? '' : result.msg;
+}
+
+// ==================== REGISTRAR ENVÍO ====================
+async function registrarEnvio() {
+  const area = document.getElementById('select-area')?.value;
+  if (!area) { showToast('Selecciona tu área', 'error'); return; }
+
+  const { ok, msg } = canEnviar();
+  if (!ok) { showToast(msg, 'error'); return; }
+
+  const btn = document.getElementById('btn-registrar');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Subiendo...';
-  $('progress-wrap').style.display = 'block';
-  setProgreso(5, 'Preparando...');
+  btn.innerHTML = '⏳ REGISTRANDO...';
 
   try {
-    const ahora      = new Date();
-    const fechaTexto = ahora.toLocaleDateString('es-EC',{timeZone:'America/Guayaquil',day:'2-digit',month:'long',year:'numeric'});
-    const horaTexto  = ahora.toLocaleTimeString('es-EC',{timeZone:'America/Guayaquil',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const ts   = Date.now();
+    const user = currentUser;
+    const mes  = getNombreMes();
+    const ref  = db.collection('envios').doc();
 
-    /* 1. Subir Excel */
-    setProgreso(10, 'Subiendo Excel a Google Drive...');
-    const storageURL = await subirAGoogleDrive(archivoSeleccionado,
-      p => setProgreso(10 + Math.round(p*0.25), `Subiendo Excel... ${Math.round(p)}%`));
+    // Subir Excel
+    const excelRef = storage.ref(`envios/${ref.id}/excel_${xlsxFile.name}`);
+    await excelRef.put(xlsxFile);
+    const excelUrl = await excelRef.getDownloadURL();
 
-    /* 2. Subir Acta PDF (si existe) */
-    let actaURL = null;
-    if (actaSeleccionada) {
-      setProgreso(40, 'Subiendo Acta PDF...');
-      actaURL = await subirAGoogleDrive(actaSeleccionada,
-        p => setProgreso(40 + Math.round(p*0.15), `Subiendo Acta... ${Math.round(p)}%`));
+    // Subir Informe de Entrega
+    const informeRef = storage.ref(`envios/${ref.id}/informe_${informeFile.name}`);
+    await informeRef.put(informeFile);
+    const informeUrl = await informeRef.getDownloadURL();
+
+    // Subir Informativo de Atraso (si existe)
+    let actaUrl = null;
+    if (actaFile) {
+      const actaRef = storage.ref(`envios/${ref.id}/acta_${actaFile.name}`);
+      await actaRef.put(actaFile);
+      actaUrl = await actaRef.getDownloadURL();
     }
 
-    const numRegistro = 'SISCTE-' + Date.now().toString(36).toUpperCase();
-
-    /* 3. Generar comprobante PDF */
-    setProgreso(60, 'Generando comprobante PDF...');
-    const comprobanteDataUrl = await generarComprobantePDFComoURL({
-      nombre:    usuario.nombre,
-      email:     usuario.email,
-      area:      areaVal,
-      archivo:   archivoSeleccionado.name,
-      acta:      actaSeleccionada?.name || '—',
-      tamano:    formatSize(archivoSeleccionado.size),
-      fecha:     fechaTexto,
-      hora:      horaTexto,
-      registro:  numRegistro,
-      driveLink: storageURL,
-      actaLink:  actaURL || ''
+    // Guardar en Firestore
+    await ref.set({
+      area,
+      mes,
+      fechaEnvio: firebase.firestore.FieldValue.serverTimestamp(),
+      usuario: user.email,
+      nombreUsuario: user.displayName || user.email,
+      excelNombre: xlsxFile.name,
+      excelUrl,
+      informeNombre: informeFile.name,
+      informeUrl,
+      actaNombre: actaFile ? actaFile.name : null,
+      actaUrl,
+      diaMes: getDiaMes(),
+      tardio: pasoDia10(),
     });
 
-    /* 4. Subir comprobante a Drive */
-    setProgreso(72, 'Subiendo comprobante PDF...');
-    let comprobanteURL = null;
-    if (comprobanteDataUrl) {
-      comprobanteURL = await subirComprobantePDFaDrive(comprobanteDataUrl, numRegistro);
-    }
+    showToast('✅ Envío registrado correctamente', 'success');
 
-    /* 5. Registrar en Firestore (con deduplicación) */
-    setProgreso(84, 'Registrando en Firestore...');
-    const { where, deleteDoc, doc: docRef } =
-      await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-
-    const qDup = window._fb.query(
-      window._fb.collection(db,'entregas'),
-      where('uid',          '==', usuario.uid),
-      where('nombreArchivo','==', archivoSeleccionado.name),
-      where('area',         '==', areaVal)
-    );
-    const snapDup = await window._fb.getDocs(qDup);
-    for (const ds of snapDup.docs) {
-      await deleteDoc(docRef(db,'entregas',ds.id));
-    }
-    const fueReemplazo = snapDup.docs.length > 0;
-
-    let driveFileId = null;
-    const m = storageURL?.match(/\/d\/([a-zA-Z0-9-_]+)\//);
-    if (m) driveFileId = m[1];
-
-    await window._fb.addDoc(window._fb.collection(db,'entregas'), {
-      uid:           usuario.uid,
-      nombre:        usuario.nombre,
-      email:         usuario.email,
-      foto:          usuario.foto,
-      area:          areaVal,
-      nombreArchivo: archivoSeleccionado.name,
-      nombreActa:    actaSeleccionada?.name || null,
-      tamanoBytes:   archivoSeleccionado.size,
-      tamanoTexto:   formatSize(archivoSeleccionado.size),
-      metodo:        'google_drive',
-      storageURL,
-      actaURL,
-      comprobanteURL,
-      driveFileId,
-      detalle:       detalleVal,
-      registro:      numRegistro,
-      fechaTexto,
-      horaTexto,
-      timestamp:     ahora.toISOString()
+    // Limpiar formulario
+    xlsxFile = null; informeFile = null; actaFile = null;
+    ['excel','informe','acta'].forEach(t => quitarArchivo(t));
+    ['input-excel','input-informe','input-acta'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
     });
 
-    /* 6. Correos */
-    setProgreso(93, 'Enviando correos de notificación...');
-    try {
-      await enviarCorreosNotificacion({
-        nombre:         usuario.nombre,
-        email:          usuario.email,
-        area:           areaVal,
-        archivo:        archivoSeleccionado.name,
-        acta:           actaSeleccionada?.name || '—',
-        tamano:         formatSize(archivoSeleccionado.size),
-        fecha:          fechaTexto,
-        hora:           horaTexto,
-        registro:       numRegistro,
-        driveLink:      storageURL,
-        actaLink:       actaURL || null,
-        comprobanteUrl: comprobanteURL || ''
-      });
-    } catch(mailErr) {
-      console.error('❌ Error enviando correos:', mailErr);
-    }
+    renderHistorial();
+    renderStats();
 
-    setProgreso(100, fueReemplazo ? '¡Archivo reemplazado!' : '¡Completado!');
-    mostrarExito(areaVal, fechaTexto, horaTexto);
-    setTimeout(() => ir('vista-exito'), 500);
-
-  } catch(err) {
+  } catch (err) {
     console.error(err);
-    toast('Error al subir: ' + (err?.message || 'Error desconocido'), 'err');
-    $('progress-wrap').style.display = 'none';
-    resetBtn();
-  }
-}
-
-function mostrarExito(area, fecha, hora) {
-  $('ex-nombre').textContent  = usuario.nombre;
-  $('ex-email').textContent   = usuario.email;
-  $('ex-area').textContent    = area;
-  $('ex-archivo').textContent = archivoSeleccionado.name;
-  $('ex-tamano').textContent  = formatSize(archivoSeleccionado.size);
-  $('ex-fecha').textContent   = fecha;
-  $('ex-hora').textContent    = hora;
-}
-
-/* ══════════════════════════════════
-   GENERAR COMPROBANTE PDF
-══════════════════════════════════ */
-async function generarComprobantePDFComoURL(d) {
-  try {
-    if (!window.jspdf) {
-      await new Promise((res,rej) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        s.onload=res; s.onerror=rej; document.head.appendChild(s);
-      });
-    }
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit:'mm', format:'a4' });
-    const W = 210;
-
-    doc.setFillColor(37,99,235);
-    doc.rect(0,0,W,50,'F');
-    doc.setTextColor(255,255,255);
-    doc.setFontSize(20); doc.setFont('helvetica','bold');
-    doc.text('SISCTE', W/2, 22, { align:'center' });
-    doc.setFontSize(11); doc.setFont('helvetica','normal');
-    doc.text('Portal de Gestión de Envíos · Personal CTE', W/2, 30, { align:'center' });
-    doc.setFontSize(9);
-    doc.text('Confirmación de entrega registrada exitosamente', W/2, 38, { align:'center' });
-
-    doc.setFillColor(22,163,74);
-    doc.circle(W/2, 62, 8, 'F');
-    doc.setTextColor(255,255,255);
-    doc.setFontSize(14); doc.setFont('helvetica','bold');
-    doc.text('✓', W/2, 66, { align:'center' });
-
-    doc.setTextColor(17,24,39);
-    doc.setFontSize(16); doc.setFont('helvetica','bold');
-    doc.text('¡Archivo registrado exitosamente!', W/2, 78, { align:'center' });
-    doc.setFontSize(10); doc.setFont('helvetica','normal');
-    doc.setTextColor(100,116,139);
-    doc.text('Tu entrega fue guardada correctamente en el sistema SISCTE.', W/2, 85, { align:'center' });
-
-    const campos = [
-      ['ENVIADO POR', d.nombre],
-      ['CORREO',      d.email],
-      ['ÁREA',        d.area],
-      ['ARCHIVO',     d.archivo],
-      ['ACTA PDF',    d.acta||'—'],
-      ['TAMAÑO',      d.tamano],
-      ['FECHA',       d.fecha],
-      ['HORA',        d.hora],
-    ];
-    let y = 95;
-    campos.forEach(([lbl,val],i) => {
-      doc.setFillColor(i%2===0?248:255, i%2===0?250:255, i%2===0?252:255);
-      doc.rect(14, y-5, W-28, 12, 'F');
-      doc.setDrawColor(226,232,240); doc.setLineWidth(0.3);
-      doc.rect(14, y-5, W-28, 12, 'S');
-      doc.setTextColor(148,163,184); doc.setFontSize(7); doc.setFont('helvetica','bold');
-      doc.text(lbl, 18, y);
-      doc.setTextColor(30,41,59); doc.setFontSize(10); doc.setFont('helvetica','normal');
-      const v = String(val||'—');
-      doc.text(v.length>55 ? v.substring(0,52)+'...' : v, 70, y);
-      y += 13;
-    });
-
-    y += 2;
-    doc.setFillColor(241,245,249);
-    doc.roundedRect(14, y, W-28, 14, 3, 3, 'F');
-    doc.setDrawColor(203,213,225); doc.setLineWidth(0.3);
-    doc.roundedRect(14, y, W-28, 14, 3, 3, 'S');
-    doc.setTextColor(148,163,184); doc.setFontSize(7); doc.setFont('helvetica','bold');
-    doc.text('N° DE REGISTRO', 18, y+5);
-    doc.setTextColor(26,58,107); doc.setFontSize(12); doc.setFont('helvetica','bold');
-    doc.text(d.registro, 70, y+9);
-
-    y += 22;
-    doc.setFillColor(255,251,235);
-    doc.roundedRect(14, y, W-28, 16, 3, 3, 'F');
-    doc.setDrawColor(245,158,11); doc.setLineWidth(0.8);
-    doc.line(14, y, 14, y+16);
-    doc.setTextColor(120,53,15); doc.setFontSize(8); doc.setFont('helvetica','bold');
-    doc.text('Guarda este comprobante como respaldo de tu entrega en el sistema SISCTE.', 20, y+6);
-    doc.setFont('helvetica','normal');
-    doc.text('Tu archivo fue almacenado en Google Drive y el registro queda permanente.', 20, y+12);
-
-    doc.setFillColor(37,99,235);
-    doc.rect(0, 275, W, 22, 'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','normal');
-    doc.text('Sistema SISCTE — Generado el '+d.fecha+' a las '+d.hora, 14, 284);
-    doc.text('siscte1-sys.github.io/SIS-CTE', W-14, 284, { align:'right' });
-    doc.setFontSize(7); doc.setTextColor(179,207,255);
-    doc.text('Este documento es un comprobante automático de tu entrega.', W/2, 290, { align:'center' });
-
-    return doc.output('datauristring');
-  } catch(e) {
-    console.warn('PDF error:', e.message);
-    return null;
-  }
-}
-
-/* ══════════════════════════════════
-   GAS MAILER — Notificaciones  v5.6
-   ──────────────────────────────────
-   CORRECCIONES:
-   1. Se abandona el <script> tag (JSONP): GAS redirige a login
-      de Google cuando el payload es grande → onload nunca
-      dispara con los datos correctos, onerror se ignora.
-   2. Se usa fetch() con mode:'no-cors' + method POST.
-      • no-cors permite enviar la petición sin preflight.
-      • La respuesta es opaca (no se puede leer), pero el
-        GAS la recibe y ejecuta _procesarEnvio() sin problema.
-   3. El payload ya NO va en la URL (límite ~2000 chars).
-      Va en el body como texto plano — GAS lo lee en
-      e.postData.contents dentro de doPost().
-   4. Se envían los dos correos en secuencia (no en paralelo)
-      para evitar que GAS rechace peticiones simultáneas del
-      mismo deployment.
-
-   IMPORTANTE: El GAS debe estar desplegado como:
-     • Ejecutar como: Yo (el propietario)
-     • Quién tiene acceso: Cualquier persona (anónimo)
-══════════════════════════════════ */
-async function _gasSend(payload) {
-  const jsonStr = JSON.stringify(payload);
-
-  // fetch no-cors + POST: sin CORS bloqueante, sin límite de URL
-  await fetch(GAS_MAILER_URL, {
-    method:  'POST',
-    mode:    'no-cors',   // respuesta opaca — aceptable, solo nos importa que llegue
-    headers: { 'Content-Type': 'text/plain' },  // 'application/json' dispara preflight en no-cors
-    body:    jsonStr
-  });
-  // no-cors nunca rechaza aunque el servidor devuelva error HTTP —
-  // cualquier fallo de red lanzará TypeError, que el caller captura
-}
-
-async function enviarCorreoUsuario(datos) {
-  await _gasSend({
-    tipo:           'usuario',
-    email:          datos.email,
-    nombre:         datos.nombre,
-    area:           datos.area,
-    archivo:        datos.archivo,
-    acta:           datos.acta || '—',
-    tamano:         datos.tamano,
-    fecha:          datos.fecha,
-    hora:           datos.hora,
-    registro:       datos.registro,
-    comprobanteUrl: datos.comprobanteUrl || ''
-  });
-  console.log('✓ Correo usuario enviado via GAS');
-  toast('Correo de confirmación enviado ✓');
-}
-
-async function enviarCorreoAdmin(datos) {
-  await _gasSend({
-    tipo:        'admin',
-    nombre:      datos.nombre,
-    email:       datos.email,
-    area:        datos.area,
-    archivo:     datos.archivo,
-    acta:        datos.acta || '—',
-    tamano:      datos.tamano,
-    fecha:       datos.fecha,
-    hora:        datos.hora,
-    registro:    datos.registro,
-    driveLink:   datos.driveLink   || '',
-    actaLink:    datos.actaLink    || '',
-    linkCarpeta: `https://drive.google.com/drive/folders/${GDRIVE_CARPETA_GENERAL}`
-  });
-  console.log('✓ Alerta admin enviada via GAS');
-}
-
-async function enviarCorreosNotificacion(datos) {
-  // Secuencial: evita que GAS rechace dos peticiones simultáneas
-  try {
-    await enviarCorreoAdmin(datos);
-  } catch(e) {
-    console.error('❌ Correo ADMIN no enviado:', e.message);
-  }
-  try {
-    await enviarCorreoUsuario(datos);
-  } catch(e) {
-    console.error('❌ Correo USUARIO no enviado:', e.message);
-    toast('⚠️ No se pudo enviar el correo de confirmación', 'err');
-  }
-}
-
-/* ══════════════════════════════════
-   PANEL ADMIN
-══════════════════════════════════ */
-async function cargarAdmin() {
-  $('tabla-body').innerHTML     = `<tr><td colspan="9" class="td-vacio">Cargando...</td></tr>`;
-  $('admin-personas').innerHTML = `<p class="cargando-txt">Cargando...</p>`;
-  docsAdmin = [];
-  try {
-    const snap = await window._fb.getDocs(window._fb.collection(db,'entregas'));
-    docsAdmin  = snap.docs
-      .map(d => ({id:d.id,...d.data()}))
-      .sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||''));
-    renderAdmin(docsAdmin);
-  } catch(e) {
-    console.error('cargarAdmin error:', e);
-    $('tabla-body').innerHTML = `<tr><td colspan="9" class="td-vacio" style="color:var(--red)">Error al cargar: ${e.message}</td></tr>`;
-    toast('Error al cargar: '+e.message,'err');
-  }
-}
-
-function renderAdmin(docs) {
-  const unicos = [...new Set(docs.map(d=>d.email))];
-  $('st-total').textContent  = docs.length;
-  $('st-unicos').textContent = unicos.length;
-  $('st-ultimo').textContent = docs.length ? `${docs[0].fechaTexto} · ${docs[0].horaTexto}` : 'Sin entregas aún';
-
-  const porPersona = {};
-  docs.forEach(d => {
-    if (!porPersona[d.email]) porPersona[d.email]={...d,cant:0,areas:new Set()};
-    porPersona[d.email].cant++;
-    if(d.area) porPersona[d.email].areas.add(d.area);
-  });
-
-  $('admin-personas').innerHTML = Object.values(porPersona).sort((a,b)=>b.cant-a.cant).map(p=>`
-    <div class="persona-row">
-      <img class="persona-foto" src="${p.foto||avatar(p.nombre)}" alt="" onerror="this.src='${avatar(p.nombre)}'">
-      <div class="persona-info">
-        <div class="persona-nombre">${p.nombre||'—'}</div>
-        <div class="persona-email">${p.email}</div>
-        <div class="persona-ultima">Área(s): ${[...p.areas].join(', ')||'—'} · Último: ${p.fechaTexto} · ${p.horaTexto}</div>
-      </div>
-      <span class="persona-badge">${p.cant} archivo${p.cant>1?'s':''}</span>
-    </div>`).join('') || '<p class="cargando-txt">Sin entregas</p>';
-
-  $('tabla-body').innerHTML = !docs.length
-    ? `<tr><td colspan="9" class="td-vacio">No hay registros</td></tr>`
-    : docs.map((d,i) => `
-      <tr class="${d.archivado?'tr-archivado':''}">
-        <td class="td-n">${i+1}</td>
-        <td><div class="td-user">
-          <img class="td-foto" src="${d.foto||avatar(d.nombre)}" alt="" onerror="this.src='${avatar(d.nombre)}'">
-          <div><div class="td-nombre">${d.nombre||'—'}</div><div class="td-email">${d.email}</div></div>
-        </div></td>
-        <td><span class="badge-area">${d.area||'—'}</span></td>
-        <td class="td-arch">${renderDescarga(d)}</td>
-        <td class="td-detalle" title="${d.detalle||'—'}">${d.detalle?(d.detalle.length>40?d.detalle.slice(0,40)+'…':d.detalle):'<span style="color:#9ca3af">—</span>'}</td>
-        <td class="td-peso">${d.tamanoTexto||'—'}</td>
-        <td class="td-fecha">${d.fechaTexto}</td>
-        <td class="td-hora">${d.horaTexto}</td>
-        <td>${d.archivado
-          ? `<span class="badge-archivado">Archivado</span>`
-          : `<span class="badge-activo">Activo</span>`}</td>
-      </tr>`).join('');
-
-  $('filtro-resultado').textContent = `${docs.length} registro${docs.length!==1?'s':''} encontrado${docs.length!==1?'s':''}`;
-}
-
-function renderDescarga(d) {
-  const svg=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
-  if (d.storageURL) return `<a href="${d.storageURL}" target="_blank" class="link-archivo">${svg}${d.nombreArchivo}</a>`;
-  return `<span style="color:var(--txt3);font-size:12px;">${d.nombreArchivo||'—'}</span>`;
-}
-
-/* ══════════════════════════════════
-   FILTROS
-══════════════════════════════════ */
-function filtrarDocs(docs) {
-  const area   = $('filtro-area').value.toLowerCase();
-  const nombre = $('filtro-nombre').value.trim().toLowerCase();
-  const email  = $('filtro-email').value.trim().toLowerCase();
-  const fd     = $('filtro-fecha-desde').value;
-  const fh     = $('filtro-fecha-hasta').value;
-  let r = [...docs];
-  if (area)   r=r.filter(d=>(d.area||'').toLowerCase().includes(area));
-  if (nombre) r=r.filter(d=>(d.nombre||'').toLowerCase().includes(nombre));
-  if (email)  r=r.filter(d=>(d.email||'').toLowerCase().includes(email));
-  if (fd)     r=r.filter(d=>d.timestamp>=new Date(fd).toISOString());
-  if (fh)     { const h=new Date(fh); h.setHours(23,59,59); r=r.filter(d=>d.timestamp<=h.toISOString()); }
-  return r;
-}
-
-function aplicarFiltros() { renderAdmin(filtrarDocs(docsAdmin)); }
-function limpiarFiltros() {
-  ['filtro-area','filtro-nombre','filtro-email','filtro-fecha-desde','filtro-fecha-hasta']
-    .forEach(id => { const e=$(id); if(e) e.value=''; });
-  renderAdmin(docsAdmin);
-}
-function exportarFiltrado() { exportarExcel(filtrarDocs(docsAdmin), true); }
-
-/* ══════════════════════════════════
-   EXPORTAR EXCEL
-══════════════════════════════════ */
-const avatar = n =>
-  `https://ui-avatars.com/api/?name=${encodeURIComponent(n||'?')}&background=1d4ed8&color=fff`;
-
-async function exportarExcel(docs, filtrado=false) {
-  if (!window.XLSX) {
-    await new Promise((res,rej) => {
-      const s=document.createElement('script');
-      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload=res; s.onerror=rej; document.head.appendChild(s);
-    });
-  }
-  const filas = docs.map((d,i) => ({
-    '#':i+1, 'Nombre':d.nombre||'—', 'Correo':d.email||'—', 'Área':d.area||'—',
-    'Archivo':d.nombreArchivo||'—', 'Acta':d.nombreActa||'—',
-    'Descripción':d.detalle||'—', 'Peso':d.tamanoTexto||'—',
-    'Fecha':d.fechaTexto||'—', 'Hora':d.horaTexto||'—',
-    'Estado':d.archivado?'ARCHIVADO':'Activo',
-    'Link Drive':d.storageURL||'—',
-    'Link Comprobante':d.comprobanteURL||'—'
-  }));
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(filas);
-  ws['!cols'] = [{wch:4},{wch:28},{wch:34},{wch:22},{wch:38},{wch:30},{wch:40},{wch:12},{wch:22},{wch:14},{wch:12},{wch:50},{wch:50}];
-  XLSX.utils.book_append_sheet(wb, ws, 'Entregas');
-  XLSX.writeFile(wb, `informe_SISCTE${filtrado?'_filtrado':'_completo'}_${new Date().toISOString().slice(0,10)}.xlsx`);
-  toast(`Informe${filtrado?' filtrado':''} descargado ✓`);
-}
-
-/* ══════════════════════════════════
-   ARCHIVADO MENSUAL
-══════════════════════════════════ */
-window.verificarChecks = function() {
-  const ok = $('check1')?.checked && $('check2')?.checked && $('check3')?.checked;
-  const btn = $('arch-btn-descargar'); if(btn) btn.disabled=!ok;
-};
-
-function labelMes(ts) {
-  return new Date(ts).toLocaleDateString('es-EC',
-    { month:'long', year:'numeric', timeZone:'America/Guayaquil' });
-}
-
-function abrirModalArchivado() {
-  const mesesMap = {};
-  docsAdmin.forEach(d => {
-    if (d.archivado || !d.storageURL) return;
-    const mes = d.timestamp.slice(0,7);
-    if (!mesesMap[mes]) mesesMap[mes] = { docs:[], label: labelMes(d.timestamp) };
-    mesesMap[mes].docs.push(d);
-  });
-  const meses = Object.entries(mesesMap).sort((a,b)=>b[0].localeCompare(a[0]));
-  if (!meses.length) { toast('No hay archivos pendientes de archivar'); return; }
-
-  const sel = $('arch-mes-select');
-  sel.innerHTML = '<option value="">— Selecciona el mes —</option>';
-  meses.forEach(([k,v]) => {
-    const o=document.createElement('option'); o.value=k;
-    o.textContent=`${v.label} (${v.docs.length} archivo${v.docs.length>1?'s':''})`;
-    sel.appendChild(o);
-  });
-  window._archMeses = mesesMap;
-  $('modal-archivado').style.display = 'flex';
-  $('arch-paso1').style.display = 'block';
-  $('arch-paso2').style.display = 'none';
-  $('arch-paso3').style.display = 'none';
-  $('arch-btn-siguiente').disabled = true;
-}
-
-function seleccionarMesArchivado() {
-  const mes = $('arch-mes-select').value;
-  $('arch-btn-siguiente').disabled = !mes;
-  if (!mes) return;
-  const info = window._archMeses[mes];
-  $('arch-resumen').innerHTML = `
-    <div class="arch-stat"><span>${info.docs.length}</span> archivos a descargar y archivar</div>
-    <div class="arch-personas">${info.docs.map(d=>`
-      <div class="arch-persona-row">
-        <img src="${d.foto||avatar(d.nombre)}" alt="" onerror="this.src='${avatar(d.nombre)}'">
-        <div>
-          <div class="arch-persona-nombre">${d.nombre||'—'} <span class="badge-area" style="font-size:10px">${d.area||''}</span></div>
-          <div class="arch-persona-archivo">${d.nombreArchivo} · ${d.tamanoTexto||'—'}</div>
-        </div>
-      </div>`).join('')}</div>`;
-}
-
-function archPaso2() {
-  const mes = $('arch-mes-select').value; if(!mes) return;
-  $('arch-paso1').style.display = 'none'; $('arch-paso2').style.display = 'block';
-  const info = window._archMeses[mes];
-  $('arch-advertencia-detalle').textContent =
-    `Se descargarán ${info.docs.length} archivo(s) de ${labelMes(info.docs[0].timestamp)}. Después podrás eliminar los binarios. El historial quedará guardado.`;
-}
-
-async function descargarMesCompleto() {
-  const mes = $('arch-mes-select').value;
-  const info = window._archMeses[mes];
-  $('arch-paso2').style.display = 'none'; $('arch-paso3').style.display = 'block';
-  $('arch-progreso-txt').textContent = 'Abriendo archivos de Drive...';
-  let ok = 0;
-  for (let i=0; i<info.docs.length; i++) {
-    const d = info.docs[i];
-    $('arch-progreso-bar').style.width = Math.round(((i+1)/info.docs.length)*100)+'%';
-    $('arch-progreso-txt').textContent = `Abriendo ${i+1} de ${info.docs.length}: ${d.nombreArchivo}`;
-    try { if(d.storageURL) window.open(d.storageURL,'_blank'); ok++; } catch(e) {}
-    await new Promise(r => setTimeout(r,400));
-  }
-  $('arch-progreso-txt').textContent = `✓ ${ok} de ${info.docs.length} archivos abiertos`;
-  $('arch-btn-archivar').style.display = 'block';
-  $('arch-btn-archivar').onclick = () => confirmarArchivar(mes, info.docs);
-}
-
-async function confirmarArchivar(mes, docs) {
-  $('arch-btn-archivar').disabled = true; $('arch-btn-archivar').textContent = 'Archivando...';
-  try {
-    const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    let p = 0;
-    for (const d of docs) {
-      $('arch-progreso-bar').style.width = Math.round(((p+1)/docs.length)*100)+'%';
-      await updateDoc(doc(db,'entregas',d.id), {
-        archivado:      true,
-        fechaArchivado: new Date().toISOString(),
-        notaArchivado:  `Archivado el ${new Date().toLocaleDateString('es-EC',{timeZone:'America/Guayaquil',day:'2-digit',month:'long',year:'numeric'})}`
-      });
-      p++; await new Promise(r => setTimeout(r,150));
-    }
-    $('arch-progreso-txt').textContent = `✓ ${p} registros archivados.`;
-    $('arch-btn-archivar').textContent = '✓ Completado';
-    setTimeout(async () => {
-      cerrarModalArchivado(); await cargarAdmin(); toast(`Mes archivado ✓`);
-    }, 2000);
-  } catch(e) {
-    toast('Error al archivar: '+e.message,'err');
-    $('arch-btn-archivar').disabled = false; $('arch-btn-archivar').textContent = 'Reintentar';
-  }
-}
-
-function cerrarModalArchivado() { $('modal-archivado').style.display = 'none'; }
-
-/* ══════════════════════════════════
-   ELIMINAR REGISTROS BD
-   FIX v5.2: limpia UI inmediatamente tras borrar
-══════════════════════════════════ */
-function abrirModalLimpiarDuplicados() {
-  $('limpieza-contenido').style.display = 'block';
-  $('limpieza-progreso').style.display  = 'none';
-  $('check-confirmar').checked = false;
-  $('btn-iniciar-limpieza').disabled = true;
-  $('elim-preview-result').style.display = 'none';
-  $('elim-fecha-desde').value = '';
-  $('elim-fecha-hasta').value = new Date().toISOString().slice(0,10);
-  $('modal-limpiar-duplicados').style.display = 'flex';
-}
-
-function cerrarModalLimpiarDuplicados() { $('modal-limpiar-duplicados').style.display = 'none'; }
-
-window.verificarCheckLimpieza = function() {
-  $('btn-iniciar-limpieza').disabled = !$('check-confirmar').checked;
-};
-
-async function _obtenerRegistrosEnRango() {
-  const fd = $('elim-fecha-desde').value;
-  const fh = $('elim-fecha-hasta').value;
-
-  const snap = await window._fb.getDocs(window._fb.collection(db,'entregas'));
-  let entregas = snap.docs.map(d => ({id:d.id,...d.data()}));
-
-  if (!fd && !fh) return entregas;
-
-  entregas = entregas.filter(d => {
-    if (!d.timestamp) return true;
-    const fechaDoc = d.timestamp.slice(0, 10);
-    if (fd && fechaDoc < fd) return false;
-    if (fh && fechaDoc > fh) return false;
-    return true;
-  });
-
-  return entregas;
-}
-
-window.previsualizarEliminacion = async function() {
-  const btn = $('btn-preview-eliminar');
-  btn.textContent = 'Consultando...'; btn.disabled = true;
-  try {
-    const registros = await _obtenerRegistrosEnRango();
-    const res = $('elim-preview-result');
-    res.style.display = 'block';
-    if (!registros.length) {
-      res.style.background='#fff7ed'; res.style.borderColor='#fed7aa'; res.style.color='#c2410c';
-      res.textContent = '⚠️ No se encontraron registros en ese rango de fechas.';
-    } else {
-      res.style.background='#f0fdf4'; res.style.borderColor='#bbf7d0'; res.style.color='#15803d';
-      res.textContent = `✓ Se eliminarán ${registros.length} registro${registros.length!==1?'s':''} de Firestore (los archivos en Drive no se tocan).`;
-    }
-  } catch(e) {
-    toast('Error al consultar: '+e.message,'err');
+    showToast('Error al registrar: ' + err.message, 'error');
   } finally {
-    btn.textContent = 'Ver cuántos registros se borrarán'; btn.disabled = false;
+    btn.disabled = false;
+    btn.innerHTML = '📤 REGISTRAR ENVÍO';
+    updateBotonEnvio();
   }
-};
+}
 
-async function iniciarLimpiezaDuplicados() {
-  $('limpieza-contenido').style.display = 'none';
-  $('limpieza-progreso').style.display  = 'block';
-  $('limpieza-resultados').innerHTML    = '';
-  const log = msg => {
-    const el=$('limpieza-resultados');
-    el.innerHTML += msg+'\n';
-    el.scrollTop = el.scrollHeight;
-  };
+// ==================== HISTORIAL ====================
+async function renderHistorial() {
+  const tbody = document.getElementById('historial-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--muted)">Cargando...</td></tr>';
+
   try {
-    log('🔍 Obteniendo registros en el rango seleccionado...\n');
-    const entregas = await _obtenerRegistrosEnRango();
-    log(`✓ ${entregas.length} registros encontrados\n`);
-    if (!entregas.length) {
-      log('ℹ️ No hay registros para eliminar en ese rango.');
-      $('limpieza-progreso-bar').style.width='100%';
-      $('limpieza-progreso-txt').textContent='Sin registros que eliminar';
-      setTimeout(() => cerrarModalLimpiarDuplicados(), 2000);
+    const snap = await db.collection('envios')
+      .orderBy('fechaEnvio', 'desc')
+      .limit(50)
+      .get();
+
+    if (snap.empty) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--muted)">Sin envíos registrados</td></tr>';
       return;
     }
-    const { deleteDoc, doc: dRef } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    let eliminados = 0;
-    for (let i=0; i<entregas.length; i++) {
-      const d = entregas[i];
-      const pct = Math.round(((i+1)/entregas.length)*100);
-      $('limpieza-progreso-bar').style.width = pct+'%';
-      $('limpieza-progreso-txt').textContent = `Eliminando ${i+1} de ${entregas.length}...`;
-      log(`  🗑️ ${d.nombreArchivo} · ${d.area||'—'} · ${d.fechaTexto||d.timestamp.slice(0,10)}`);
-      await deleteDoc(dRef(db,'entregas',d.id));
-      eliminados++;
-      await new Promise(r => setTimeout(r,80));
-    }
-    $('limpieza-progreso-bar').style.width='100%';
-    $('limpieza-progreso-txt').textContent='✓ Eliminación completada';
-    log(`\n✅ ${eliminados} registro${eliminados!==1?'s':''} eliminado${eliminados!==1?'s':''} de Firestore.`);
-    log('ℹ️ Los archivos en Google Drive no fueron afectados.');
 
-    docsAdmin = [];
-    cerrarModalLimpiarDuplicados();
+    tbody.innerHTML = snap.docs.map(doc => {
+      const d = doc.data();
+      const fecha = d.fechaEnvio ? new Date(d.fechaEnvio.seconds * 1000).toLocaleDateString('es-EC', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+      let estado = '';
+      if (d.actaUrl) estado = '<span class="badge badge-completo">Completo</span>';
+      else if (d.tardio) estado = '<span class="badge badge-atrasado">Sin informativo</span>';
+      else estado = '<span class="badge badge-sin-acta">Sin informe atraso</span>';
 
-    const vistaAdmin = $('vista-admin');
-    if (vistaAdmin && vistaAdmin.style.display !== 'none') {
-      $('tabla-body').innerHTML = `<tr><td colspan="9" class="td-vacio">No hay registros</td></tr>`;
-      $('admin-personas').innerHTML = `<p class="cargando-txt">Sin entregas</p>`;
-      $('st-total').textContent  = '0';
-      $('st-unicos').textContent = '0';
-      $('st-ultimo').textContent = 'Sin entregas aún';
-      $('filtro-resultado').textContent = '0 registros encontrados';
-    }
-
-    const listaMisEnvios = $('mis-envios-lista');
-    if (listaMisEnvios) {
-      listaMisEnvios.innerHTML = `<div class="mis-envios-vacio">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-        <p>No hay envíos registrados todavía.</p></div>`;
-    }
-
-    toast(`✓ ${eliminados} registro${eliminados!==1?'s':''} eliminado${eliminados!==1?'s':''}`);
-
-  } catch(e) {
-    log(`\n❌ Error: ${e.message}`);
-    toast('Error: '+e.message,'err');
+      return `<tr>
+        <td>${esc(d.area || '—')}</td>
+        <td>${esc(d.mes  || '—')}</td>
+        <td>${fecha}</td>
+        <td><a href="${d.excelUrl}" target="_blank" style="color:var(--gold)">📊 ${esc(d.excelNombre || 'Excel')}</a></td>
+        <td><a href="${d.informeUrl}" target="_blank" style="color:var(--gold)">📄 ${esc(d.informeNombre || 'Informe')}</a></td>
+        <td>${d.actaUrl ? `<a href="${d.actaUrl}" target="_blank" style="color:var(--gold)">📄 ${esc(d.actaNombre||'Acta')}</a>` : '<span style="color:var(--muted)">—</span>'}</td>
+        <td>${estado}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger)">Error al cargar</td></tr>';
   }
 }
 
-/* ══════════════════════════════════
-   EXPONER AL HTML
-══════════════════════════════════ */
-window.login                        = login;
-window.abrirSelectorArchivo         = abrirSelectorArchivo;
-window.abrirSelectorActa            = abrirSelectorActa;
-window.seleccionarActa              = seleccionarActa;
-window.quitarActa                   = quitarActa;
-window.abrirModalArchivado          = abrirModalArchivado;
-window.cerrarModalArchivado         = cerrarModalArchivado;
-window.abrirModalLimpiarDuplicados  = abrirModalLimpiarDuplicados;
-window.cerrarModalLimpiarDuplicados = cerrarModalLimpiarDuplicados;
-window.iniciarLimpiezaDuplicados    = iniciarLimpiezaDuplicados;
-window.irSubir                      = irSubir;
-window.seleccionarMesArchivado      = seleccionarMesArchivado;
-window.archPaso2                    = archPaso2;
-window.descargarMesCompleto         = descargarMesCompleto;
-window.ir                           = ir;
-window.show                         = show;
-window.hide                         = hide;
-window.toast                        = toast;
-window.$                            = $;
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;');
+}
+
+// ==================== INICIALIZACIÓN ====================
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  setupZonaExcel();
+  setupZonaInforme();
+  setupZonaActa();
+  renderEnvioForm();
+});
