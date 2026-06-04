@@ -153,7 +153,7 @@ const esAdmin = () =>
    DOM HELPERS
 ══════════════════════════════════ */
 const $       = id => document.getElementById(id);
-const show    = id => { const e=$(id); if(e) e.style.display='block'; };
+const show    = id => { const e=$(id); if(!e) return; e.style.display = ['nav-sesion','nav-guest','nav-right'].includes(id) ? 'flex' : 'block'; };
 const hide    = id => { const e=$(id); if(e) e.style.display='none'; };
 const hideAll = () => ['vista-login','vista-subir','vista-exito','vista-admin'].forEach(hide);
 
