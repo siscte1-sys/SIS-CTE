@@ -460,7 +460,7 @@ function actualizarContadorActa() {
     cTxt.style.color = '#ef4444';
     cTxt.textContent = diasRestantes === 0
       ? '⏰ ¡Hoy vence el plazo! Mañana será obligatorio'
-      : `⏳ Faltan ${diasRestantes} día${diasRestantes !== 1 ? 's' : ''} para que el Informativo de Atraso sea obligatorio`;
+      : `⏳ Faltan ${diasRestantes} día${diasRestantes !== 1 ? 's' : ''} para que el Informe de Atraso sea obligatorio`;
 
     if (dz) {
       dz.style.opacity = '0.45';
@@ -468,8 +468,8 @@ function actualizarContadorActa() {
       dz.style.pointerEvents = 'none';
     }
     if (lbl) {
-      lbl.textContent = `DISPONIBLE EN ${diasRestantes} DÍA${diasRestantes !== 1 ? 'S' : ''}`;
-      lbl.style.background = '#d97706';
+      lbl.textContent = `OBLIGATORIO EN ${diasRestantes} DÍA${diasRestantes !== 1 ? 'S' : ''}`;
+      lbl.style.background = '#ef4444';
     }
   } else {
     /* Después del día 10: habilitado y en rojo urgente */
@@ -478,7 +478,7 @@ function actualizarContadorActa() {
     cBox.style.borderColor  = '#fda4af';
     cBox.querySelector('svg').style.stroke = '#dc2626';
     cTxt.style.color = '#dc2626';
-    cTxt.textContent = `🚨 Envío tardío — ${diasRetraso} día${diasRetraso !== 1 ? 's' : ''} de retraso · El Informativo de Atraso es OBLIGATORIO`;
+    cTxt.textContent = `🚨 Envío tardío — ${diasRetraso} día${diasRetraso !== 1 ? 's' : ''} de retraso · El Informe de Atraso es OBLIGATORIO`;
 
     if (dz) {
       dz.style.opacity = '1';
@@ -519,7 +519,7 @@ function actualizarBotonEnviar() {
     else if (!informeSeleccionado)
       hint.textContent = '⚠️ El Informe de Entrega PDF es obligatorio';
     else if (!actaSeleccionada && actaObligatoria)
-      hint.textContent = '⚠️ El Informativo de Atraso es obligatorio — pasó el día 10';
+      hint.textContent = '⚠️ El Informe de Atraso es obligatorio — pasó el día 10';
     else
       hint.textContent = '';
   }
