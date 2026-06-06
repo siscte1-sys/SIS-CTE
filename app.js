@@ -52,8 +52,9 @@ const AREAS = [
 ];
 
 let db, auth, usuario = null;
-let archivoSeleccionado = null;
-let actaSeleccionada    = null;
+let archivoSeleccionado  = null;
+let informeSeleccionado  = null;
+let actaSeleccionada     = null;
 let docsAdmin           = [];
 let _firebaseReady      = null;
 let _driveTokenCache    = null;
@@ -226,11 +227,15 @@ function poblarAreas(selectId, placeholder='— Selecciona tu área —') {
 ══════════════════════════════════ */
 function irSubir() {
   archivoSeleccionado = null;
+  informeSeleccionado = null;
   actaSeleccionada    = null;
-  const fi=$('file-input'); if(fi) fi.value='';
-  const ai=$('acta-input'); if(ai) ai.value='';
+  const fi=$('file-input');    if(fi) fi.value='';
+  const ii=$('informe-input'); if(ii) ii.value='';
+  const ai=$('acta-input');    if(ai) ai.value='';
   $('dropzone').style.display    = 'flex';
   $('file-preview').style.display = 'none';
+  const id=$('informe-dropzone'); if(id) id.style.display='flex';
+  const ip=$('informe-preview');  if(ip) ip.style.display='none';
   const ad=$('acta-dropzone'); if(ad) ad.style.display='flex';
   const ap=$('acta-preview');  if(ap) ap.style.display='none';
   $('progress-wrap').style.display = 'none';
@@ -341,6 +346,31 @@ function abrirSelectorActa() {
   document.body.appendChild(i); i.click();
 }
 
+function abrirSelectorInforme() {
+  const i=document.createElement('input'); i.type='file'; i.accept='.pdf'; i.style.display='none';
+  i.addEventListener('change', () => { if(i.files[0]) seleccionarInforme(i.files[0]); i.remove(); });
+  document.body.appendChild(i); i.click();
+}
+
+function seleccionarInforme(f) {
+  if (!f) return;
+  if (f.name.split('.').pop().toLowerCase() !== 'pdf') { toast('El informe debe ser PDF (.pdf)','err'); return; }
+  informeSeleccionado = f;
+  const iNombre=$('informe-nombre'); if(iNombre) iNombre.textContent=f.name;
+  const iPeso=$('informe-peso');     if(iPeso)   iPeso.textContent=formatSize(f.size);
+  const idz=$('informe-dropzone');   if(idz) idz.style.display='none';
+  const iprev=$('informe-preview');  if(iprev) iprev.style.display='flex';
+  actualizarBotonEnviar();
+}
+
+function quitarInforme() {
+  informeSeleccionado = null;
+  const idz=$('informe-dropzone');  if(idz) idz.style.display='flex';
+  const iprev=$('informe-preview'); if(iprev) iprev.style.display='none';
+  const ii=$('informe-input'); if(ii) ii.value='';
+  actualizarBotonEnviar();
+}
+
 function quitarActa() {
   actaSeleccionada = null;
   const ad=$('acta-dropzone'); if(ad) ad.style.display='flex';
@@ -408,33 +438,41 @@ function actualizarBotonEnviar() {
   const btn = $('btn-enviar'); if (!btn) return;
   const actaObligatoria = actaEsObligatoriaHoy();
   const info = infoPlazoPorFecha();
-  const listo = !!(archivoSeleccionado && (actaSeleccionada || !actaObligatoria));
+
+  /* Mostrar u ocultar toda la sección del Informativo de Atraso */
+  const actaField = $('acta-field');
+  if (actaField) actaField.style.display = actaObligatoria ? 'block' : 'none';
+
+  /* Si ya no es obligatoria y había una seleccionada, limpiarla */
+  if (!actaObligatoria && actaSeleccionada) {
+    actaSeleccionada = null;
+    const ai=$('acta-input'); if(ai) ai.value='';
+    const ad=$('acta-dropzone'); if(ad) ad.style.display='flex';
+    const ap=$('acta-preview');  if(ap) ap.style.display='none';
+  }
+
+  const listo = !!(archivoSeleccionado && informeSeleccionado && (actaSeleccionada || !actaObligatoria));
   btn.disabled = !listo;
   btn.style.opacity = listo ? '1' : '0.45';
   btn.style.cursor  = listo ? 'pointer' : 'not-allowed';
 
   const actaLabel = $('acta-label-oblig');
   if (actaLabel) {
-    if (actaObligatoria) {
-      actaLabel.textContent = 'OBLIGATORIO — Envío tardío';
-      actaLabel.style.background = '#ef4444';
-    } else {
-      actaLabel.textContent = 'OPCIONAL hasta el día 10';
-      actaLabel.style.background = '#d97706';
-    }
+    actaLabel.textContent  = 'OBLIGATORIO — Envío tardío';
+    actaLabel.style.background = '#ef4444';
   }
 
   const plazoEl = $('acta-plazo-info');
-  if (plazoEl) plazoEl.textContent = info.mensaje;
+  if (plazoEl) plazoEl.textContent = actaObligatoria ? info.mensaje : '';
 
   const hint = $('enviar-hint');
   if (hint) {
-    if (!archivoSeleccionado && actaObligatoria)
-      hint.textContent = 'Sube el Excel y el Acta PDF (retraso — acta obligatoria)';
-    else if (!archivoSeleccionado)
+    if (!archivoSeleccionado)
       hint.textContent = 'Sube el Excel para habilitar el envío';
+    else if (!informeSeleccionado)
+      hint.textContent = '⚠️ El Informe de Entrega PDF es obligatorio';
     else if (!actaSeleccionada && actaObligatoria)
-      hint.textContent = '⚠️ El Acta PDF es obligatoria — envío tardío (pasó el día 10)';
+      hint.textContent = '⚠️ El Informativo de Atraso es obligatorio — pasó el día 10';
     else
       hint.textContent = '';
   }
@@ -557,6 +595,50 @@ async function subirAGoogleDrive(archivo, onProgress) {
 }
 
 /* ══════════════════════════════════
+   GOOGLE DRIVE — SUBIR PDF GENÉRICO
+══════════════════════════════════ */
+async function subirPDFaGoogleDrive(archivo, onProgress) {
+  const token = await obtenerTokenDrive();
+  const area  = $('area-select')?.value;
+  if (!area) throw new Error('No se seleccionó área');
+  const idSubcarpeta = await obtenerOCrearSubcarpeta(token, area);
+  if (onProgress) onProgress(40);
+
+  const fecha       = new Date().toISOString().slice(0,10);
+  const nombreFinal = `${fecha}_${archivo.name}`;
+
+  return new Promise((resolve, reject) => {
+    const metadata = {
+      name:     nombreFinal,
+      mimeType: 'application/pdf',
+      parents:  [idSubcarpeta]
+    };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', archivo);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    xhr.upload.onprogress = e => { if(e.lengthComputable && onProgress) onProgress(Math.round(40 + (e.loaded/e.total)*50)); };
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const resp = JSON.parse(xhr.responseText);
+        fetch(`https://www.googleapis.com/drive/v3/files/${resp.id}/permissions`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'reader', type: 'anyone' })
+        }).finally(() => resolve(`https://drive.google.com/file/d/${resp.id}/view`));
+      } else {
+        reject(new Error('HTTP ' + xhr.status + ': ' + xhr.responseText));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Error de red'));
+    xhr.send(form);
+  });
+}
+
+/* ══════════════════════════════════
    GOOGLE DRIVE — SUBIR COMPROBANTE PDF
 ══════════════════════════════════ */
 async function subirComprobantePDFaDrive(dataUrl, registro) {
@@ -603,6 +685,7 @@ async function subirComprobantePDFaDrive(dataUrl, registro) {
 ══════════════════════════════════ */
 async function enviarArchivo() {
   if (!archivoSeleccionado) { toast('Selecciona un archivo Excel primero','err'); return; }
+  if (!informeSeleccionado) { toast('El Informe de Entrega PDF es obligatorio','err'); return; }
 
   const actaObligatoria = actaEsObligatoriaHoy();
   if (actaObligatoria && !actaSeleccionada) {
@@ -629,43 +712,50 @@ async function enviarArchivo() {
     /* 1. Subir Excel */
     setProgreso(10, 'Subiendo Excel a Google Drive...');
     const storageURL = await subirAGoogleDrive(archivoSeleccionado,
-      p => setProgreso(10 + Math.round(p*0.25), `Subiendo Excel... ${Math.round(p)}%`));
+      p => setProgreso(10 + Math.round(p*0.20), `Subiendo Excel... ${Math.round(p)}%`));
 
-    /* 2. Subir Acta PDF (si existe) */
+    /* 2. Subir Informe de Entrega PDF (obligatorio) */
+    setProgreso(35, 'Subiendo Informe de Entrega PDF...');
+    const informeURL = await subirPDFaGoogleDrive(informeSeleccionado,
+      p => setProgreso(35 + Math.round(p*0.15), `Subiendo Informe... ${Math.round(p)}%`));
+
+    /* 3. Subir Acta PDF (si existe) */
     let actaURL = null;
     if (actaSeleccionada) {
-      setProgreso(40, 'Subiendo Acta PDF...');
-      actaURL = await subirAGoogleDrive(actaSeleccionada,
-        p => setProgreso(40 + Math.round(p*0.15), `Subiendo Acta... ${Math.round(p)}%`));
+      setProgreso(55, 'Subiendo Acta PDF...');
+      actaURL = await subirPDFaGoogleDrive(actaSeleccionada,
+        p => setProgreso(55 + Math.round(p*0.10), `Subiendo Acta... ${Math.round(p)}%`));
     }
 
     const numRegistro = 'SISCTE-' + Date.now().toString(36).toUpperCase();
 
-    /* 3. Generar comprobante PDF */
-    setProgreso(60, 'Generando comprobante PDF...');
+    /* 4. Generar comprobante PDF */
+    setProgreso(68, 'Generando comprobante PDF...');
     const comprobanteDataUrl = await generarComprobantePDFComoURL({
       nombre:    usuario.nombre,
       email:     usuario.email,
       area:      areaVal,
       archivo:   archivoSeleccionado.name,
+      informe:   informeSeleccionado?.name || '—',
       acta:      actaSeleccionada?.name || '—',
       tamano:    formatSize(archivoSeleccionado.size),
       fecha:     fechaTexto,
       hora:      horaTexto,
       registro:  numRegistro,
       driveLink: storageURL,
+      informeLink: informeURL || '',
       actaLink:  actaURL || ''
     });
 
-    /* 4. Subir comprobante a Drive */
-    setProgreso(72, 'Subiendo comprobante PDF...');
+    /* 5. Subir comprobante a Drive */
+    setProgreso(78, 'Subiendo comprobante PDF...');
     let comprobanteURL = null;
     if (comprobanteDataUrl) {
       comprobanteURL = await subirComprobantePDFaDrive(comprobanteDataUrl, numRegistro);
     }
 
-    /* 5. Registrar en Firestore (con deduplicación) */
-    setProgreso(84, 'Registrando en Firestore...');
+    /* 6. Registrar en Firestore (con deduplicación) */
+    setProgreso(88, 'Registrando en Firestore...');
     const { where, deleteDoc, doc: docRef } =
       await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
 
@@ -692,11 +782,13 @@ async function enviarArchivo() {
       foto:          usuario.foto,
       area:          areaVal,
       nombreArchivo: archivoSeleccionado.name,
+      nombreInforme: informeSeleccionado?.name || null,
       nombreActa:    actaSeleccionada?.name || null,
       tamanoBytes:   archivoSeleccionado.size,
       tamanoTexto:   formatSize(archivoSeleccionado.size),
       metodo:        'google_drive',
       storageURL,
+      informeURL,
       actaURL,
       comprobanteURL,
       driveFileId,
@@ -715,12 +807,14 @@ async function enviarArchivo() {
         email:          usuario.email,
         area:           areaVal,
         archivo:        archivoSeleccionado.name,
+        informe:        informeSeleccionado?.name || '—',
         acta:           actaSeleccionada?.name || '—',
         tamano:         formatSize(archivoSeleccionado.size),
         fecha:          fechaTexto,
         hora:           horaTexto,
         registro:       numRegistro,
         driveLink:      storageURL,
+        informeLink:    informeURL || null,
         actaLink:       actaURL || null,
         comprobanteUrl: comprobanteURL || ''
       });
@@ -1308,8 +1402,11 @@ async function iniciarLimpiezaDuplicados() {
 window.login                        = login;
 window.abrirSelectorArchivo         = abrirSelectorArchivo;
 window.abrirSelectorActa            = abrirSelectorActa;
+window.abrirSelectorInforme         = abrirSelectorInforme;
 window.seleccionarActa              = seleccionarActa;
+window.seleccionarInforme           = seleccionarInforme;
 window.quitarActa                   = quitarActa;
+window.quitarInforme                = quitarInforme;
 window.abrirModalArchivado          = abrirModalArchivado;
 window.cerrarModalArchivado         = cerrarModalArchivado;
 window.abrirModalLimpiarDuplicados  = abrirModalLimpiarDuplicados;
