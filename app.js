@@ -244,6 +244,7 @@ function irSubir() {
   const bar=$('progress-bar'); if(bar) bar.style.width='0%';
   const ptxt=$('progress-txt'); if(ptxt) ptxt.textContent='0%';
   resetBtn();
+  actualizarContadorActa();
   const hn=$('hero-nombre'); if(hn) hn.textContent=usuario?.nombre||usuario?.email||'';
   ir('vista-subir');
   cargarMisEnvios();
@@ -434,16 +435,71 @@ function infoPlazoPorFecha() {
   }
 }
 
+/* Devuelve true si aún estamos antes del día 10 (el dropzone debe estar bloqueado) */
+function actaEstaDeshabilitada() {
+  return !actaEsObligatoriaHoy();
+}
+
+/* Actualiza el contador regresivo / aviso vencimiento del Informativo de Atraso */
+function actualizarContadorActa() {
+  const cBox = $('acta-countdown');
+  const cTxt = $('acta-countdown-txt');
+  const dz   = $('acta-dropzone');
+  const lbl  = $('acta-label-oblig');
+  if (!cBox || !cTxt) return;
+
+  const actaObligatoria = actaEsObligatoriaHoy();
+  const dia = new Date().getDate();
+
+  if (!actaObligatoria) {
+    /* Antes del día 10: mostrar cuenta regresiva, bloquear dropzone */
+    const diasRestantes = 10 - dia;
+    cBox.style.background   = '#fef2f2';
+    cBox.style.borderColor  = '#fecaca';
+    cBox.querySelector('svg').style.stroke = '#ef4444';
+    cTxt.style.color = '#ef4444';
+    cTxt.textContent = diasRestantes === 0
+      ? '⏰ ¡Hoy vence el plazo! Mañana será obligatorio'
+      : `⏳ Faltan ${diasRestantes} día${diasRestantes !== 1 ? 's' : ''} para que el Informativo de Atraso sea obligatorio`;
+
+    if (dz) {
+      dz.style.opacity = '0.45';
+      dz.style.cursor  = 'not-allowed';
+      dz.style.pointerEvents = 'none';
+    }
+    if (lbl) {
+      lbl.textContent = `DISPONIBLE EN ${diasRestantes} DÍA${diasRestantes !== 1 ? 'S' : ''}`;
+      lbl.style.background = '#d97706';
+    }
+  } else {
+    /* Después del día 10: habilitado y en rojo urgente */
+    const diasRetraso = dia - 10;
+    cBox.style.background   = '#fff1f2';
+    cBox.style.borderColor  = '#fda4af';
+    cBox.querySelector('svg').style.stroke = '#dc2626';
+    cTxt.style.color = '#dc2626';
+    cTxt.textContent = `🚨 Envío tardío — ${diasRetraso} día${diasRetraso !== 1 ? 's' : ''} de retraso · El Informativo de Atraso es OBLIGATORIO`;
+
+    if (dz) {
+      dz.style.opacity = '1';
+      dz.style.cursor  = 'pointer';
+      dz.style.pointerEvents = 'auto';
+    }
+    if (lbl) {
+      lbl.textContent = 'OBLIGATORIO — Envío tardío';
+      lbl.style.background = '#ef4444';
+    }
+  }
+}
+
 function actualizarBotonEnviar() {
   const btn = $('btn-enviar'); if (!btn) return;
   const actaObligatoria = actaEsObligatoriaHoy();
-  const info = infoPlazoPorFecha();
 
-  /* Mostrar u ocultar toda la sección del Informativo de Atraso */
-  const actaField = $('acta-field');
-  if (actaField) actaField.style.display = actaObligatoria ? 'block' : 'none';
+  /* Actualizar visual del contador */
+  actualizarContadorActa();
 
-  /* Si ya no es obligatoria y había una seleccionada, limpiarla */
+  /* Si no es obligatoria y había algo seleccionado, limpiarlo */
   if (!actaObligatoria && actaSeleccionada) {
     actaSeleccionada = null;
     const ai=$('acta-input'); if(ai) ai.value='';
@@ -455,15 +511,6 @@ function actualizarBotonEnviar() {
   btn.disabled = !listo;
   btn.style.opacity = listo ? '1' : '0.45';
   btn.style.cursor  = listo ? 'pointer' : 'not-allowed';
-
-  const actaLabel = $('acta-label-oblig');
-  if (actaLabel) {
-    actaLabel.textContent  = 'OBLIGATORIO — Envío tardío';
-    actaLabel.style.background = '#ef4444';
-  }
-
-  const plazoEl = $('acta-plazo-info');
-  if (plazoEl) plazoEl.textContent = actaObligatoria ? info.mensaje : '';
 
   const hint = $('enviar-hint');
   if (hint) {
@@ -1403,6 +1450,7 @@ window.login                        = login;
 window.abrirSelectorArchivo         = abrirSelectorArchivo;
 window.abrirSelectorActa            = abrirSelectorActa;
 window.abrirSelectorInforme         = abrirSelectorInforme;
+window.actaEstaDeshabilitada         = actaEstaDeshabilitada;
 window.seleccionarActa              = seleccionarActa;
 window.seleccionarInforme           = seleccionarInforme;
 window.quitarActa                   = quitarActa;
