@@ -406,7 +406,7 @@ function seleccionarActa(f) {
    LÓGICA DE PLAZO / ACTA OBLIGATORIA
 ══════════════════════════════════ */
 function actaEsObligatoriaHoy() {
-  return new Date().getDate() > 10;
+  return new Date().getDate() > 5;
 }
 
 function infoPlazoPorFecha() {
@@ -416,8 +416,8 @@ function infoPlazoPorFecha() {
   const nombreMesPasado = mesPasado.toLocaleDateString('es-EC',
     { month:'long', year:'numeric', timeZone:'America/Guayaquil' });
 
-  if (dia <= 10) {
-    const diasRestantes = 10 - dia;
+  if (dia <= 5) {
+    const diasRestantes = 5 - dia;
     return {
       tardio: false,
       mesReporte: nombreMesPasado,
@@ -426,7 +426,7 @@ function infoPlazoPorFecha() {
         : `Envío del reporte de ${nombreMesPasado} · te quedan ${diasRestantes} día${diasRestantes!==1?'s':''} sin acta`
     };
   } else {
-    const diasRetraso = dia - 10;
+    const diasRetraso = dia - 5;
     return {
       tardio: true,
       mesReporte: nombreMesPasado,
@@ -452,8 +452,8 @@ function actualizarContadorActa() {
   const dia = new Date().getDate();
 
   if (!actaObligatoria) {
-    /* Antes del día 10: mostrar cuenta regresiva, bloquear dropzone */
-    const diasRestantes = 10 - dia;
+    /* Antes del día 5: mostrar cuenta regresiva, bloquear dropzone */
+    const diasRestantes = 5 - dia;
     cBox.style.background   = '#fef2f2';
     cBox.style.borderColor  = '#fecaca';
     cBox.querySelector('svg').style.stroke = '#ef4444';
@@ -472,8 +472,8 @@ function actualizarContadorActa() {
       lbl.style.background = '#ef4444';
     }
   } else {
-    /* Después del día 10: habilitado y en rojo urgente */
-    const diasRetraso = dia - 10;
+    /* Después del día 5: habilitado y en rojo urgente */
+    const diasRetraso = dia - 5;
     cBox.style.background   = '#fff1f2';
     cBox.style.borderColor  = '#fda4af';
     cBox.querySelector('svg').style.stroke = '#dc2626';
@@ -519,7 +519,7 @@ function actualizarBotonEnviar() {
     else if (!informeSeleccionado)
       hint.textContent = '⚠️ El Informe de Entrega PDF es obligatorio';
     else if (!actaSeleccionada && actaObligatoria)
-      hint.textContent = '⚠️ El Informe de Atraso es obligatorio — pasó el día 10';
+      hint.textContent = '⚠️ El Informe de Atraso es obligatorio — pasó el día 5';
     else
       hint.textContent = '';
   }
