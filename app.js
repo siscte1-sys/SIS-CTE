@@ -222,6 +222,40 @@ function poblarAreas(selectId, placeholder='— Selecciona tu área —') {
 }
 
 /* ══════════════════════════════════
+   FILTROS — MES / AÑO (panel admin)
+══════════════════════════════════ */
+const MESES_FILTRO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function poblarFiltroMes() {
+  const sel = $('filtro-mes'); if (!sel) return;
+  sel.innerHTML = '<option value="">Todos los meses</option>';
+  MESES_FILTRO.forEach((m,i) => {
+    const o = document.createElement('option');
+    o.value = String(i+1).padStart(2,'0');
+    o.textContent = m;
+    sel.appendChild(o);
+  });
+}
+
+/* Se llama cada vez que se cargan datos en el panel admin, para que
+   el listado de años refleje los años que realmente tienen envíos */
+function poblarFiltroAnio(docs) {
+  const sel = $('filtro-anio'); if (!sel) return;
+  const valorPrevio = sel.value;
+  const anios = [...new Set((docs||[]).map(d => (d.timestamp||'').slice(0,4)).filter(Boolean))]
+    .sort((a,b) => b.localeCompare(a));
+  const anioActual = String(new Date().getFullYear());
+  if (!anios.includes(anioActual)) anios.unshift(anioActual);
+
+  sel.innerHTML = '<option value="">Todos los años</option>';
+  anios.forEach(a => {
+    const o = document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o);
+  });
+  if (anios.includes(valorPrevio)) sel.value = valorPrevio;
+}
+
+/* ══════════════════════════════════
    VISTA SUBIR
 ══════════════════════════════════ */
 function irSubir() {
@@ -297,6 +331,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initFirebase().catch(e => console.error(e));
   poblarAreas('area-select');
   poblarAreas('filtro-area', 'Todas las áreas');
+  poblarFiltroMes();
   await new Promise(r => setTimeout(r, 100));
 
   /* botones */
@@ -1167,7 +1202,7 @@ async function enviarCorreosNotificacion(datos) {
    Los archivos dentro ya quedan identificados por mes gracias
    al nombrado NRO_MES_MES_AREA_AÑO. */
 async function abrirCarpetaArea(area) {
-  if (!area) { toast('Selecciona un área primero','err'); return; }
+  if (!area) { toast('No se encontró el área para abrir la carpeta','err'); return; }
   try {
     toast(`Abriendo carpeta de ${area}...`);
     const token = await obtenerTokenDrive();
@@ -1176,11 +1211,6 @@ async function abrirCarpetaArea(area) {
   } catch(e) {
     toast('Error al abrir la carpeta: ' + e.message, 'err');
   }
-}
-
-function abrirCarpetaAreaFiltro() {
-  const area = $('filtro-area')?.value;
-  abrirCarpetaArea(area);
 }
 
 async function cargarAdmin() {
@@ -1192,6 +1222,7 @@ async function cargarAdmin() {
     docsAdmin  = snap.docs
       .map(d => ({id:d.id,...d.data()}))
       .sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||''));
+    poblarFiltroAnio(docsAdmin);
     renderAdmin(docsAdmin);
   } catch(e) {
     console.error('cargarAdmin error:', e);
@@ -1221,7 +1252,7 @@ function renderAdmin(docs) {
         <div class="persona-email">${p.email}</div>
         <div class="persona-ultima">Área(s): ${[...p.areas].join(', ')||'—'} · Último: ${p.fechaTexto} · ${p.horaTexto}</div>
       </div>
-      <span class="persona-badge">${p.cant} archivo${p.cant>1?'s':''}</span>
+      <button type="button" class="persona-badge persona-badge-link" onclick="abrirCarpetaArea('${p.area||''}')" title="Abrir carpeta de ${p.area||'su área'} en Drive">${p.cant} archivo${p.cant>1?'s':''}</button>
     </div>`).join('') || '<p class="cargando-txt">Sin entregas</p>';
 
   $('tabla-body').innerHTML = !docs.length
@@ -1233,7 +1264,7 @@ function renderAdmin(docs) {
           <img class="td-foto" src="${d.foto||avatar(d.nombre)}" alt="" onerror="this.src='${avatar(d.nombre)}'">
           <div><div class="td-nombre">${d.nombre||'—'}</div><div class="td-email">${d.email}</div></div>
         </div></td>
-        <td><button type="button" class="badge-area badge-area-link" onclick="abrirCarpetaArea('${d.area||''}')" title="Abrir carpeta de ${d.area||'esta área'} en Drive">📁 ${d.area||'—'}</button></td>
+        <td><span class="badge-area">${d.area||'—'}</span></td>
         <td class="td-arch">${renderDescarga(d)}</td>
         <td class="td-detalle" title="${d.detalle||'—'}">${d.detalle?(d.detalle.length>40?d.detalle.slice(0,40)+'…':d.detalle):'<span style="color:#9ca3af">—</span>'}</td>
         <td class="td-peso">${d.tamanoTexto||'—'}</td>
@@ -1262,18 +1293,22 @@ function filtrarDocs(docs) {
   const email  = $('filtro-email').value.trim().toLowerCase();
   const fd     = $('filtro-fecha-desde').value;
   const fh     = $('filtro-fecha-hasta').value;
+  const mes    = $('filtro-mes')?.value || '';
+  const anio   = $('filtro-anio')?.value || '';
   let r = [...docs];
   if (area)   r=r.filter(d=>(d.area||'').toLowerCase().includes(area));
   if (nombre) r=r.filter(d=>(d.nombre||'').toLowerCase().includes(nombre));
   if (email)  r=r.filter(d=>(d.email||'').toLowerCase().includes(email));
   if (fd)     r=r.filter(d=>d.timestamp>=new Date(fd).toISOString());
   if (fh)     { const h=new Date(fh); h.setHours(23,59,59); r=r.filter(d=>d.timestamp<=h.toISOString()); }
+  if (mes)    r=r.filter(d=>(d.timestamp||'').slice(5,7)===mes);
+  if (anio)   r=r.filter(d=>(d.timestamp||'').slice(0,4)===anio);
   return r;
 }
 
 function aplicarFiltros() { renderAdmin(filtrarDocs(docsAdmin)); }
 function limpiarFiltros() {
-  ['filtro-area','filtro-nombre','filtro-email','filtro-fecha-desde','filtro-fecha-hasta']
+  ['filtro-area','filtro-nombre','filtro-email','filtro-fecha-desde','filtro-fecha-hasta','filtro-mes','filtro-anio']
     .forEach(id => { const e=$(id); if(e) e.value=''; });
   renderAdmin(docsAdmin);
 }
@@ -1573,7 +1608,6 @@ window.hide                         = hide;
 window.toast                        = toast;
 window.$                            = $;
 window.abrirCarpetaArea             = abrirCarpetaArea;
-window.abrirCarpetaAreaFiltro       = abrirCarpetaAreaFiltro;
 /* ══════════════════════════════════
    MODO OSCURO / CLARO
 ══════════════════════════════════ */
