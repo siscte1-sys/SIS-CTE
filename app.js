@@ -43,8 +43,7 @@ const ADMIN_EMAILS = [
 
 const AREAS = [
   "SUB ZONA GUAYAS","ZONA 8",
-  "CEBAF TULCAN","CEBAF NUEVA LOJA","CEBAF HUAQUILLAS",
-  "CEBAF MACARA","CEBAF AREA COMPUTO NACIONAL",
+  "CEBAF AREA COMPUTO NACIONAL",
   "PROV_PICHINCHA","PROV_MANABI","PROV_SANTO DOMINGO",
   "PROV_LOS RIOS","PROV_BOLIVAR","PROV_SANTA ELENA",
   "PROV_AZUAY","PROV_EL ORO",
@@ -279,7 +278,7 @@ async function cargarMisEnvios() {
             &nbsp;·&nbsp;${d.tamanoTexto||'—'}
             ${d.archivado
               ? '&nbsp;·&nbsp;<span style="color:var(--txt3);font-size:10px;font-weight:600;">Archivado</span>'
-              : '&nbsp;·&nbsp;<span style="color:var(--blue);font-size:10px;font-weight:500;">↩ Para reemplazar, sube el mismo nombre</span>'}
+              : '&nbsp;·&nbsp;<span style="color:var(--blue);font-size:10px;font-weight:500;">↩ Subir de nuevo este mes reemplaza este envío</span>'}
             ${d.comprobanteURL
               ? `&nbsp;·&nbsp;<a href="${d.comprobanteURL}" target="_blank" style="color:#16a34a;font-size:10px;font-weight:600;">🧾 Ver comprobante</a>`
               : ''}
@@ -336,7 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
    SELECTORES DE ARCHIVO
 ══════════════════════════════════ */
 function abrirSelectorArchivo() {
-  const i=document.createElement('input'); i.type='file'; i.accept='.xlsx,.xls'; i.style.display='none';
+  const i=document.createElement('input'); i.type='file'; i.accept='.rar,.zip'; i.style.display='none';
   i.addEventListener('change', () => { if(i.files[0]) seleccionar(i.files[0]); i.remove(); });
   document.body.appendChild(i); i.click();
 }
@@ -381,7 +380,7 @@ function quitarActa() {
 
 function seleccionar(f) {
   const ext = f.name.split('.').pop().toLowerCase();
-  if (!['xlsx','xls'].includes(ext)) { toast('Solo se aceptan archivos Excel (.xlsx o .xls)','err'); return; }
+  if (!['rar','zip'].includes(ext)) { toast('Solo se aceptan archivos comprimidos (.rar o .zip)','err'); return; }
   archivoSeleccionado = f;
   $('fp-nombre').textContent = f.name;
   $('fp-peso').textContent   = formatSize(f.size);
@@ -403,21 +402,53 @@ function seleccionarActa(f) {
 }
 
 /* ══════════════════════════════════
+   NOMBRADO DE ARCHIVOS — NRO_MES_MES_AREA_AÑO
+   El mes que se usa es el MES REPORTADO (mes anterior al
+   día de envío), no el mes calendario en que se sube.
+══════════════════════════════════ */
+const MESES_ES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
+  'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+
+function obtenerMesReporte() {
+  const ahora = new Date();
+  return new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1);
+}
+
+function normalizarParaArchivo(txt) {
+  return (txt || '').toString()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // quitar tildes
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '')                          // quitar espacios/guiones/etc.
+    .trim();
+}
+
+function nombreBaseEnvio(areaVal) {
+  const mesReporte = obtenerMesReporte();
+  const mesNum     = String(mesReporte.getMonth() + 1).padStart(2, '0');
+  const mesNombre  = MESES_ES[mesReporte.getMonth()];
+  const anio       = mesReporte.getFullYear();
+  const areaSlug   = normalizarParaArchivo(areaVal);
+  return `${mesNum}_${mesNombre}_${areaSlug}_${anio}`;
+}
+
+/* ══════════════════════════════════
    LÓGICA DE PLAZO / ACTA OBLIGATORIA
+   Plazo: día 2 del mes. Después del día 2 es tardío y
+   se vuelven obligatorios los tres archivos.
 ══════════════════════════════════ */
 function actaEsObligatoriaHoy() {
-  return new Date().getDate() > 5;
+  return new Date().getDate() > 2;
 }
 
 function infoPlazoPorFecha() {
-  const ahora = new Date();
-  const dia   = ahora.getDate();
-  const mesPasado = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1);
+  const ahora           = new Date();
+  const dia             = ahora.getDate();
+  const mesPasado       = obtenerMesReporte();
   const nombreMesPasado = mesPasado.toLocaleDateString('es-EC',
     { month:'long', year:'numeric', timeZone:'America/Guayaquil' });
 
-  if (dia <= 5) {
-    const diasRestantes = 5 - dia;
+  if (dia <= 2) {
+    const diasRestantes = 2 - dia;
     return {
       tardio: false,
       mesReporte: nombreMesPasado,
@@ -426,7 +457,7 @@ function infoPlazoPorFecha() {
         : `Envío del reporte de ${nombreMesPasado} · te quedan ${diasRestantes} día${diasRestantes!==1?'s':''} sin acta`
     };
   } else {
-    const diasRetraso = dia - 5;
+    const diasRetraso = dia - 2;
     return {
       tardio: true,
       mesReporte: nombreMesPasado,
@@ -452,8 +483,8 @@ function actualizarContadorActa() {
   const dia = new Date().getDate();
 
   if (!actaObligatoria) {
-    /* Antes del día 5: mostrar cuenta regresiva, bloquear dropzone */
-    const diasRestantes = 5 - dia;
+    /* Antes del día 2: mostrar cuenta regresiva, bloquear dropzone */
+    const diasRestantes = 2 - dia;
     cBox.style.background   = '#fef2f2';
     cBox.style.borderColor  = '#fecaca';
     cBox.querySelector('svg').style.stroke = '#ef4444';
@@ -472,8 +503,8 @@ function actualizarContadorActa() {
       lbl.style.background = '#ef4444';
     }
   } else {
-    /* Después del día 5: habilitado y en rojo urgente */
-    const diasRetraso = dia - 5;
+    /* Después del día 2: habilitado y en rojo urgente */
+    const diasRetraso = dia - 2;
     cBox.style.background   = '#fff1f2';
     cBox.style.borderColor  = '#fda4af';
     cBox.querySelector('svg').style.stroke = '#dc2626';
@@ -515,11 +546,11 @@ function actualizarBotonEnviar() {
   const hint = $('enviar-hint');
   if (hint) {
     if (!archivoSeleccionado)
-      hint.textContent = 'Sube el Excel para habilitar el envío';
+      hint.textContent = 'Sube el archivo comprimido (RAR o ZIP) para habilitar el envío';
     else if (!informeSeleccionado)
       hint.textContent = '⚠️ El Informe de Entrega PDF es obligatorio';
     else if (!actaSeleccionada && actaObligatoria)
-      hint.textContent = '⚠️ El Informe de Atraso es obligatorio — pasó el día 5';
+      hint.textContent = '⚠️ El Informe de Atraso es obligatorio — pasó el día 2';
     else
       hint.textContent = '';
   }
@@ -598,22 +629,65 @@ async function obtenerOCrearSubcarpeta(token, nombreArea) {
 }
 
 /* ══════════════════════════════════
+   GOOGLE DRIVE — HELPERS DE NOMBRADO
+══════════════════════════════════ */
+function mimeTypePorExtension(ext) {
+  const e = (ext||'').toLowerCase();
+  if (e === 'zip') return 'application/zip';
+  if (e === 'rar') return 'application/vnd.rar';
+  if (e === 'pdf') return 'application/pdf';
+  return 'application/octet-stream';
+}
+
+/* Busca archivos con un nombre exacto dentro de una carpeta */
+async function buscarArchivoEnCarpeta(token, idCarpeta, nombre) {
+  const q = encodeURIComponent(
+    `name='${nombre.replace(/'/g,"\\'")}' and '${idCarpeta}' in parents and trashed=false`
+  );
+  const r = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=10`,
+    { headers: { 'Authorization': 'Bearer ' + token } }
+  );
+  if (!r.ok) return [];
+  const d = await r.json();
+  return d.files || [];
+}
+
+/* Si ya existe un archivo con ese nombre en la carpeta (mismo mes/área), lo elimina
+   antes de subir el nuevo — así no se acumulan duplicados del mismo reporte */
+async function eliminarSiExiste(token, idCarpeta, nombre) {
+  try {
+    const existentes = await buscarArchivoEnCarpeta(token, idCarpeta, nombre);
+    for (const f of existentes) {
+      await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+    }
+  } catch(e) {
+    console.warn('No se pudo verificar/eliminar archivo previo en Drive:', e.message);
+  }
+}
+
+/* ══════════════════════════════════
    GOOGLE DRIVE — SUBIR ARCHIVO
 ══════════════════════════════════ */
-async function subirAGoogleDrive(archivo, onProgress) {
+async function subirAGoogleDrive(archivo, nombreFinal, onProgress) {
   const token = await obtenerTokenDrive();
   const area  = $('area-select')?.value;
   if (!area) throw new Error('No se seleccionó área');
   const idSubcarpeta = await obtenerOCrearSubcarpeta(token, area);
+  onProgress(25);
+
+  await eliminarSiExiste(token, idSubcarpeta, nombreFinal);
   onProgress(40);
 
-  const fecha       = new Date().toISOString().slice(0,10);
-  const nombreFinal = `${fecha}_${archivo.name}`;
+  const ext = nombreFinal.split('.').pop();
 
   return new Promise((resolve, reject) => {
     const metadata = {
       name:     nombreFinal,
-      mimeType: archivo.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      mimeType: archivo.type || mimeTypePorExtension(ext),
       parents:  [idSubcarpeta]
     };
     const form = new FormData();
@@ -644,15 +718,15 @@ async function subirAGoogleDrive(archivo, onProgress) {
 /* ══════════════════════════════════
    GOOGLE DRIVE — SUBIR PDF GENÉRICO
 ══════════════════════════════════ */
-async function subirPDFaGoogleDrive(archivo, onProgress) {
+async function subirPDFaGoogleDrive(archivo, nombreFinal, onProgress) {
   const token = await obtenerTokenDrive();
   const area  = $('area-select')?.value;
   if (!area) throw new Error('No se seleccionó área');
   const idSubcarpeta = await obtenerOCrearSubcarpeta(token, area);
-  if (onProgress) onProgress(40);
+  if (onProgress) onProgress(25);
 
-  const fecha       = new Date().toISOString().slice(0,10);
-  const nombreFinal = `${fecha}_${archivo.name}`;
+  await eliminarSiExiste(token, idSubcarpeta, nombreFinal);
+  if (onProgress) onProgress(40);
 
   return new Promise((resolve, reject) => {
     const metadata = {
@@ -731,7 +805,7 @@ async function subirComprobantePDFaDrive(dataUrl, registro) {
    ENVIAR ARCHIVO — FLUJO PRINCIPAL
 ══════════════════════════════════ */
 async function enviarArchivo() {
-  if (!archivoSeleccionado) { toast('Selecciona un archivo Excel primero','err'); return; }
+  if (!archivoSeleccionado) { toast('Selecciona un archivo comprimido (RAR o ZIP) primero','err'); return; }
   if (!informeSeleccionado) { toast('El Informe de Entrega PDF es obligatorio','err'); return; }
 
   const actaObligatoria = actaEsObligatoriaHoy();
@@ -745,6 +819,13 @@ async function enviarArchivo() {
   if (!areaVal) { toast('Debes seleccionar tu área','err'); return; }
   const detalleVal = ($('detalle-envio')?.value||'').trim();
 
+  /* Nombres estandarizados: NRO_MES_MES_AREA_AÑO (+ sufijo según tipo) */
+  const nombreBase        = nombreBaseEnvio(areaVal);
+  const extArchivo        = (archivoSeleccionado.name.split('.').pop()||'').toLowerCase();
+  const nombreArchivoFinal = `${nombreBase}.${extArchivo}`;
+  const nombreInformeFinal = `${nombreBase}_INFORME.pdf`;
+  const nombreActaFinal    = actaSeleccionada ? `${nombreBase}_ATRASO.pdf` : null;
+
   const btn = $('btn-enviar');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Subiendo...';
@@ -756,21 +837,21 @@ async function enviarArchivo() {
     const fechaTexto = ahora.toLocaleDateString('es-EC',{timeZone:'America/Guayaquil',day:'2-digit',month:'long',year:'numeric'});
     const horaTexto  = ahora.toLocaleTimeString('es-EC',{timeZone:'America/Guayaquil',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
-    /* 1. Subir Excel */
-    setProgreso(10, 'Subiendo Excel a Google Drive...');
-    const storageURL = await subirAGoogleDrive(archivoSeleccionado,
-      p => setProgreso(10 + Math.round(p*0.20), `Subiendo Excel... ${Math.round(p)}%`));
+    /* 1. Subir archivo comprimido (RAR/ZIP) */
+    setProgreso(10, 'Subiendo archivo a Google Drive...');
+    const storageURL = await subirAGoogleDrive(archivoSeleccionado, nombreArchivoFinal,
+      p => setProgreso(10 + Math.round(p*0.20), `Subiendo archivo... ${Math.round(p)}%`));
 
     /* 2. Subir Informe de Entrega PDF (obligatorio) */
     setProgreso(35, 'Subiendo Informe de Entrega PDF...');
-    const informeURL = await subirPDFaGoogleDrive(informeSeleccionado,
+    const informeURL = await subirPDFaGoogleDrive(informeSeleccionado, nombreInformeFinal,
       p => setProgreso(35 + Math.round(p*0.15), `Subiendo Informe... ${Math.round(p)}%`));
 
     /* 3. Subir Acta PDF (si existe) */
     let actaURL = null;
     if (actaSeleccionada) {
       setProgreso(55, 'Subiendo Acta PDF...');
-      actaURL = await subirPDFaGoogleDrive(actaSeleccionada,
+      actaURL = await subirPDFaGoogleDrive(actaSeleccionada, nombreActaFinal,
         p => setProgreso(55 + Math.round(p*0.10), `Subiendo Acta... ${Math.round(p)}%`));
     }
 
@@ -782,9 +863,9 @@ async function enviarArchivo() {
       nombre:    usuario.nombre,
       email:     usuario.email,
       area:      areaVal,
-      archivo:   archivoSeleccionado.name,
-      informe:   informeSeleccionado?.name || '—',
-      acta:      actaSeleccionada?.name || '—',
+      archivo:   nombreArchivoFinal,
+      informe:   nombreInformeFinal,
+      acta:      nombreActaFinal || '—',
       tamano:    formatSize(archivoSeleccionado.size),
       fecha:     fechaTexto,
       hora:      horaTexto,
@@ -801,7 +882,7 @@ async function enviarArchivo() {
       comprobanteURL = await subirComprobantePDFaDrive(comprobanteDataUrl, numRegistro);
     }
 
-    /* 6. Registrar en Firestore (con deduplicación) */
+    /* 6. Registrar en Firestore (con deduplicación por mes+área) */
     setProgreso(88, 'Registrando en Firestore...');
     const { where, deleteDoc, doc: docRef } =
       await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
@@ -809,7 +890,7 @@ async function enviarArchivo() {
     const qDup = window._fb.query(
       window._fb.collection(db,'entregas'),
       where('uid',          '==', usuario.uid),
-      where('nombreArchivo','==', archivoSeleccionado.name),
+      where('nombreArchivo','==', nombreArchivoFinal),
       where('area',         '==', areaVal)
     );
     const snapDup = await window._fb.getDocs(qDup);
@@ -828,9 +909,10 @@ async function enviarArchivo() {
       email:         usuario.email,
       foto:          usuario.foto,
       area:          areaVal,
-      nombreArchivo: archivoSeleccionado.name,
-      nombreInforme: informeSeleccionado?.name || null,
-      nombreActa:    actaSeleccionada?.name || null,
+      nombreArchivo: nombreArchivoFinal,
+      nombreOriginal: archivoSeleccionado.name,
+      nombreInforme: nombreInformeFinal,
+      nombreActa:    nombreActaFinal,
       tamanoBytes:   archivoSeleccionado.size,
       tamanoTexto:   formatSize(archivoSeleccionado.size),
       metodo:        'google_drive',
@@ -853,9 +935,9 @@ async function enviarArchivo() {
         nombre:         usuario.nombre,
         email:          usuario.email,
         area:           areaVal,
-        archivo:        archivoSeleccionado.name,
-        informe:        informeSeleccionado?.name || '—',
-        acta:           actaSeleccionada?.name || '—',
+        archivo:        nombreArchivoFinal,
+        informe:        nombreInformeFinal,
+        acta:           nombreActaFinal || '—',
         tamano:         formatSize(archivoSeleccionado.size),
         fecha:          fechaTexto,
         hora:           horaTexto,
@@ -870,7 +952,7 @@ async function enviarArchivo() {
     }
 
     setProgreso(100, fueReemplazo ? '¡Archivo reemplazado!' : '¡Completado!');
-    mostrarExito(areaVal, fechaTexto, horaTexto);
+    mostrarExito(areaVal, fechaTexto, horaTexto, nombreArchivoFinal);
     setTimeout(() => ir('vista-exito'), 500);
 
   } catch(err) {
@@ -881,11 +963,11 @@ async function enviarArchivo() {
   }
 }
 
-function mostrarExito(area, fecha, hora) {
+function mostrarExito(area, fecha, hora, nombreArchivoFinal) {
   $('ex-nombre').textContent  = usuario.nombre;
   $('ex-email').textContent   = usuario.email;
   $('ex-area').textContent    = area;
-  $('ex-archivo').textContent = archivoSeleccionado.name;
+  $('ex-archivo').textContent = nombreArchivoFinal || archivoSeleccionado.name;
   $('ex-tamano').textContent  = formatSize(archivoSeleccionado.size);
   $('ex-fecha').textContent   = fecha;
   $('ex-hora').textContent    = hora;
@@ -1080,6 +1162,27 @@ async function enviarCorreosNotificacion(datos) {
 /* ══════════════════════════════════
    PANEL ADMIN
 ══════════════════════════════════ */
+
+/* Abre en una pestaña nueva la carpeta de Drive de un área.
+   Los archivos dentro ya quedan identificados por mes gracias
+   al nombrado NRO_MES_MES_AREA_AÑO. */
+async function abrirCarpetaArea(area) {
+  if (!area) { toast('Selecciona un área primero','err'); return; }
+  try {
+    toast(`Abriendo carpeta de ${area}...`);
+    const token = await obtenerTokenDrive();
+    const idCarpeta = await obtenerOCrearSubcarpeta(token, area);
+    window.open(`https://drive.google.com/drive/folders/${idCarpeta}`, '_blank');
+  } catch(e) {
+    toast('Error al abrir la carpeta: ' + e.message, 'err');
+  }
+}
+
+function abrirCarpetaAreaFiltro() {
+  const area = $('filtro-area')?.value;
+  abrirCarpetaArea(area);
+}
+
 async function cargarAdmin() {
   $('tabla-body').innerHTML     = `<tr><td colspan="9" class="td-vacio">Cargando...</td></tr>`;
   $('admin-personas').innerHTML = `<p class="cargando-txt">Cargando...</p>`;
@@ -1130,7 +1233,7 @@ function renderAdmin(docs) {
           <img class="td-foto" src="${d.foto||avatar(d.nombre)}" alt="" onerror="this.src='${avatar(d.nombre)}'">
           <div><div class="td-nombre">${d.nombre||'—'}</div><div class="td-email">${d.email}</div></div>
         </div></td>
-        <td><span class="badge-area">${d.area||'—'}</span></td>
+        <td><button type="button" class="badge-area badge-area-link" onclick="abrirCarpetaArea('${d.area||''}')" title="Abrir carpeta de ${d.area||'esta área'} en Drive">📁 ${d.area||'—'}</button></td>
         <td class="td-arch">${renderDescarga(d)}</td>
         <td class="td-detalle" title="${d.detalle||'—'}">${d.detalle?(d.detalle.length>40?d.detalle.slice(0,40)+'…':d.detalle):'<span style="color:#9ca3af">—</span>'}</td>
         <td class="td-peso">${d.tamanoTexto||'—'}</td>
@@ -1469,6 +1572,8 @@ window.show                         = show;
 window.hide                         = hide;
 window.toast                        = toast;
 window.$                            = $;
+window.abrirCarpetaArea             = abrirCarpetaArea;
+window.abrirCarpetaAreaFiltro       = abrirCarpetaAreaFiltro;
 /* ══════════════════════════════════
    MODO OSCURO / CLARO
 ══════════════════════════════════ */
