@@ -25,7 +25,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* ── GAS Mailer — Notificaciones por correo ──────────── */
-const GAS_MAILER_URL = 'https://script.google.com/macros/s/AKfycbz-5ZWOLoWwzMRSGFNP4Wpt9gqpig6FhEUv3q0zTk8mJ3ocrghDNQpcZs3pXzkN5WS-/exec';
+const GAS_MAILER_URL = 'https://script.google.com/macros/s/AKfycbxVjHN7-NeDy2e0mhZ5RPIoqnUhzt86sW6v1HJlhmMaBtI-3PJlM2ZuSI1Wdvtf2jR8/exec';
 
 /* ── Google Drive ────────────────────────────────────── */
 const GDRIVE_CONFIG = {
