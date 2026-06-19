@@ -25,7 +25,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* ── GAS Mailer — Notificaciones por correo ──────────── */
-const GAS_MAILER_URL = 'https://script.google.com/macros/s/AKfycbzxvr3CTE0I9B8Vc519z9RSMK9LTQ6871MAnaoFQbttrvnlHS3Ma1sljvC22M0nO6x3/exec';
+const GAS_MAILER_URL = 'https://script.google.com/macros/s/AKfycbz-5ZWOLoWwzMRSGFNP4Wpt9gqpig6FhEUv3q0zTk8mJ3ocrghDNQpcZs3pXzkN5WS-/exec';
 
 /* ── Google Drive ────────────────────────────────────── */
 const GDRIVE_CONFIG = {
@@ -966,6 +966,16 @@ async function enviarArchivo() {
     /* 6. Correos */
     setProgreso(93, 'Enviando correos de notificación...');
     try {
+      /* Calcular el link de la carpeta real del área en Drive */
+      const _tokenMail = _driveTokenCache;
+      let _carpetaAreaId = null;
+      if (_tokenMail) {
+        try { _carpetaAreaId = await obtenerOCrearSubcarpeta(_tokenMail, areaVal); } catch(e) {}
+      }
+      const linkCarpetaArea = _carpetaAreaId
+        ? `https://drive.google.com/drive/folders/${_carpetaAreaId}`
+        : `https://drive.google.com/drive/folders/${GDRIVE_CARPETA_GENERAL}`;
+
       await enviarCorreosNotificacion({
         nombre:         usuario.nombre,
         email:          usuario.email,
@@ -980,6 +990,7 @@ async function enviarArchivo() {
         driveLink:      storageURL,
         informeLink:    informeURL || null,
         actaLink:       actaURL || null,
+        linkCarpeta:    linkCarpetaArea,
         comprobanteUrl: comprobanteURL || ''
       });
     } catch(mailErr) {
@@ -1149,7 +1160,9 @@ async function enviarCorreoUsuario(datos) {
     nombre:         datos.nombre,
     area:           datos.area,
     archivo:        datos.archivo,
-    acta:           datos.acta || '—',
+    informe:        datos.informe     || '—',
+    informeLink:    datos.informeLink || '',
+    acta:           datos.acta        || '—',
     tamano:         datos.tamano,
     fecha:          datos.fecha,
     hora:           datos.hora,
@@ -1167,14 +1180,16 @@ async function enviarCorreoAdmin(datos) {
     email:       datos.email,
     area:        datos.area,
     archivo:     datos.archivo,
-    acta:        datos.acta || '—',
+    informe:     datos.informe     || '—',
+    informeLink: datos.informeLink || '',
+    acta:        datos.acta        || '—',
     tamano:      datos.tamano,
     fecha:       datos.fecha,
     hora:        datos.hora,
     registro:    datos.registro,
     driveLink:   datos.driveLink   || '',
     actaLink:    datos.actaLink    || '',
-    linkCarpeta: `https://drive.google.com/drive/folders/${GDRIVE_CARPETA_GENERAL}`
+    linkCarpeta: datos.linkCarpeta || `https://drive.google.com/drive/folders/${GDRIVE_CARPETA_GENERAL}`
   });
   console.log('✓ Alerta admin enviada via GAS');
 }
