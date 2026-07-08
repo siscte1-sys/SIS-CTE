@@ -1,0 +1,525 @@
+/* ══════════════════════════════════════════════════════════
+   ESTILOS COMPLEMENTARIOS — Módulo Novedades v6.0
+   Agregar DESPUÉS de styles.css:
+   <link rel="stylesheet" href="styles_novedades_v6.css">
+══════════════════════════════════════════════════════════ */
+
+/* ════════════════════════════════
+   NOVEDADES — Layout Superior
+════════════════════════════════ */
+.novedades-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:16px;
+  margin-bottom:20px;
+  padding:16px 20px;
+  background:var(--white);
+  border:1px solid var(--border);
+  border-radius:12px;
+  box-shadow:var(--sh);
+}
+
+.novedades-info{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.info-badge{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 12px;
+  background:var(--blue-l);
+  border:1px solid var(--blue-m);
+  border-radius:8px;
+  font-size:12px;
+  color:var(--blue);
+  font-weight:600;
+}
+
+body.dark-mode .info-badge{
+  background:var(--blue-m);
+  border-color:var(--blue);
+  color:#fff;
+}
+
+.novedades-controles{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+/* ════════════════════════════════
+   TABLA NOVEDADES — Scroll horizontal
+════════════════════════════════ */
+.tabla-scroll-container{
+  overflow-x:auto;
+  overflow-y:visible;
+  border-radius:12px;
+  border:1px solid var(--border);
+}
+
+.tabla-novedades{
+  width:100%;
+  border-collapse:collapse;
+  font-size:11px;
+  background:var(--white);
+}
+
+.tabla-novedades thead{
+  background:var(--blue-l);
+  position:sticky;
+  top:0;
+  z-index:10;
+}
+
+.tabla-novedades th{
+  padding:10px 6px;
+  text-align:center;
+  font-weight:700;
+  color:var(--blue);
+  border-bottom:2px solid var(--blue-m);
+  white-space:nowrap;
+  background:var(--blue-l);
+}
+
+body.dark-mode .tabla-novedades th{
+  background:var(--blue-m);
+  color:#fff;
+  border-bottom-color:var(--blue);
+}
+
+.tabla-novedades td{
+  padding:8px 4px;
+  text-align:center;
+  border:1px solid var(--border);
+  transition:background .1s;
+}
+
+.tabla-novedades tbody tr:hover td{
+  background:var(--blue-l);
+}
+
+body.dark-mode .tabla-novedades tbody tr:hover td{
+  background:var(--blue-m);
+}
+
+/* ════════════════════════════════
+   LEYENDA DE CÓDIGOS
+════════════════════════════════ */
+.leyenda-codigos{
+  margin-top:20px;
+  padding:16px 20px;
+  background:var(--white);
+  border:1px solid var(--border);
+  border-radius:12px;
+  box-shadow:var(--sh);
+}
+
+.lc-titulo{
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  color:var(--txt2);
+  margin-bottom:12px;
+}
+
+.lc-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));
+  gap:8px;
+}
+
+.lc-item{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:8px 12px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:8px;
+}
+
+.lc-codigo{
+  font-weight:700;
+  font-size:12px;
+  color:var(--blue);
+}
+
+.lc-desc{
+  font-size:11px;
+  color:var(--txt2);
+}
+
+/* ════════════════════════════════
+   MODALES — Novedades y Errores
+════════════════════════════════ */
+.modal-overlay{
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  background:rgba(0,0,0,.5);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:1000;
+}
+
+.modal-card{
+  background:var(--white);
+  border:1px solid var(--border);
+  border-radius:14px;
+  box-shadow:var(--shl);
+  animation:up .3s ease;
+  overflow:hidden;
+  max-width:90%;
+  max-height:90vh;
+  display:flex;
+  flex-direction:column;
+}
+
+.modal-header{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:20px;
+  border-bottom:1px solid var(--border);
+  background:var(--bg);
+}
+
+.modal-ico{
+  width:40px;
+  height:40px;
+  background:var(--blue-l);
+  border:1px solid var(--blue-m);
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+}
+
+.modal-titulo{
+  font-size:14px;
+  font-weight:700;
+  color:var(--txt);
+}
+
+.modal-sub{
+  font-size:12px;
+  color:var(--txt2);
+  margin-top:2px;
+}
+
+.modal-cerrar{
+  background:none;
+  border:none;
+  font-size:20px;
+  cursor:pointer;
+  color:var(--txt2);
+  margin-left:auto;
+  transition:color .15s;
+  width:32px;
+  height:32px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.modal-cerrar:hover{
+  color:var(--red);
+}
+
+.modal-body{
+  padding:20px;
+  overflow-y:auto;
+  flex:1;
+}
+
+.modal-footer{
+  display:flex;
+  gap:8px;
+  justify-content:flex-end;
+  padding:16px 20px;
+  border-top:1px solid var(--border);
+  background:var(--bg);
+}
+
+.btn-modal-primary{
+  background:var(--blue);
+  color:#fff;
+  border:none;
+  padding:8px 16px;
+  border-radius:8px;
+  font-weight:600;
+  cursor:pointer;
+  transition:background .15s;
+  font-size:13px;
+}
+
+.btn-modal-primary:hover{
+  background:var(--blue-d);
+}
+
+.btn-modal-primary:disabled{
+  opacity:.5;
+  cursor:not-allowed;
+}
+
+.btn-modal-cancel{
+  background:var(--white);
+  color:var(--txt2);
+  border:1px solid var(--border);
+  padding:8px 16px;
+  border-radius:8px;
+  font-weight:600;
+  cursor:pointer;
+  transition:all .15s;
+  font-size:13px;
+}
+
+.btn-modal-cancel:hover{
+  border-color:var(--red);
+  color:var(--red);
+}
+
+.btn-modal-danger{
+  background:var(--red);
+  color:#fff;
+  border:none;
+  padding:8px 16px;
+  border-radius:8px;
+  font-weight:600;
+  cursor:pointer;
+  transition:background .15s;
+  font-size:13px;
+}
+
+.btn-modal-danger:hover{
+  background:#991b1b;
+}
+
+/* ════════════════════════════════
+   FORM FIELDS en Modales
+════════════════════════════════ */
+.form-field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-bottom:16px;
+}
+
+.form-label{
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color:var(--txt2);
+}
+
+.form-select,
+.form-textarea{
+  padding:8px 12px;
+  border:1.5px solid var(--border);
+  border-radius:8px;
+  font-family:inherit;
+  font-size:13px;
+  color:var(--txt);
+  background:var(--white);
+  transition:border-color .15s;
+}
+
+.form-select:focus,
+.form-textarea:focus{
+  outline:none;
+  border-color:var(--blue);
+  box-shadow:0 0 0 3px rgba(37,99,235,.1);
+}
+
+.form-textarea{
+  resize:vertical;
+  min-height:80px;
+  font-family:inherit;
+}
+
+/* ════════════════════════════════
+   PAGE HERO — Estilos mejorados
+════════════════════════════════ */
+.page-hero{
+  background:linear-gradient(135deg, var(--blue-l) 0%, var(--bg) 100%);
+  padding:20px;
+  border-radius:12px;
+  margin-bottom:20px;
+  border:1px solid var(--blue-m);
+}
+
+.page-hero-titulo{
+  font-size:24px;
+  font-weight:800;
+  color:var(--blue);
+  margin-bottom:6px;
+  font-family:var(--font-brand);
+}
+
+.page-hero-sub{
+  font-size:13px;
+  color:var(--txt2);
+  line-height:1.6;
+}
+
+/* ════════════════════════════════
+   PAGE BODY
+════════════════════════════════ */
+.page-body{
+  padding:0;
+  max-width:100%;
+}
+
+.panel-white{
+  background:var(--white);
+  border:1px solid var(--border);
+  border-radius:12px;
+  box-shadow:var(--sh);
+  overflow:hidden;
+  margin-bottom:20px;
+}
+
+/* ════════════════════════════════
+   ADMIN TABS
+════════════════════════════════ */
+.admin-tab{
+  position:relative;
+  border-bottom:3px solid transparent;
+  transition:all .15s;
+}
+
+.admin-tab.active{
+  border-bottom-color:var(--blue);
+  background:var(--blue-l);
+}
+
+.admin-tab-content{
+  display:none;
+}
+
+.admin-tab-content.active{
+  display:block;
+}
+
+/* ════════════════════════════════
+   ESTADÍSTICAS
+════════════════════════════════ */
+.stats-row{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+  gap:12px;
+  margin-bottom:20px;
+}
+
+.stat-box{
+  background:var(--white);
+  border:1px solid var(--border);
+  border-top:3px solid var(--blue);
+  border-radius:12px;
+  padding:16px 20px;
+  box-shadow:var(--sh);
+}
+
+.stat-lbl{
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  color:var(--txt2);
+  margin-bottom:6px;
+}
+
+.stat-val{
+  font-family:var(--font-brand);
+  font-size:32px;
+  font-weight:800;
+  color:var(--blue);
+  line-height:1;
+}
+
+/* ════════════════════════════════
+   DARK MODE — Complementarios
+════════════════════════════════ */
+body.dark-mode .novedades-top,
+body.dark-mode .tabla-scroll-container,
+body.dark-mode .leyenda-codigos,
+body.dark-mode .panel-white,
+body.dark-mode .stat-box,
+body.dark-mode .modal-card,
+body.dark-mode .page-hero{
+  background:var(--white);
+  border-color:var(--border);
+  color:var(--txt);
+}
+
+body.dark-mode .modal-header,
+body.dark-mode .modal-body,
+body.dark-mode .modal-footer,
+body.dark-mode .page-hero{
+  background:var(--white);
+  border-color:var(--border);
+}
+
+body.dark-mode .form-select,
+body.dark-mode .form-textarea,
+body.dark-mode input[type="date"],
+body.dark-mode input[type="text"]{
+  background:var(--white);
+  border-color:var(--border);
+  color:var(--txt);
+}
+
+body.dark-mode .form-select:focus,
+body.dark-mode .form-textarea:focus{
+  border-color:var(--blue);
+}
+
+/* ════════════════════════════════
+   RESPONSIVE
+════════════════════════════════ */
+@media (max-width:768px){
+  .novedades-top{
+    flex-direction:column;
+  }
+  
+  .novedades-controles{
+    width:100%;
+  }
+  
+  .lc-grid{
+    grid-template-columns:repeat(auto-fill, minmax(100px, 1fr));
+  }
+  
+  .modal-card{
+    max-width:95%;
+  }
+}
+
+/* ════════════════════════════════
+   ANIMACIONES
+════════════════════════════════ */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-overlay {
+  animation: slideDown 0.3s ease;
+}
