@@ -200,8 +200,8 @@
             <span class="lc-desc">Sin novedad</span>
           </div>
           <div class="lc-item">
-            <span class="lc-codigo">UTA</span>
-            <span class="lc-desc">UTA Área (FUT)</span>
+            <span class="lc-codigo">OA</span>
+            <span class="lc-desc">Otra Área (FUT)</span>
           </div>
           <div class="lc-item">
             <span class="lc-codigo">X</span>
@@ -216,7 +216,7 @@
             <span class="lc-desc">Baja</span>
           </div>
           <div class="lc-item">
-            <span class="lc-codigo">L</span>
+            <span class="lc-codigo">Li</span>
             <span class="lc-desc">Licencia</span>
           </div>
           <div class="lc-item">
@@ -441,6 +441,7 @@
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="accesos">🔐 Accesos</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="auditoria">📋 Auditoría</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="desbloqueos">🔓 Desbloqueos</button>
+          <button class="btn-acc btn-acc-blue admin-tab" data-tab="resumen">📊 Resumen General</button>
         </div>
       </div>
 
@@ -643,6 +644,51 @@
         </div>
       </div>
 
+      <!-- TAB 5: Resumen General -->
+      <div id="admin-tab-resumen" class="admin-tab-content" style="display:none">
+        <div class="panel-white" style="margin-bottom:16px;">
+          <div style="padding:16px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div class="form-field" style="margin-bottom:0;">
+              <label class="form-label">Mes</label>
+              <select id="resumen-mes" class="filtro-select"></select>
+            </div>
+            <div class="form-field" style="margin-bottom:0;">
+              <label class="form-label">Año</label>
+              <select id="resumen-anio" class="filtro-select"></select>
+            </div>
+            <button class="btn-acc btn-acc-blue" onclick="cargarResumenGeneral()" style="margin-top:18px;">Generar resumen</button>
+          </div>
+        </div>
+
+        <div class="panel-white">
+          <div style="overflow-x:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Área</th><th>Responsable</th><th>Total Personal</th>
+                  <th>S/N</th><th>OA</th><th>X</th><th>CS</th><th>B</th><th>Li</th><th>V</th><th>PE</th>
+                </tr>
+              </thead>
+              <tbody id="resumen-tabla-body">
+                <tr><td colspan="11" class="td-vacio">Elegí un mes y hacé clic en "Generar resumen"</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="resumen-detalle-container" class="panel-white" style="display:none;margin-top:16px;padding:20px;">
+          <div class="sec-titulo" id="resumen-detalle-titulo"></div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead>
+                <tr><th>Área</th><th>Código</th><th>Grado</th><th>Apellidos y Nombres</th><th>Días con este código</th></tr>
+              </thead>
+              <tbody id="resumen-detalle-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -665,7 +711,7 @@
     <div class="modal-body">
       <div class="form-field">
         <label class="form-label">Código de Novedad</label>
-        <input type="text" id="modal-novedad-codigo" class="form-select" placeholder="ej: S/N, UTA, X, CS, B, L, V, PE" maxlength="3">
+        <input type="text" id="modal-novedad-codigo" class="form-select" placeholder="ej: S/N, OA, X, CS, B, Li, V, PE" maxlength="3">
       </div>
       <div class="form-field">
         <label class="form-label">Observación (opcional)</label>
@@ -705,7 +751,7 @@
           <strong style="color:var(--blue);">S/N</strong> — Sin novedad
         </div>
         <div style="padding:8px 12px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;">
-          <strong style="color:var(--blue);">UTA</strong> — UTA Área
+          <strong style="color:var(--blue);">OA</strong> — Otra Área
         </div>
         <div style="padding:8px 12px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;">
           <strong style="color:var(--blue);">X</strong> — Ausencia injustificada
@@ -717,7 +763,7 @@
           <strong style="color:var(--blue);">B</strong> — Baja
         </div>
         <div style="padding:8px 12px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;">
-          <strong style="color:var(--blue);">L</strong> — Licencia
+          <strong style="color:var(--blue);">Li</strong> — Licencia
         </div>
         <div style="padding:8px 12px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;">
           <strong style="color:var(--blue);">V</strong> — Vacaciones
