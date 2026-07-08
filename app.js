@@ -444,6 +444,12 @@ function renderizarTablaNovedades(diaHoy) {
   thObs.style.minWidth = '120px';
   thObs.textContent = 'Observación';
   thead.appendChild(thObs);
+
+  // Agregar columna acción
+  const thAccion = document.createElement('th');
+  thAccion.style.width = '90px';
+  thAccion.textContent = 'Acción';
+  thead.appendChild(thAccion);
   
   // Limpiar cuerpo
   tbody.innerHTML = '';
@@ -538,6 +544,23 @@ function renderizarTablaNovedades(diaHoy) {
       tdObs.style.overflow = 'hidden';
       tdObs.style.textOverflow = 'ellipsis';
       tr.appendChild(tdObs);
+
+      // Columna acción
+      const tdAccion = document.createElement('td');
+      tdAccion.style.position = 'relative';
+      tdAccion.style.textAlign = 'center';
+      const btnAccion = document.createElement('button');
+      btnAccion.className = 'btn-acc btn-acc-blue';
+      btnAccion.style.fontSize = '10px';
+      btnAccion.style.padding = '4px 8px';
+      btnAccion.textContent = 'Acción ▾';
+      btnAccion.type = 'button';
+      btnAccion.addEventListener('click', (e) => {
+        e.stopPropagation();
+        abrirMenuAccionRapida(idx, btnAccion);
+      });
+      tdAccion.appendChild(btnAccion);
+      tr.appendChild(tdAccion);
       
       tbody.appendChild(tr);
     });
@@ -595,6 +618,80 @@ async function solicitarDesbloqueo(dia) {
   }
 }
 
+function cerrarMenuAccionRapida() {
+  const existente = document.getElementById('menu-accion-rapida');
+  if (existente) existente.remove();
+  document.removeEventListener('click', cerrarMenuAccionRapida);
+}
+
+function abrirMenuAccionRapida(idx, btnRef) {
+  cerrarMenuAccionRapida();
+
+  const dia = new Date().getDate();
+  const menu = document.createElement('div');
+  menu.id = 'menu-accion-rapida';
+  menu.style.cssText = `
+    position:absolute; z-index:2000; background:var(--white); border:1px solid var(--border);
+    border-radius:8px; box-shadow:var(--shl); padding:6px; min-width:200px;
+  `;
+
+  const titulo = document.createElement('div');
+  titulo.style.cssText = 'font-size:10px;font-weight:700;color:var(--txt2);padding:4px 8px;';
+  titulo.textContent = `Marcar día ${dia} como:`;
+  menu.appendChild(titulo);
+
+  CODIGOS_VALIDOS.forEach(c => {
+    const item = document.createElement('div');
+    item.style.cssText = 'padding:6px 8px;font-size:12px;cursor:pointer;border-radius:6px;';
+    item.textContent = `${c} — ${CODIGOS_DESC[c]}`;
+    item.addEventListener('mouseover', () => item.style.background = 'var(--blue-l)');
+    item.addEventListener('mouseout', () => item.style.background = '');
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cerrarMenuAccionRapida();
+      aplicarCodigoRapido(idx, dia, c);
+    });
+    menu.appendChild(item);
+  });
+
+  document.body.appendChild(menu);
+  const rect = btnRef.getBoundingClientRect();
+  menu.style.top = `${window.scrollY + rect.bottom + 4}px`;
+  menu.style.left = `${window.scrollX + rect.right - menu.offsetWidth}px`;
+
+  setTimeout(() => document.addEventListener('click', cerrarMenuAccionRapida), 0);
+}
+
+async function aplicarCodigoRapido(idx, dia, codigo) {
+  if (!esAdmin() && dia !== new Date().getDate()) {
+    toast('❌ Solo podés editar el día de hoy. Para días anteriores, solicitá desbloqueo.', 'err');
+    return;
+  }
+  const agente = novedadesActuales.agentes[idx];
+  if (!agente) return;
+
+  if (!agente.novedadesPorDia) agente.novedadesPorDia = {};
+  agente.novedadesPorDia[String(dia)] = codigo;
+  agente.observaciones = CODIGOS_DESC[codigo] || '';
+  actualizarDiaCompletado(dia);
+
+  try {
+    const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
+    await window._fb.updateDoc(novedadesRef, {
+      agentes: novedadesActuales.agentes,
+      diasNoCompletados: novedadesActuales.diasNoCompletados,
+      ultimaModificacion: new Date()
+    });
+    await registrarEnAuditoria('modificar_novedad', areaActual, usuario.email, dia, mesActual, { codigo }, `Acción rápida: ${agente.apellidosNombres} - Día ${dia} - ${codigo}`);
+    renderizarTablaNovedades(new Date().getDate());
+    verificarDiasPendientes();
+    toast(`✅ Marcado como "${codigo}"`, 'ok');
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
 function verificarDiasPendientes() {
   const diaHoy = new Date().getDate();
   const diasSinCompletar = [];
@@ -623,6 +720,22 @@ let modalAgenteEdicion = null;
 let modalDiaEdicion = null;
 let modalIdxEdicion = null;
 
+function poblarSelectCodigos(select) {
+  if (select.dataset.poblado === '1') return;
+  CODIGOS_VALIDOS.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = `${c} — ${CODIGOS_DESC[c]}`;
+    select.appendChild(opt);
+  });
+  select.dataset.poblado = '1';
+}
+
+function actualizarObsSegunCodigo() {
+  const codigo = $('modal-novedad-codigo').value;
+  $('modal-novedad-obs').value = codigo ? (CODIGOS_DESC[codigo] || '') : '';
+}
+
 function abrirModalEditarNovedad(agente, dia, idx) {
   modalAgenteEdicion = agente;
   modalDiaEdicion = dia;
@@ -633,15 +746,16 @@ function abrirModalEditarNovedad(agente, dia, idx) {
   const codigo = $('modal-novedad-codigo');
   const obs = $('modal-novedad-obs');
   
+  poblarSelectCodigos(codigo);
+  
   sub.textContent = `Día ${dia} — ${agente.apellidosNombres}`;
   codigo.value = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
-  obs.value = agente.observaciones || '';
+  obs.value = codigo.value ? (CODIGOS_DESC[codigo.value] || '') : '';
   
   hide('modal-novedad-error');
   
   modal.style.display = 'flex';
   codigo.focus();
-  codigo.select();
 }
 
 function cerrarModalNovedad() {
@@ -652,14 +766,24 @@ function cerrarModalNovedad() {
   modalIdxEdicion = null;
 }
 
+function actualizarDiaCompletado(dia) {
+  const todosCompletos = (novedadesActuales.agentes || []).length > 0 &&
+    novedadesActuales.agentes.every(a => a.novedadesPorDia && a.novedadesPorDia[String(dia)]);
+  if (!novedadesActuales.diasNoCompletados) novedadesActuales.diasNoCompletados = [];
+  if (todosCompletos) {
+    novedadesActuales.diasNoCompletados = novedadesActuales.diasNoCompletados.filter(d => d !== dia);
+  } else if (!novedadesActuales.diasNoCompletados.includes(dia)) {
+    novedadesActuales.diasNoCompletados.push(dia);
+  }
+}
+
 async function guardarNovedad() {
   if (!modalAgenteEdicion) return;
   
   const codigo = $('modal-novedad-codigo').value.trim();
-  const obs = $('modal-novedad-obs').value.trim();
   
   if (!codigo) {
-    mostrarErrorCodigo('El código no puede estar vacío');
+    mostrarErrorCodigo('Elegí una nomenclatura de la lista');
     return;
   }
   
@@ -671,18 +795,22 @@ async function guardarNovedad() {
     return;
   }
   
+  const obs = CODIGOS_DESC[codigoNorm] || '';
+  
   // Actualizar en memoria
   if (!modalAgenteEdicion.novedadesPorDia) {
     modalAgenteEdicion.novedadesPorDia = {};
   }
   modalAgenteEdicion.novedadesPorDia[String(modalDiaEdicion)] = codigoNorm;
   modalAgenteEdicion.observaciones = obs;
+  actualizarDiaCompletado(modalDiaEdicion);
   
   // Guardar en Firestore
   try {
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
     await window._fb.updateDoc(novedadesRef, {
       agentes: novedadesActuales.agentes,
+      diasNoCompletados: novedadesActuales.diasNoCompletados,
       ultimaModificacion: new Date()
     });
     
@@ -733,13 +861,16 @@ async function llenarSinNovedadHoy() {
       novedadesActuales.agentes.forEach(agente => {
         if (!agente.novedadesPorDia) agente.novedadesPorDia = {};
         agente.novedadesPorDia[String(hoy)] = 'S/N';
+        agente.observaciones = CODIGOS_DESC['S/N'];
       });
     }
+    actualizarDiaCompletado(hoy);
     
     // Guardar en Firestore
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
     await window._fb.updateDoc(novedadesRef, {
       agentes: novedadesActuales.agentes,
+      diasNoCompletados: novedadesActuales.diasNoCompletados,
       ultimaModificacion: new Date()
     });
     
@@ -787,8 +918,38 @@ function mostrarCierreMes(area, periodo, data) {
 
   renderizarTablaSoloLectura($('tabla-cierre-mes'), data, periodo);
 
-  $('cierre-elaborado-por').value = data.elaboradoPor || '';
-  $('cierre-responsable').value = data.responsable || '';
+  if (esAdmin()) {
+    show('cierre-mes-form-admin');
+    $('cierre-mes-form-admin').style.display = 'block';
+    hide('cierre-mes-aviso-usuario');
+    $('cierre-elaborado-por').value = data.elaboradoPor || '';
+    $('cierre-responsable').value = data.responsable || '';
+    cargarListaPersonalParaCierre();
+  } else {
+    hide('cierre-mes-form-admin');
+    show('cierre-mes-aviso-usuario');
+    $('cierre-mes-aviso-usuario').style.display = 'block';
+  }
+}
+
+async function cargarListaPersonalParaCierre() {
+  try {
+    const ref = window._fb.doc(db, 'sistema', 'personal_lis');
+    const snap = await window._fb.getDoc(ref);
+    const datalist = $('lista-personal-lis');
+    if (!datalist) return;
+
+    if (!snap.exists() || !snap.data().lista) {
+      datalist.innerHTML = '';
+      return;
+    }
+
+    datalist.innerHTML = snap.data().lista
+      .map(nombre => `<option value="${nombre.replace(/"/g, '&quot;')}"></option>`)
+      .join('');
+  } catch(e) {
+    console.warn('No se pudo cargar la lista de personal:', e);
+  }
 }
 
 function ocultarPantallaCierreMes() {
@@ -815,6 +976,10 @@ function renderizarTablaSoloLectura(tabla, data, periodo) {
 }
 
 async function cerrarYExportarMes() {
+  if (!esAdmin()) {
+    toast('❌ Solo el administrador puede cerrar el mes y generar el reporte', 'err');
+    return;
+  }
   if (!cierreMesData) return;
   const elaboradoPor = $('cierre-elaborado-por').value.trim();
   const responsable = $('cierre-responsable').value.trim();
@@ -2468,23 +2633,39 @@ async function importarBaseDatos() {
     }
     
     // Parsear filas (saltar encabezado)
+    // Estructura real del LIS: [0]=Código/Nº, [1]=Grado, [2]=Apellidos, [3]=Nombres, [4]=Área actual, [5]=concatenado (ignorado)
     const datos = {};
+    const personalCompleto = []; // lista completa para autocompletar "Elaborado por" / "Responsable"
     for (let i = 1; i < filas.length; i++) {
       const partes = filas[i];
-      if (!partes || partes.length < 6) continue;
+      if (!partes || partes.length < 5 || !String(partes[0]).trim()) continue;
       
-      const area = sanitizarNombreArea(partes[5] || 'SIN ÁREA');
+      const area = sanitizarNombreArea(partes[4] || 'SIN ÁREA');
       if (!datos[area]) datos[area] = [];
       
+      const grado = partes[1] || '';
+      const nombreCompleto = `${partes[2] || ''} ${partes[3] || ''}`.trim();
+
       datos[area].push({
-        numero: partes[0],
-        codigo: partes[1],
-        grado: partes[2],
-        apellidosNombres: partes[3],
-        cedula: partes[4],
+        codigo: partes[0],
+        grado: grado,
+        apellidosNombres: nombreCompleto,
         novedadesPorDia: {},
         observaciones: ''
       });
+
+      personalCompleto.push(`${partes[0]} - ${grado} ${nombreCompleto}`.trim());
+    }
+    
+    // Guardar la lista completa de personal (para los selectores de "Elaborado por" / "Responsable")
+    try {
+      const personalRef = window._fb.doc(db, 'sistema', 'personal_lis');
+      await window._fb.setDoc(personalRef, {
+        lista: personalCompleto,
+        ultimaActualizacion: new Date()
+      });
+    } catch(e) {
+      console.warn('No se pudo guardar la lista de personal:', e);
     }
     
     // Guardar en Firestore — se FUSIONA con lo existente, nunca se sobrescribe
@@ -2503,7 +2684,7 @@ async function importarBaseDatos() {
       const agentesFinal = dataExistente ? [...(dataExistente.agentes || [])] : [];
 
       agentesNuevos.forEach(nuevo => {
-        const yaExiste = nuevo.cedula && agentesFinal.some(a => a.cedula === nuevo.cedula);
+        const yaExiste = nuevo.codigo && agentesFinal.some(a => a.codigo === nuevo.codigo);
         if (!yaExiste) agentesFinal.push(nuevo);
       });
 
@@ -2583,7 +2764,7 @@ async function cargarAccesos() {
           <div style="font-weight:600;font-size:13px;">${data.correo}</div>
           <div style="font-size:11px;color:var(--txt2);">${data.area}</div>
         </div>
-        <button class="btn-acc btn-acc-blue" onclick="editarAcceso('${doc.id}')">✎</button>
+        <button class="btn-acc btn-acc-blue" onclick="editarAcceso('${doc.id}', '${data.correo.replace(/'/g,"\\'")}', '${data.area.replace(/'/g,"\\'")}')">✎</button>
         <button class="btn-acc btn-acc-red" onclick="eliminarAcceso('${doc.id}')">🗑</button>
       `;
       lista.appendChild(div);
@@ -2595,35 +2776,68 @@ async function cargarAccesos() {
   }
 }
 
+let modalAccesoDocIdEdicion = null; // null = creando nuevo, string = editando existente
+
+function poblarSelectAreaAcceso() {
+  const sel = $('modal-acceso-area');
+  if (sel.options.length === 0) {
+    AREAS.forEach(area => {
+      const opt = document.createElement('option');
+      opt.value = area;
+      opt.textContent = area;
+      sel.appendChild(opt);
+    });
+  }
+}
+
 function mostrarFormAcceso() {
-  const correo = prompt('Correo (ej: usuario@cte.ec):');
-  if (!correo) return;
-  
-  const select = document.createElement('select');
-  AREAS.forEach(area => {
-    const opt = document.createElement('option');
-    opt.value = area;
-    opt.textContent = area;
-    select.appendChild(opt);
-  });
-  
-  const modal = document.createElement('div');
-  modal.innerHTML = `
-    <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:10000;">
-      <div style="background:var(--white);border-radius:12px;padding:20px;max-width:400px;">
-        <h3>Nuevo Acceso</h3>
-        <p style="font-size:12px;color:var(--txt2);margin:12px 0;">Selecciona el área para: <strong>${correo}</strong></p>
-        <select id="area-select-modal" class="form-select" style="width:100%;margin-bottom:16px;">
-          ${AREAS.map(a => `<option value="${a}">${a}</option>`).join('')}
-        </select>
-        <div style="display:flex;gap:8px;">
-          <button class="btn-acc btn-acc-ghost" onclick="this.parentElement.parentElement.parentElement.remove()">Cancelar</button>
-          <button class="btn-acc btn-acc-green" onclick="guardarAcceso('${correo}', document.getElementById('area-select-modal').value)">Guardar</button>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
+  modalAccesoDocIdEdicion = null;
+  poblarSelectAreaAcceso();
+  $('modal-acceso-titulo').textContent = 'Nuevo Acceso';
+  $('modal-acceso-sub').textContent = 'Asigná un área a este correo';
+  $('modal-acceso-correo').value = '';
+  $('modal-acceso-correo').disabled = false;
+  $('modal-acceso-area').value = AREAS[0];
+  hide('modal-acceso-error');
+  $('modal-acceso').style.display = 'flex';
+  $('modal-acceso-correo').focus();
+}
+
+function editarAcceso(docId, correoActual, areaActual) {
+  modalAccesoDocIdEdicion = docId;
+  poblarSelectAreaAcceso();
+  $('modal-acceso-titulo').textContent = 'Editar Acceso';
+  $('modal-acceso-sub').textContent = 'Cambiá el área asignada a este correo';
+  $('modal-acceso-correo').value = correoActual || docId;
+  $('modal-acceso-correo').disabled = true; // el correo es el ID del documento, no se cambia acá
+  $('modal-acceso-area').value = areaActual || AREAS[0];
+  hide('modal-acceso-error');
+  $('modal-acceso').style.display = 'flex';
+}
+
+function cerrarModalAcceso() {
+  $('modal-acceso').style.display = 'none';
+  modalAccesoDocIdEdicion = null;
+}
+
+async function confirmarGuardarAcceso() {
+  const correo = $('modal-acceso-correo').value.trim();
+  const area = $('modal-acceso-area').value;
+  const errorEl = $('modal-acceso-error');
+
+  if (!correo || !correo.includes('@')) {
+    errorEl.textContent = 'Ingresá un correo válido';
+    show('modal-acceso-error');
+    return;
+  }
+  if (!area) {
+    errorEl.textContent = 'Elegí un área';
+    show('modal-acceso-error');
+    return;
+  }
+
+  await guardarAcceso(correo, area);
+  cerrarModalAcceso();
 }
 
 async function guardarAcceso(correo, area) {
@@ -2652,7 +2866,6 @@ async function guardarAcceso(correo, area) {
     
     toast(`✅ Acceso ${existente.exists() ? 'actualizado' : 'creado'}`, 'ok');
     cargarAccesos();
-    document.querySelector('div[style*="position:fixed"]').remove();
     
   } catch(e) {
     toast('Error: ' + e.message, 'err');
@@ -2992,26 +3205,6 @@ async function mostrarDetalleCodigo(area, periodo, codigo) {
 ═════════════════════════════════════════ */
 
 
-async function editarAcceso(docId) {
-  const nuevaArea = prompt('Nueva área para este acceso (deja vacío para cancelar):');
-  if (!nuevaArea) return;
-  if (!AREAS.includes(nuevaArea)) {
-    toast('❌ Área no válida. Debe coincidir exactamente con una de las áreas configuradas.', 'err');
-    return;
-  }
-  try {
-    await window._fb.updateDoc(window._fb.doc(db, 'accesos', docId), {
-      area: nuevaArea,
-      ultimaEdicion: new Date()
-    });
-    await registrarEnAuditoria('editar_acceso', nuevaArea, null, null, null, {}, `Acceso ${docId} actualizado a ${nuevaArea}`);
-    toast('✅ Acceso actualizado', 'ok');
-    cargarAccesos();
-  } catch(e) {
-    toast('Error: ' + e.message, 'err');
-  }
-}
-
 /* ══════════════════════════════════
    EXPONER AL HTML
 ══════════════════════════════════ */
@@ -3047,12 +3240,15 @@ window.cerrarYExportarMes           = cerrarYExportarMes;
 window.abrirModalEditarNovedad      = abrirModalEditarNovedad;
 window.cerrarModalNovedad           = cerrarModalNovedad;
 window.guardarNovedad               = guardarNovedad;
+window.actualizarObsSegunCodigo     = actualizarObsSegunCodigo;
 window.mostrarErrorCodigo           = mostrarErrorCodigo;
 window.cerrarErrorCodigo            = cerrarErrorCodigo;
 
 /* Panel Admin — Novedades */
 window.importarBaseDatos            = importarBaseDatos;
 window.mostrarFormAcceso            = mostrarFormAcceso;
+window.cerrarModalAcceso            = cerrarModalAcceso;
+window.confirmarGuardarAcceso       = confirmarGuardarAcceso;
 window.guardarAcceso                = guardarAcceso;
 window.eliminarAcceso               = eliminarAcceso;
 window.editarAcceso                 = editarAcceso;
