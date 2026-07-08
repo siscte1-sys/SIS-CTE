@@ -114,11 +114,40 @@
     <div class="page-hero">
       <h1 class="page-hero-titulo">📋 Novedades Mensuales</h1>
       <p class="page-hero-sub">Registra las novedades diarias de tu área. <strong id="hero-area"></strong> · Mes: <strong id="hero-mes"></strong></p>
+      <div id="admin-selector-area-novedades" style="display:none;margin-top:12px;">
+        <label class="form-label" style="color:#fff;opacity:.85;">Área a gestionar (admin)</label>
+        <select id="select-area-admin-novedades" class="form-select" style="max-width:320px;"></select>
+      </div>
     </div>
 
     <div class="page-body">
+      <!-- SECCIÓN: Cierre de mes anterior pendiente -->
+      <div id="cierre-mes-container" class="panel-white" style="display:none;padding:20px;margin-bottom:20px;border:2px solid var(--blue-m);">
+        <div class="sec-titulo">🔒 Cierre de mes — <span id="cierre-mes-nombre"></span></div>
+        <p style="font-size:12px;color:var(--txt2);margin-bottom:16px;">
+          El mes anterior ya no se puede modificar. Completá los siguientes datos para generar el reporte mensual (Excel y PDF).
+        </p>
+        <div class="tabla-scroll-container" style="margin-bottom:16px;">
+          <table id="tabla-cierre-mes" class="tabla-novedades"></table>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div class="form-field" style="margin-bottom:0;">
+            <label class="form-label">Elaborado por</label>
+            <input type="text" id="cierre-elaborado-por" class="filtro-input" placeholder="Nombre de quien elaboró">
+          </div>
+          <div class="form-field" style="margin-bottom:0;">
+            <label class="form-label">Responsable</label>
+            <input type="text" id="cierre-responsable" class="filtro-input" placeholder="Nombre del responsable">
+          </div>
+        </div>
+        <button class="btn-acc btn-acc-blue" onclick="cerrarYExportarMes()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Cerrar mes y exportar (Excel + PDF)
+        </button>
+      </div>
+
       <!-- SECCIÓN: Info y Controles -->
-      <div class="novedades-top">
+      <div class="novedades-top" id="novedades-top-controles">
         <div class="novedades-info">
           <div class="info-badge">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -135,10 +164,6 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             Sin novedad hoy
           </button>
-          <button class="btn-acc btn-acc-blue" id="btn-exportar-mes" onclick="exportarMesActual()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Exportar
-          </button>
         </div>
       </div>
 
@@ -152,7 +177,6 @@
                 <th style="width:80px">Código</th>
                 <th style="width:100px">Grado</th>
                 <th style="min-width:200px">Apellidos y Nombres</th>
-                <th style="width:110px">Cédula</th>
                 <!-- Días 1-31 se agregan dinámicamente -->
                 <th style="min-width:120px">Observación</th>
               </tr>
