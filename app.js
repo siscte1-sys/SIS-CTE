@@ -521,6 +521,10 @@ function renderizarTablaNovedades(diaHoy) {
               td.style.backgroundColor = '';
             }
           });
+        } else {
+          // Día bloqueado: permitir al usuario solicitar desbloqueo
+          td.title = 'Día bloqueado — clic para solicitar desbloqueo al administrador';
+          td.addEventListener('click', () => solicitarDesbloqueo(dia));
         }
         
         tr.appendChild(td);
@@ -547,6 +551,47 @@ function renderizarTablaNovedades(diaHoy) {
     td.style.color = 'var(--txt3)';
     tr.appendChild(td);
     tbody.appendChild(tr);
+  }
+}
+
+async function solicitarDesbloqueo(dia) {
+  try {
+    // Evitar duplicar una solicitud pendiente para el mismo día/área/usuario
+    const solRef = window._fb.collection(db, 'solicitudes');
+    const q = window._fb.query(
+      solRef,
+      window._fb.where('correoUsuario', '==', usuario.email),
+      window._fb.where('area', '==', areaActual),
+      window._fb.where('mes', '==', mesActual),
+      window._fb.where('dia', '==', dia),
+      window._fb.where('estado', '==', 'pendiente')
+    );
+    const existentes = await window._fb.getDocs(q);
+    if (!existentes.empty) {
+      toast('Ya tenés una solicitud pendiente para ese día. Esperá la respuesta del administrador.', 'ok');
+      return;
+    }
+
+    const razon = prompt(`El día ${dia} está bloqueado. Contale al administrador por qué necesitás editarlo:`);
+    if (!razon) return;
+
+    await window._fb.addDoc(solRef, {
+      area: areaActual,
+      correoUsuario: usuario.email,
+      tipo: 'desbloqueo_dia',
+      dia: dia,
+      mes: mesActual,
+      razon: razon,
+      estado: 'pendiente',
+      fechaSolicitud: new Date(),
+      fechaRespuesta: null,
+      respuestaAdmin: null
+    });
+
+    toast('✅ Solicitud enviada. El administrador la va a revisar.', 'ok');
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error enviando solicitud: ' + e.message, 'err');
   }
 }
 
@@ -2366,6 +2411,11 @@ async function iniciarLimpiezaDuplicados() {
 /* ══════════════════════════════════
    PANEL ADMIN — Novedades (Importar BD, Accesos, Auditoría, Desbloqueos)
 ══════════════════════════════════ */
+function sanitizarNombreArea(area) {
+  // Firestore usa "/" como separador de ruta — no puede ir dentro de un nombre de área
+  return (area || 'SIN ÁREA').replace(/\//g, '-').replace(/\s+/g, ' ').trim();
+}
+
 async function importarBaseDatos() {
   try {
     if (!esAdmin()) {
@@ -2382,29 +2432,48 @@ async function importarBaseDatos() {
     }
     
     if (!fileInput.files || fileInput.files.length === 0) {
-      toast('⚠️ Selecciona un archivo CSV', 'warn');
+      toast('⚠️ Selecciona un archivo CSV o Excel', 'warn');
       return;
     }
     
     toast('⏳ Procesando archivo...', 'ok');
     
-    // Leer CSV
+    // Leer archivo (CSV o Excel) y convertirlo a filas (array de arrays)
     const file = fileInput.files[0];
-    const text = await file.text();
-    const lineas = text.split('\n').filter(l => l.trim());
-    
-    if (lineas.length < 2) {
-      toast('❌ El archivo CSV está vacío o mal formateado', 'err');
+    const esExcel = /\.xlsx?$/i.test(file.name);
+    let filas = [];
+
+    if (esExcel) {
+      if (!window.XLSX) {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+          s.onload = res; s.onerror = rej; document.head.appendChild(s);
+        });
+      }
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const primeraHoja = wb.Sheets[wb.SheetNames[0]];
+      filas = XLSX.utils.sheet_to_json(primeraHoja, { header: 1, defval: '' })
+        .map(fila => fila.map(celda => String(celda ?? '').trim()));
+    } else {
+      const text = await file.text();
+      filas = text.split('\n').filter(l => l.trim())
+        .map(linea => linea.split(',').map(p => p.replace(/^"|"$/g, '').trim()));
+    }
+
+    if (filas.length < 2) {
+      toast('❌ El archivo está vacío o mal formateado', 'err');
       return;
     }
     
-    // Parsear líneas (saltar encabezado)
+    // Parsear filas (saltar encabezado)
     const datos = {};
-    for (let i = 1; i < lineas.length; i++) {
-      const partes = lineas[i].split(',').map(p => p.replace(/^"|"$/g, '').trim());
-      if (partes.length < 6) continue;
+    for (let i = 1; i < filas.length; i++) {
+      const partes = filas[i];
+      if (!partes || partes.length < 6) continue;
       
-      const area = partes[5] || 'SIN ÁREA';
+      const area = sanitizarNombreArea(partes[5] || 'SIN ÁREA');
       if (!datos[area]) datos[area] = [];
       
       datos[area].push({
@@ -2413,23 +2482,38 @@ async function importarBaseDatos() {
         grado: partes[2],
         apellidosNombres: partes[3],
         cedula: partes[4],
-        novedadesPorDia: Array.from({length: 31}, (_, i) => 'S/N').reduce((o, v, i) => ({...o, [String(i+1)]: v}), {}),
+        novedadesPorDia: {},
         observaciones: ''
       });
     }
     
-    // Guardar en Firestore
+    // Guardar en Firestore — se FUSIONA con lo existente, nunca se sobrescribe
+    // (si un agente rota de área a mitad de mes, sigue apareciendo en la anterior
+    //  con lo ya registrado, y se agrega también a la nueva sin perder nada)
     const dateParts = obtenerFechaParts();
     const periodo = dateParts.periodo;
-    
-    for (const [area, agentes] of Object.entries(datos)) {
+    const areasNoReconocidas = [];
+
+    for (const [area, agentesNuevos] of Object.entries(datos)) {
+      if (!AREAS.includes(area)) areasNoReconocidas.push(area);
+
       const novedadesRef = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+      const existente = await window._fb.getDoc(novedadesRef);
+      const dataExistente = existente.exists() ? existente.data() : null;
+      const agentesFinal = dataExistente ? [...(dataExistente.agentes || [])] : [];
+
+      agentesNuevos.forEach(nuevo => {
+        const yaExiste = nuevo.cedula && agentesFinal.some(a => a.cedula === nuevo.cedula);
+        if (!yaExiste) agentesFinal.push(nuevo);
+      });
+
       await window._fb.setDoc(novedadesRef, {
-        agentes: agentes,
-        estado: 'activo',
-        diasBloqueados: [],
-        diasNoCompletados: Array.from({length: 31}, (_, i) => i + 1),
-        fechaCreacion: new Date(),
+        agentes: agentesFinal,
+        estado: dataExistente ? dataExistente.estado : 'activo',
+        diasBloqueados: dataExistente ? (dataExistente.diasBloqueados || []) : [],
+        diasDesbloqueados: dataExistente ? (dataExistente.diasDesbloqueados || []) : [],
+        diasNoCompletados: dataExistente ? dataExistente.diasNoCompletados : Array.from({length: 31}, (_, i) => i + 1),
+        fechaCreacion: dataExistente ? dataExistente.fechaCreacion : new Date(),
         ultimaModificacion: new Date()
       });
     }
@@ -2448,6 +2532,10 @@ async function importarBaseDatos() {
       },
       `Importación de BD: ${coleccion}`
     );
+
+    if (areasNoReconocidas.length > 0) {
+      toast(`⚠️ Estas áreas del CSV no coinciden con la lista AREAS del sistema y no aparecerán en los selectores: ${areasNoReconocidas.join(', ')}`, 'err');
+    }
     
     const resultado = $('import-resultado');
     resultado.innerHTML = `
@@ -2540,17 +2628,29 @@ function mostrarFormAcceso() {
 
 async function guardarAcceso(correo, area) {
   try {
-    await window._fb.addDoc(window._fb.collection(db, 'accesos'), {
-      correo: correo.toLowerCase(),
+    const correoNorm = correo.toLowerCase().trim();
+    // Un solo registro por correo (usando el correo como ID) — si la persona ya tenía
+    // acceso y rota de área, esto ACTUALIZA su área en vez de crear un duplicado.
+    const accesoRef = window._fb.doc(db, 'accesos', correoNorm);
+    const existente = await window._fb.getDoc(accesoRef);
+
+    await window._fb.setDoc(accesoRef, {
+      correo: correoNorm,
       area: area,
       estado: true,
-      fechaCreacion: new Date(),
+      fechaCreacion: existente.exists() ? existente.data().fechaCreacion : new Date(),
       ultimaEdicion: new Date()
     });
+
+    await registrarEnAuditoria(
+      existente.exists() ? 'editar_acceso' : 'crear_acceso',
+      area, correoNorm, null, null, {},
+      existente.exists()
+        ? `Área actualizada: ${correoNorm} → ${area} (antes: ${existente.data().area})`
+        : `Nuevo acceso: ${correoNorm} → ${area}`
+    );
     
-    await registrarEnAuditoria('crear_acceso', area, correo, null, null, {}, `Nuevo acceso: ${correo} → ${area}`);
-    
-    toast('✅ Acceso creado', 'ok');
+    toast(`✅ Acceso ${existente.exists() ? 'actualizado' : 'creado'}`, 'ok');
     cargarAccesos();
     document.querySelector('div[style*="position:fixed"]').remove();
     
@@ -2674,6 +2774,7 @@ async function cargarDesbloqueos() {
           <div>
             <div style="font-weight:600;">${badge} ${data.correoUsuario}</div>
             <div style="font-size:11px;color:var(--txt2);">${data.area} — ${data.tipo === 'desbloqueo_dia' ? 'Día ' + data.dia : 'Mes ' + data.mes}</div>
+            ${data.razon ? `<div style="font-size:11px;color:var(--txt3);margin-top:2px;">"${data.razon}"</div>` : ''}
           </div>
           ${data.estado === 'pendiente' ? `
             <div style="display:flex;gap:6px;">
