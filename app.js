@@ -306,19 +306,38 @@ function obtenerPeriodoAnterior(periodo) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+async function obtenerAreasNovedades() {
+  try {
+    const ref = window._fb.doc(db, 'sistema', 'areas_novedades');
+    const snap = await window._fb.getDoc(ref);
+    if (snap.exists() && snap.data().lista && snap.data().lista.length > 0) {
+      return snap.data().lista;
+    }
+  } catch(e) {
+    console.warn('No se pudo obtener la lista real de áreas, usando AREAS por defecto:', e);
+  }
+  return AREAS; // respaldo si todavía no se importó nada
+}
+
 async function poblarSelectorAreaAdmin() {
   const cont = $('admin-selector-area-novedades');
   const sel = $('select-area-admin-novedades');
   if (!cont || !sel) return;
   show('admin-selector-area-novedades');
   cont.style.display = 'block';
-  if (sel.options.length === 0) {
-    AREAS.forEach(a => {
+
+  const areasReales = await obtenerAreasNovedades();
+
+  if (sel.dataset.poblado !== '1') {
+    sel.innerHTML = '';
+    areasReales.forEach(a => {
       const opt = document.createElement('option');
       opt.value = a; opt.textContent = a;
       sel.appendChild(opt);
     });
-    sel.value = areaActual || AREAS[0];
+    sel.dataset.poblado = '1';
+    if (!areaActual || !areasReales.includes(areaActual)) areaActual = areasReales[0];
+    sel.value = areaActual;
     sel.addEventListener('change', () => {
       areaActual = sel.value;
       cargarNovedadesActuales();
@@ -336,7 +355,6 @@ async function cargarNovedadesActuales() {
 
     if (esAdmin()) {
       // El admin tiene acceso total: elige el área a gestionar, sin requerir estar en "accesos"
-      if (!areaActual) areaActual = AREAS[0];
       await poblarSelectorAreaAdmin();
     } else {
       hide('admin-selector-area-novedades');
@@ -1319,6 +1337,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'auditoria')   cargarAuditoria();
       if (tabName === 'desbloqueos') cargarDesbloqueos();
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
+      if (tabName === 'importar') poblarSelectoresLimpieza();
     });
   });
 
@@ -2667,17 +2686,30 @@ async function importarBaseDatos() {
     } catch(e) {
       console.warn('No se pudo guardar la lista de personal:', e);
     }
+
+    // Guardar la lista real de áreas de Novedades encontradas (para el selector del admin
+    // y el Resumen General — la lista fija AREAS es de Envíos y no coincide con el LIS)
+    try {
+      const areasRef = window._fb.doc(db, 'sistema', 'areas_novedades');
+      const areasSnap = await window._fb.getDoc(areasRef);
+      const areasPrevias = areasSnap.exists() ? (areasSnap.data().lista || []) : [];
+      const areasNuevas = Object.keys(datos);
+      const areasUnion = Array.from(new Set([...areasPrevias, ...areasNuevas])).sort();
+      await window._fb.setDoc(areasRef, {
+        lista: areasUnion,
+        ultimaActualizacion: new Date()
+      });
+    } catch(e) {
+      console.warn('No se pudo guardar la lista de áreas:', e);
+    }
     
     // Guardar en Firestore — se FUSIONA con lo existente, nunca se sobrescribe
     // (si un agente rota de área a mitad de mes, sigue apareciendo en la anterior
     //  con lo ya registrado, y se agrega también a la nueva sin perder nada)
     const dateParts = obtenerFechaParts();
     const periodo = dateParts.periodo;
-    const areasNoReconocidas = [];
 
     for (const [area, agentesNuevos] of Object.entries(datos)) {
-      if (!AREAS.includes(area)) areasNoReconocidas.push(area);
-
       const novedadesRef = window._fb.doc(db, 'novedades', area, periodo, 'datos');
       const existente = await window._fb.getDoc(novedadesRef);
       const dataExistente = existente.exists() ? existente.data() : null;
@@ -2714,10 +2746,6 @@ async function importarBaseDatos() {
       `Importación de BD: ${coleccion}`
     );
 
-    if (areasNoReconocidas.length > 0) {
-      toast(`⚠️ Estas áreas del CSV no coinciden con la lista AREAS del sistema y no aparecerán en los selectores: ${areasNoReconocidas.join(', ')}`, 'err');
-    }
-    
     const resultado = $('import-resultado');
     resultado.innerHTML = `
       ✅ <strong>Importación exitosa</strong><br>
@@ -2731,6 +2759,87 @@ async function importarBaseDatos() {
     
   } catch(e) {
     console.error('Error importando:', e);
+    toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
+/* ═════════════════════════════════════════
+   PANEL ADMIN — Corregir/Eliminar datos de un área+mes
+═════════════════════════════════════════ */
+
+async function poblarSelectoresLimpieza() {
+  const selArea = $('limpiar-area');
+  const selMes = $('limpiar-mes');
+  const selAnio = $('limpiar-anio');
+  if (!selArea || !selMes || !selAnio) return;
+
+  const areasReales = await obtenerAreasNovedades();
+  selArea.innerHTML = areasReales.map(a => `<option value="${a}">${a}</option>`).join('');
+
+  if (selMes.options.length === 0) {
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    meses.forEach((m, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i + 1).padStart(2, '0');
+      opt.textContent = m;
+      selMes.appendChild(opt);
+    });
+  }
+  if (selAnio.options.length === 0) {
+    const anioActual = new Date().getFullYear();
+    for (let a = anioActual - 1; a <= anioActual + 1; a++) {
+      const opt = document.createElement('option');
+      opt.value = String(a);
+      opt.textContent = String(a);
+      selAnio.appendChild(opt);
+    }
+  }
+  const hoy = obtenerFechaParts();
+  selMes.value = hoy.mes;
+  selAnio.value = String(new Date().getFullYear());
+}
+
+async function eliminarNovedadesAreaMes() {
+  const area = $('limpiar-area').value;
+  const mes = $('limpiar-mes').value;
+  const anio = $('limpiar-anio').value;
+  if (!area || !mes || !anio) { toast('Elegí área, mes y año', 'err'); return; }
+  const periodo = `${anio}-${mes}`;
+
+  const confirmacion = prompt(
+    `Esto va a BORRAR PERMANENTEMENTE todas las novedades de:\n\n` +
+    `Área: ${area}\nMes: ${periodo}\n\n` +
+    `Esta acción no se puede deshacer. Escribí BORRAR para confirmar:`
+  );
+  if (confirmacion !== 'BORRAR') {
+    toast('Cancelado — no se borró nada', 'ok');
+    return;
+  }
+
+  try {
+    const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+    const snap = await window._fb.getDoc(ref);
+    if (!snap.exists()) {
+      toast('No había datos guardados para esa área/mes', 'ok');
+      return;
+    }
+    const cantidadAgentes = (snap.data().agentes || []).length;
+
+    await window._fb.deleteDoc(ref);
+
+    await registrarEnAuditoria(
+      'eliminar_novedades_area_mes', area, usuario.email, null, periodo,
+      { cantidadAgentes },
+      `Eliminación manual: ${area} — ${periodo} (${cantidadAgentes} agentes)`
+    );
+
+    toast(`✅ Se eliminaron los datos de ${area} — ${periodo}`, 'ok');
+
+    // Si era el área/mes que estaba viendo en pantalla, recargar
+    if (areaActual === area && mesActual === periodo) cargarNovedadesActuales();
+
+  } catch(e) {
+    console.error(e);
     toast('❌ Error: ' + e.message, 'err');
   }
 }
@@ -3103,7 +3212,8 @@ async function cargarResumenGeneral() {
   const filasPorArea = [];
   const totales = { total: 0, 'S/N':0, 'OA':0, 'X':0, 'CS':0, 'B':0, 'Li':0, 'V':0, 'PE':0 };
 
-  for (const area of AREAS) {
+  const areasReales = await obtenerAreasNovedades();
+  for (const area of areasReales) {
     try {
       const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
       const snap = await window._fb.getDoc(ref);
@@ -3246,6 +3356,7 @@ window.cerrarErrorCodigo            = cerrarErrorCodigo;
 
 /* Panel Admin — Novedades */
 window.importarBaseDatos            = importarBaseDatos;
+window.eliminarNovedadesAreaMes     = eliminarNovedadesAreaMes;
 window.mostrarFormAcceso            = mostrarFormAcceso;
 window.cerrarModalAcceso            = cerrarModalAcceso;
 window.confirmarGuardarAcceso       = confirmarGuardarAcceso;
