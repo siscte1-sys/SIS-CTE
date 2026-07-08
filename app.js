@@ -427,7 +427,7 @@ async function cargarNovedadesActuales() {
     }
 
     // Renderizar tabla
-    renderizarTablaNov edades(diaHoy);
+    renderizarTablaNovedades(diaHoy);
     
     // Verificar días pendientes
     verificarDiasPendientes();
