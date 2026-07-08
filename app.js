@@ -51,14 +51,14 @@ const AREAS = [
 ];
 
 /* ── Códigos de Novedad (8 exactos) ─────────────────── */
-const CODIGOS_VALIDOS = ["S/N", "UTA", "X", "CS", "B", "L", "V", "PE"];
+const CODIGOS_VALIDOS = ["S/N", "OA", "X", "CS", "B", "Li", "V", "PE"];
 const CODIGOS_DESC = {
   "S/N": "SIN NOVEDAD (normal)",
-  "UTA": "UTA ÁREA — Formulario Único de Traslado (FUT)",
+  "OA":  "OTRA ÁREA — Formulario Único de Traslado (FUT)",
   "X":   "AUSENCIA INJUSTIFICADA",
   "CS":  "COMISIÓN DE SERVICIO",
-  "B":   "BAJA (Fallecido, Destitucion, Renuncia)",
-  "L":   "LICENCIA (Paternidad, Matrimonio, Calamidad, Maternidad)",
+  "B":   "BAJA (Fallecido, Destitución, Renuncia)",
+  "Li":  "LICENCIA (Paternidad, Matrimonio, Calamidad, Maternidad)",
   "V":   "VACACIONES",
   "PE":  "PERMISO"
 };
@@ -1108,6 +1108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'accesos')     cargarAccesos();
       if (tabName === 'auditoria')   cargarAuditoria();
       if (tabName === 'desbloqueos') cargarDesbloqueos();
+      if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
     });
   });
 
@@ -2743,6 +2744,149 @@ async function rechazarDesbloqueo(docId) {
 }
 
 /* ═════════════════════════════════════════
+   PANEL ADMIN — Resumen General de Novedades
+═════════════════════════════════════════ */
+
+function poblarSelectoresResumen() {
+  const selMes = $('resumen-mes');
+  const selAnio = $('resumen-anio');
+  if (!selMes || !selAnio) return;
+
+  if (selMes.options.length === 0) {
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    meses.forEach((m, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i + 1).padStart(2, '0');
+      opt.textContent = m;
+      selMes.appendChild(opt);
+    });
+  }
+  if (selAnio.options.length === 0) {
+    const anioActual = new Date().getFullYear();
+    for (let a = anioActual - 1; a <= anioActual + 1; a++) {
+      const opt = document.createElement('option');
+      opt.value = String(a);
+      opt.textContent = String(a);
+      selAnio.appendChild(opt);
+    }
+  }
+
+  const hoy = obtenerFechaParts();
+  selMes.value = hoy.mes;
+  selAnio.value = String(new Date().getFullYear());
+}
+
+async function cargarResumenGeneral() {
+  const mes = $('resumen-mes').value;
+  const anio = $('resumen-anio').value;
+  if (!mes || !anio) { toast('Elegí mes y año', 'err'); return; }
+  const periodo = `${anio}-${mes}`;
+
+  const tbody = $('resumen-tabla-body');
+  tbody.innerHTML = `<tr><td colspan="11" class="td-vacio">Cargando...</td></tr>`;
+  hide('resumen-detalle-container');
+
+  const filasPorArea = [];
+  const totales = { total: 0, 'S/N':0, 'OA':0, 'X':0, 'CS':0, 'B':0, 'Li':0, 'V':0, 'PE':0 };
+
+  for (const area of AREAS) {
+    try {
+      const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+      const snap = await window._fb.getDoc(ref);
+      if (!snap.exists()) continue;
+      const data = snap.data();
+      const agentes = data.agentes || [];
+      if (agentes.length === 0) continue;
+
+      const conteo = { 'S/N':0, 'OA':0, 'X':0, 'CS':0, 'B':0, 'Li':0, 'V':0, 'PE':0 };
+      agentes.forEach(agente => {
+        const dias = agente.novedadesPorDia || {};
+        Object.values(dias).forEach(codigo => {
+          if (conteo.hasOwnProperty(codigo)) conteo[codigo]++;
+        });
+      });
+
+      filasPorArea.push({
+        area,
+        responsable: data.responsable || data.elaboradoPor || '—',
+        totalPersonal: agentes.length,
+        conteo,
+        periodo
+      });
+
+      totales.total += agentes.length;
+      CODIGOS_VALIDOS.forEach(c => { totales[c] += conteo[c]; });
+
+    } catch(e) {
+      console.warn(`Sin datos de ${area} para ${periodo}`);
+    }
+  }
+
+  if (filasPorArea.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" class="td-vacio">No hay novedades registradas para ese mes</td></tr>`;
+    return;
+  }
+
+  let html = '';
+  filasPorArea.forEach(fila => {
+    html += `<tr>
+      <td>${fila.area}</td>
+      <td>${fila.responsable}</td>
+      <td style="text-align:center">${fila.totalPersonal}</td>
+      ${CODIGOS_VALIDOS.map(c => `<td style="text-align:center;cursor:pointer;text-decoration:underline;" onclick="mostrarDetalleCodigo('${fila.area.replace(/'/g,"\\'")}','${fila.periodo}','${c}')">${fila.conteo[c]}</td>`).join('')}
+    </tr>`;
+  });
+
+  html += `<tr style="font-weight:700;background:var(--bg);">
+    <td>TOTAL GENERAL</td><td></td>
+    <td style="text-align:center">${totales.total}</td>
+    ${CODIGOS_VALIDOS.map(c => `<td style="text-align:center">${totales[c]}</td>`).join('')}
+  </tr>`;
+
+  tbody.innerHTML = html;
+}
+
+async function mostrarDetalleCodigo(area, periodo, codigo) {
+  try {
+    const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+    const snap = await window._fb.getDoc(ref);
+    if (!snap.exists()) return;
+    const agentes = snap.data().agentes || [];
+
+    const filas = [];
+    agentes.forEach(agente => {
+      const dias = agente.novedadesPorDia || {};
+      const cantidad = Object.values(dias).filter(c => c === codigo).length;
+      if (cantidad > 0) {
+        filas.push({ area, codigo: agente.codigo || '', grado: agente.grado || '', nombre: agente.apellidosNombres || '', cantidad });
+      }
+    });
+
+    $('resumen-detalle-titulo').textContent = `Detalle — ${area} — Código "${codigo}" (${CODIGOS_DESC[codigo] || ''})`;
+
+    if (filas.length === 0) {
+      $('resumen-detalle-body').innerHTML = `<tr><td colspan="5" class="td-vacio">Sin registros</td></tr>`;
+    } else {
+      $('resumen-detalle-body').innerHTML = filas.map(f => `
+        <tr>
+          <td>${f.area}</td><td>${f.codigo}</td><td>${f.grado}</td><td>${f.nombre}</td>
+          <td style="text-align:center">${f.cantidad}</td>
+        </tr>`).join('') + `
+        <tr style="font-weight:700;background:var(--bg);">
+          <td colspan="4">TOTAL DE PERSONAS CON "${codigo}"</td>
+          <td style="text-align:center">${filas.length}</td>
+        </tr>`;
+    }
+
+    show('resumen-detalle-container');
+    $('resumen-detalle-container').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  } catch(e) {
+    toast('Error: ' + e.message, 'err');
+  }
+}
+
+/* ═════════════════════════════════════════
    ENVÍOS (Funciones del sistema actual)
 ═════════════════════════════════════════ */
 
@@ -2815,6 +2959,8 @@ window.filtrarAuditoria             = filtrarAuditoria;
 window.limpiarAuditoria             = limpiarAuditoria;
 window.aprobarDesbloqueo            = aprobarDesbloqueo;
 window.rechazarDesbloqueo           = rechazarDesbloqueo;
+window.cargarResumenGeneral         = cargarResumenGeneral;
+window.mostrarDetalleCodigo         = mostrarDetalleCodigo;
 
 /* ══════════════════════════════════
    MODO OSCURO / CLARO
