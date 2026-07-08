@@ -437,6 +437,14 @@ function renderizarTablaNovedades(diaHoy) {
   const tabla = $('tabla-novedades');
   const thead = tabla.querySelector('thead tr');
   const tbody = $('tabla-novedades-body');
+
+  // Detectar si hay agentes duplicados (mismo código) — solo relevante para admin
+  const btnCombinar = $('btn-combinar-duplicados');
+  if (btnCombinar) {
+    const codigos = (novedadesActuales.agentes || []).map(a => String(a.codigo || '').trim()).filter(Boolean);
+    const hayDuplicados = new Set(codigos).size !== codigos.length;
+    btnCombinar.style.display = (esAdmin() && hayDuplicados) ? 'inline-flex' : 'none';
+  }
   
   // Limpiar cabecera (mantener primeras 5 columnas)
   const colsFijas = 4;
@@ -704,6 +712,86 @@ async function aplicarCodigoRapido(idx, dia, codigo) {
     renderizarTablaNovedades(new Date().getDate());
     verificarDiasPendientes();
     toast(`✅ Marcado como "${codigo}"`, 'ok');
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
+async function combinarDuplicadosArea() {
+  const agentes = novedadesActuales.agentes || [];
+  const grupos = {};
+  agentes.forEach(a => {
+    const clave = String(a.codigo || '').trim();
+    if (!clave) return;
+    if (!grupos[clave]) grupos[clave] = [];
+    grupos[clave].push(a);
+  });
+
+  const duplicados = Object.entries(grupos).filter(([, lista]) => lista.length > 1);
+  if (duplicados.length === 0) {
+    toast('No se encontraron duplicados en esta área', 'ok');
+    return;
+  }
+
+  const resumen = duplicados.map(([cod, lista]) => `Código ${cod}: ${lista.length} registros`).join('\n');
+  const confirmar = confirm(
+    `Se van a combinar estos duplicados en un solo registro por agente, uniendo los días que cada uno tenga cargados:\n\n${resumen}\n\n¿Confirmás?`
+  );
+  if (!confirmar) return;
+
+  try {
+    const agentesFinal = [];
+    const yaProcesados = new Set();
+
+    agentes.forEach(a => {
+      const clave = String(a.codigo || '').trim();
+      if (!clave || yaProcesados.has(clave)) return;
+      yaProcesados.add(clave);
+
+      const grupo = grupos[clave];
+      if (grupo.length === 1) {
+        agentesFinal.push(a);
+        return;
+      }
+
+      // Fusionar: preferir el nombre/grado más largo (más completo),
+      // y unir los días cargados de todas las copias (el valor no vacío gana)
+      const base = grupo.reduce((mejor, actual) =>
+        (actual.apellidosNombres || '').length > (mejor.apellidosNombres || '').length ? actual : mejor
+      );
+      const novedadesPorDiaUnidas = {};
+      grupo.forEach(g => {
+        Object.entries(g.novedadesPorDia || {}).forEach(([dia, val]) => {
+          if (val && !novedadesPorDiaUnidas[dia]) novedadesPorDiaUnidas[dia] = val;
+        });
+      });
+      const observacionUnida = grupo.map(g => g.observaciones).find(o => o) || '';
+
+      agentesFinal.push({
+        codigo: base.codigo,
+        grado: base.grado,
+        apellidosNombres: base.apellidosNombres,
+        novedadesPorDia: novedadesPorDiaUnidas,
+        observaciones: observacionUnida
+      });
+    });
+
+    const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
+    await window._fb.updateDoc(novedadesRef, {
+      agentes: agentesFinal,
+      ultimaModificacion: new Date()
+    });
+
+    await registrarEnAuditoria(
+      'combinar_duplicados', areaActual, usuario.email, null, mesActual,
+      { antes: agentes.length, despues: agentesFinal.length },
+      `Duplicados combinados en ${areaActual}: ${agentes.length} → ${agentesFinal.length} agentes`
+    );
+
+    toast(`✅ Combinado: ${agentes.length} registros → ${agentesFinal.length} agentes`, 'ok');
+    cargarNovedadesActuales();
+
   } catch(e) {
     console.error(e);
     toast('❌ Error: ' + e.message, 'err');
@@ -2716,7 +2804,7 @@ async function importarBaseDatos() {
       const agentesFinal = dataExistente ? [...(dataExistente.agentes || [])] : [];
 
       agentesNuevos.forEach(nuevo => {
-        const yaExiste = nuevo.codigo && agentesFinal.some(a => a.codigo === nuevo.codigo);
+        const yaExiste = nuevo.codigo && agentesFinal.some(a => String(a.codigo).trim() === String(nuevo.codigo).trim());
         if (!yaExiste) agentesFinal.push(nuevo);
       });
 
@@ -3346,6 +3434,7 @@ window.abrirCarpetaArea             = abrirCarpetaArea;
 /* Novedades */
 window.irNovedades                  = irNovedades;
 window.llenarSinNovedadHoy          = llenarSinNovedadHoy;
+window.combinarDuplicadosArea       = combinarDuplicadosArea;
 window.cerrarYExportarMes           = cerrarYExportarMes;
 window.abrirModalEditarNovedad      = abrirModalEditarNovedad;
 window.cerrarModalNovedad           = cerrarModalNovedad;
