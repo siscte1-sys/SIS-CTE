@@ -556,6 +556,32 @@
             </div>
           </div>
         </div>
+
+        <div class="panel-white" style="border:2px solid var(--red);">
+          <div style="padding:20px;">
+            <div class="sec-titulo" style="color:var(--red);">⚠️ Corregir / Eliminar datos de un área y mes específico</div>
+            <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
+              Usá esto si una importación se duplicó o se cargó mal. Borra <strong>solo</strong> los datos de Novedades del área y mes que elijas — no afecta otras áreas ni otros meses.
+            </p>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:12px;align-items:end;">
+              <div class="form-field" style="margin-bottom:0;">
+                <label class="form-label">Área</label>
+                <select id="limpiar-area" class="form-select"></select>
+              </div>
+              <div class="form-field" style="margin-bottom:0;">
+                <label class="form-label">Mes</label>
+                <select id="limpiar-mes" class="filtro-select"></select>
+              </div>
+              <div class="form-field" style="margin-bottom:0;">
+                <label class="form-label">Año</label>
+                <select id="limpiar-anio" class="filtro-select"></select>
+              </div>
+              <button class="btn-acc btn-acc-red" onclick="eliminarNovedadesAreaMes()" style="height:38px;">
+                🗑️ Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- TAB 2: Accesos -->
