@@ -753,6 +753,34 @@
 
       <!-- TAB 4: Desbloqueos -->
       <div id="admin-tab-desbloqueos" class="admin-tab-content" style="display:none">
+        <div class="panel-white" style="border:2px solid var(--blue-m);margin-bottom:16px;">
+          <div style="padding:20px;">
+            <div class="sec-titulo">🔓 Desbloqueo directo (sin esperar solicitud)</div>
+            <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
+              Como admin podés habilitar la edición de un día puntual para cualquier área y mes — incluso si el mes ya cerró (días 28 al 31) y ya pasó al mes siguiente. El usuario va a poder editar <strong>solo ese día</strong>; en cuanto guarde el cambio, se vuelve a bloquear solo y reaparece el botón de generar el reporte.
+            </p>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:end;">
+              <div class="form-field" style="margin-bottom:0;">
+                <label class="form-label">Área</label>
+                <select id="desbloqueo-directo-area" class="form-select"></select>
+              </div>
+              <div class="form-field" style="margin-bottom:0;">
+                <label class="form-label">Mes</label>
+                <select id="desbloqueo-directo-mes" class="filtro-select"></select>
+              </div>
+              <div class="form-field" style="margin-bottom:0;">
+                <label class="form-label">Año</label>
+                <select id="desbloqueo-directo-anio" class="filtro-select"></select>
+              </div>
+              <div class="form-field" style="margin-bottom:0;">
+                <label class="form-label">Día</label>
+                <select id="desbloqueo-directo-dia" class="filtro-select"></select>
+              </div>
+              <button class="btn-acc btn-acc-green" onclick="desbloquearDiaDirecto()" style="height:38px;">🔓 Desbloquear</button>
+            </div>
+          </div>
+        </div>
+
         <div class="panel-white">
           <div style="padding:20px;">
             <div class="sec-titulo">Solicitudes de Desbloqueo</div>
@@ -794,6 +822,7 @@
               <select id="resumen-anio" class="filtro-select"></select>
             </div>
             <button class="btn-acc btn-acc-blue" onclick="cargarResumenGeneral()" style="margin-top:18px;">Generar resumen</button>
+            <button class="btn-acc btn-acc-green" onclick="exportarResumenGeneralExcel()" style="margin-top:18px;">📥 Exportar a Excel</button>
           </div>
         </div>
 
