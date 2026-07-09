@@ -2997,14 +2997,25 @@ async function importarBaseDatos() {
     // Guardar cada persona en la colección plana 'personal' (visor paginado/editable del admin)
     resultado.innerHTML = '⏳ Guardando el directorio de personal...';
     const tamanioLotePersonal = 100;
+    let personalGuardados = 0;
+    let personalErrorEjemplo = null;
     for (let i = 0; i < registrosPersonal.length; i += tamanioLotePersonal) {
       const lote = registrosPersonal.slice(i, i + tamanioLotePersonal);
-      await Promise.all(lote.map(reg =>
+      const resultados = await Promise.allSettled(lote.map(reg =>
         window._fb.setDoc(window._fb.doc(db, 'personal', reg.codigo), {
           ...reg,
           ultimaActualizacion: new Date()
-        }, { merge: true }).catch(() => {})
+        }, { merge: true })
       ));
+      resultados.forEach(r => {
+        if (r.status === 'fulfilled') personalGuardados++;
+        else if (!personalErrorEjemplo) personalErrorEjemplo = r.reason;
+      });
+      resultado.innerHTML = `⏳ Guardando el directorio de personal... ${Math.min(i + tamanioLotePersonal, registrosPersonal.length)} / ${registrosPersonal.length}`;
+    }
+    if (personalErrorEjemplo) {
+      console.error('Error guardando el directorio de personal:', personalErrorEjemplo);
+      toast(`⚠️ Se guardaron ${personalGuardados}/${registrosPersonal.length} registros en la Base de Personal. Hubo errores — revisá los permisos de Firestore para la colección "personal". Detalle: ${personalErrorEjemplo.message || personalErrorEjemplo}`, 'err');
     }
     
     // Guardar en Firestore — se FUSIONA con lo existente, nunca se sobrescribe
@@ -3061,7 +3072,8 @@ async function importarBaseDatos() {
       ✅ <strong>Importación exitosa</strong><br>
       Colección: ${coleccion}<br>
       Áreas: ${Object.keys(datos).length}<br>
-      Registros: ${Object.values(datos).reduce((sum, arr) => sum + arr.length, 0)}
+      Registros en Novedades: ${Object.values(datos).reduce((sum, arr) => sum + arr.length, 0)}<br>
+      Registros en Base de Personal: ${personalGuardados} / ${registrosPersonal.length}${personalErrorEjemplo ? ' ⚠️ (hubo errores, ver arriba)' : ' ✅'}
     `;
     show('import-resultado');
     
