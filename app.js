@@ -1323,10 +1323,10 @@ async function cerrarYExportarMes() {
 ═════════════════════════════════════════ */
 
 async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, responsable) {
-  if (!window.XLSX) {
+  if (!window.ExcelJS) {
     await new Promise((res, rej) => {
       const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
       s.onload = res; s.onerror = rej; document.head.appendChild(s);
     });
   }
@@ -1336,58 +1336,130 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   const nombreMes = obtenerNombreMes(mesNum);
   const numCols = 3 + 31 + 1; // código, grado, nombres + 31 días + observación
 
-  const aoa = [];
-  aoa.push(['COMISIÓN DE TRÁNSITO DEL ECUADOR — CONTROL DE NOVEDADES MENSUAL']);
-  aoa.push([`ÁREA: ${area}   ·   MES: ${nombreMes} ${anio}`]);
-  aoa.push([]);
+  // Colores de la plantilla oficial
+  const NAVY = 'FF1F3864';
+  const AMARILLO = 'FFFFFF00';
+  const VERDE_CLARO = 'FFD9EAD3';
+  const BLANCO = 'FFFFFFFF';
 
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Novedades');
+
+  ws.columns = [
+    { width: 8 }, { width: 12 }, { width: 30 },
+    ...Array.from({ length: 31 }, () => ({ width: 4 })),
+    { width: 22 }
+  ];
+
+  const estiloNavy = (cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+    cell.font = { color: { argb: BLANCO }, bold: true };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  };
+  const estiloAmarillo = (cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMARILLO } };
+    cell.alignment = { horizontal: 'center' };
+  };
+
+  // ── Título ──
+  ws.mergeCells(1, 1, 1, numCols);
+  const tituloCell = ws.getCell(1, 1);
+  tituloCell.value = 'COMISIÓN DE TRÁNSITO DEL ECUADOR — CONTROL DE NOVEDADES MENSUAL';
+  estiloNavy(tituloCell);
+  ws.getRow(1).height = 22;
+
+  // ── Área ──
+  ws.mergeCells(2, 1, 2, numCols);
+  const areaCell = ws.getCell(2, 1);
+  areaCell.value = `ÁREA: ${area}   ·   MES: ${nombreMes.toUpperCase()} ${anio}`;
+  estiloNavy(areaCell);
+
+  ws.addRow([]);
+
+  // ── Encabezado de columnas ──
   const headerRow = ['CÓDIGO', 'GRADO', 'APELLIDOS Y NOMBRES'];
   for (let d = 1; d <= 31; d++) headerRow.push(d);
   headerRow.push('OBSERVACIÓN');
-  aoa.push(headerRow);
+  const filaHeader = ws.addRow(headerRow);
+  filaHeader.eachCell(c => estiloNavy(c));
 
+  // ── Filas de agentes — días en amarillo (zona de datos, como la plantilla) ──
   (data.agentes || []).forEach(agente => {
     const fila = [agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= 31; d++) {
-      if (d > totalDias) { fila.push(''); continue; }
-      fila.push((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '');
+      fila.push(d > totalDias ? '' : ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || ''));
     }
     fila.push(agente.observaciones || '');
-    aoa.push(fila);
+    const row = ws.addRow(fila);
+
+    row.getCell(1).alignment = { horizontal: 'center' };
+    row.getCell(2).alignment = { horizontal: 'left' };
+    row.getCell(3).alignment = { horizontal: 'left' };
+    for (let d = 1; d <= 31; d++) {
+      const cell = row.getCell(3 + d);
+      if (d > totalDias) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+      } else {
+        estiloAmarillo(cell);
+      }
+    }
+    row.getCell(numCols).alignment = { horizontal: 'left' };
   });
 
-  aoa.push([]);
-  aoa.push(['NOMENCLATURA']);
-  CODIGOS_VALIDOS.forEach(c => aoa.push([c, CODIGOS_DESC[c]]));
-  aoa.push([]);
-  aoa.push(['NOTA: Para meses de 28, 29 o 30 días, se dejan en blanco las columnas de los días que no existen en ese mes.']);
-  aoa.push([]);
-  aoa.push(['CERTIFICACIÓN']);
-  aoa.push(['ELABORADO POR', '', 'RESPONSABLE']);
-  aoa.push([elaboradoPor, '', responsable]);
+  ws.addRow([]);
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // ── Nomenclatura ──
+  ws.mergeCells(ws.rowCount + 1, 1, ws.rowCount + 1, numCols);
+  const filaNomTitulo = ws.getRow(ws.rowCount);
+  filaNomTitulo.getCell(1).value = 'NOMENCLATURA';
+  filaNomTitulo.eachCell({ includeEmpty: true }, c => estiloNavy(c));
 
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: numCols - 1 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: numCols - 1 } },
-  ];
-  const filaNomenclatura = 4 + (data.agentes || []).length + 1;
-  ws['!merges'].push({ s: { r: filaNomenclatura, c: 0 }, e: { r: filaNomenclatura, c: numCols - 1 } });
-  const filaNota = filaNomenclatura + CODIGOS_VALIDOS.length + 1;
-  ws['!merges'].push({ s: { r: filaNota, c: 0 }, e: { r: filaNota, c: numCols - 1 } });
-  const filaCertTitulo = filaNota + 2;
-  ws['!merges'].push({ s: { r: filaCertTitulo, c: 0 }, e: { r: filaCertTitulo, c: numCols - 1 } });
-  ws['!merges'].push({ s: { r: filaCertTitulo + 1, c: 0 }, e: { r: filaCertTitulo + 1, c: 1 } });
-  ws['!merges'].push({ s: { r: filaCertTitulo + 1, c: 2 }, e: { r: filaCertTitulo + 1, c: numCols - 1 } });
-  ws['!merges'].push({ s: { r: filaCertTitulo + 2, c: 0 }, e: { r: filaCertTitulo + 2, c: 1 } });
-  ws['!merges'].push({ s: { r: filaCertTitulo + 2, c: 2 }, e: { r: filaCertTitulo + 2, c: numCols - 1 } });
+  CODIGOS_VALIDOS.forEach(c => {
+    const row = ws.addRow([c, CODIGOS_DESC[c]]);
+    row.eachCell({ includeEmpty: false }, cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE_CLARO } };
+    });
+    row.getCell(1).font = { bold: true };
+  });
 
-  ws['!cols'] = [{wch:8},{wch:14},{wch:32}, ...Array.from({length:31},()=>({wch:4})), {wch:20}];
+  ws.addRow([]);
+  const filaNota = ws.addRow(['NOTA: Para meses de 28, 29 o 30 días, se dejan en blanco las columnas de los días que no existen en ese mes.']);
+  ws.mergeCells(filaNota.number, 1, filaNota.number, numCols);
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Novedades');
-  XLSX.writeFile(wb, `novedades_${area}_${periodo}.xlsx`);
+  ws.addRow([]);
+
+  // ── Certificación ──
+  ws.mergeCells(ws.rowCount + 1, 1, ws.rowCount + 1, numCols);
+  const filaCertTitulo = ws.getRow(ws.rowCount);
+  filaCertTitulo.getCell(1).value = 'CERTIFICACIÓN';
+  filaCertTitulo.eachCell({ includeEmpty: true }, c => estiloNavy(c));
+
+  const mitad = Math.floor(numCols / 2);
+  ws.mergeCells(ws.rowCount + 1, 1, ws.rowCount + 1, mitad);
+  ws.mergeCells(ws.rowCount, mitad + 1, ws.rowCount, numCols);
+  const filaCertLabels = ws.getRow(ws.rowCount);
+  filaCertLabels.getCell(1).value = 'ELABORADO POR';
+  filaCertLabels.getCell(mitad + 1).value = 'RESPONSABLE';
+  filaCertLabels.eachCell({ includeEmpty: true }, c => estiloNavy(c));
+
+  ws.mergeCells(ws.rowCount + 1, 1, ws.rowCount + 1, mitad);
+  ws.mergeCells(ws.rowCount, mitad + 1, ws.rowCount, numCols);
+  const filaCertValores = ws.getRow(ws.rowCount);
+  filaCertValores.getCell(1).value = elaboradoPor;
+  filaCertValores.getCell(mitad + 1).value = responsable;
+  filaCertValores.eachCell({ includeEmpty: true }, c => estiloAmarillo(c));
+  filaCertValores.height = 20;
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `novedades_${area}_${periodo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 /* ═════════════════════════════════════════
@@ -1415,14 +1487,28 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   const [anio, mesNum] = periodo.split('-');
   const nombreMes = obtenerNombreMes(mesNum);
 
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+  // Colores de la plantilla oficial
+  const NAVY = [31, 56, 100];
+  const AMARILLO = [255, 255, 0];
+  const VERDE_CLARO = [217, 234, 211];
+  const BLANCO = [255, 255, 255];
 
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+  const anchoPagina = doc.internal.pageSize.getWidth();
+
+  // ── Banners de título ──
+  doc.setFillColor(...NAVY);
+  doc.rect(10, 8, anchoPagina - 20, 8, 'F');
+  doc.setTextColor(...BLANCO);
   doc.setFontSize(12);
   doc.setFont(undefined, 'bold');
-  doc.text('COMISIÓN DE TRÁNSITO DEL ECUADOR — CONTROL DE NOVEDADES MENSUAL', 148, 12, { align: 'center' });
+  doc.text('COMISIÓN DE TRÁNSITO DEL ECUADOR — CONTROL DE NOVEDADES MENSUAL', anchoPagina / 2, 13.5, { align: 'center' });
+
+  doc.setFillColor(...NAVY);
+  doc.rect(10, 16, anchoPagina - 20, 7, 'F');
   doc.setFontSize(10);
-  doc.setFont(undefined, 'normal');
-  doc.text(`ÁREA: ${area}   ·   MES: ${nombreMes} ${anio}`, 148, 18, { align: 'center' });
+  doc.text(`ÁREA: ${area}   ·   MES: ${nombreMes.toUpperCase()} ${anio}`, anchoPagina / 2, 21, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
 
   const head = [['Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
   const body = (data.agentes || []).map(agente => {
@@ -1434,32 +1520,71 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
 
   doc.autoTable({
     head, body,
-    startY: 22,
+    startY: 26,
     styles: { fontSize: 6, cellPadding: 1 },
-    headStyles: { fillColor: [37, 99, 235] }
+    headStyles: { fillColor: NAVY, textColor: BLANCO },
+    didParseCell: (hookData) => {
+      // Pintar de amarillo las columnas de días (índices 3 al 3+totalDias-1) en el cuerpo
+      const idx = hookData.column.index;
+      if (hookData.section === 'body' && idx >= 3 && idx < 3 + totalDias) {
+        hookData.cell.styles.fillColor = AMARILLO;
+      }
+    }
   });
 
-  let y = doc.lastAutoTable.finalY + 8;
+  let y = doc.lastAutoTable.finalY + 6;
+
+  // ── Nomenclatura ──
+  doc.setFillColor(...NAVY);
+  doc.rect(10, y, anchoPagina - 20, 6, 'F');
+  doc.setTextColor(...BLANCO);
   doc.setFontSize(9);
   doc.setFont(undefined, 'bold');
-  doc.text('NOMENCLATURA', 14, y);
-  y += 5;
+  doc.text('NOMENCLATURA', anchoPagina / 2, y + 4.2, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+  y += 9;
+
   doc.setFont(undefined, 'normal');
   doc.setFontSize(8);
   CODIGOS_VALIDOS.forEach(c => {
-    doc.text(`${c} — ${CODIGOS_DESC[c]}`, 14, y);
-    y += 4;
+    doc.setFillColor(...VERDE_CLARO);
+    doc.rect(10, y - 3.2, anchoPagina - 20, 4.2, 'F');
+    doc.setFont(undefined, 'bold');
+    doc.text(c, 12, y);
+    doc.setFont(undefined, 'normal');
+    doc.text(`— ${CODIGOS_DESC[c]}`, 22, y);
+    y += 4.6;
   });
 
   y += 6;
+
+  // ── Certificación ──
+  doc.setFillColor(...NAVY);
+  doc.rect(10, y, anchoPagina - 20, 6, 'F');
+  doc.setTextColor(...BLANCO);
   doc.setFontSize(9);
   doc.setFont(undefined, 'bold');
-  doc.text('CERTIFICACIÓN', 14, y);
-  y += 7;
+  doc.text('CERTIFICACIÓN', anchoPagina / 2, y + 4.2, { align: 'center' });
+  y += 10;
+
+  const mitadPagina = anchoPagina / 2;
+  doc.setFillColor(...NAVY);
+  doc.rect(10, y - 4.5, mitadPagina - 12, 6, 'F');
+  doc.rect(mitadPagina + 2, y - 4.5, mitadPagina - 12, 6, 'F');
+  doc.setTextColor(...BLANCO);
+  doc.setFontSize(8);
+  doc.text('ELABORADO POR', 10 + (mitadPagina - 12) / 2, y - 0.8, { align: 'center' });
+  doc.text('RESPONSABLE', mitadPagina + 2 + (mitadPagina - 12) / 2, y - 0.8, { align: 'center' });
+  y += 3;
+
+  doc.setFillColor(...AMARILLO);
+  doc.rect(10, y - 4.5, mitadPagina - 12, 7, 'F');
+  doc.rect(mitadPagina + 2, y - 4.5, mitadPagina - 12, 7, 'F');
+  doc.setTextColor(0, 0, 0);
   doc.setFont(undefined, 'normal');
   doc.setFontSize(9);
-  doc.text(`Elaborado por: ${elaboradoPor}`, 14, y);
-  doc.text(`Responsable: ${responsable}`, 148, y);
+  doc.text(elaboradoPor, 10 + (mitadPagina - 12) / 2, y, { align: 'center' });
+  doc.text(responsable, mitadPagina + 2 + (mitadPagina - 12) / 2, y, { align: 'center' });
 
   doc.save(`novedades_${area}_${periodo}.pdf`);
 }
