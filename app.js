@@ -3166,6 +3166,8 @@ function cambiarPaginaPersonal(delta) {
   renderizarTablaPersonal();
 }
 
+let personalSeleccionados = new Set(); // ids seleccionados para el cambio de área en lote
+
 function renderizarTablaPersonal() {
   const filtrados = obtenerPersonalFiltrado();
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PERSONAL_POR_PAGINA));
@@ -3176,10 +3178,11 @@ function renderizarTablaPersonal() {
 
   const tbody = $('personal-tabla-body');
   if (pagina.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="td-vacio">No se encontraron registros</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="td-vacio">No se encontraron registros</td></tr>`;
   } else {
     tbody.innerHTML = pagina.map(p => `
       <tr>
+        <td><input type="checkbox" data-personal-id="${p.id}" ${personalSeleccionados.has(p.id) ? 'checked' : ''} onchange="toggleSeleccionPersonal('${p.id}', this.checked)"></td>
         <td>${p.codigo || ''}</td>
         <td>${p.grado || ''}</td>
         <td>${p.apellidos || ''}</td>
@@ -3197,6 +3200,99 @@ function renderizarTablaPersonal() {
   $('personal-paginacion').style.display = 'flex';
   $('personal-paginacion-info').textContent =
     `${filtrados.length} registro${filtrados.length !== 1 ? 's' : ''} — página ${personalPaginaActual} de ${totalPaginas}`;
+
+  // Botón para seleccionar TODOS los filtrados (no solo los de la página actual)
+  const btnFiltrados = $('personal-seleccionar-filtrados');
+  const hayFiltroActivo = ['personal-filtro-codigo','personal-filtro-grado','personal-filtro-nombre','personal-filtro-area']
+    .some(id => ($(id)?.value || '').trim() !== '');
+  if (filtrados.length > 0 && (hayFiltroActivo || filtrados.length > PERSONAL_POR_PAGINA)) {
+    btnFiltrados.style.display = 'inline-flex';
+    btnFiltrados.textContent = `☑️ Seleccionar los ${filtrados.length} registros filtrados (todas las páginas)`;
+  } else {
+    btnFiltrados.style.display = 'none';
+  }
+
+  actualizarBarraCambioLote();
+}
+
+function toggleSeleccionPersonal(id, checked) {
+  if (checked) personalSeleccionados.add(id);
+  else personalSeleccionados.delete(id);
+  actualizarBarraCambioLote();
+}
+
+function toggleSeleccionarTodosPersonal(checked) {
+  const filtrados = obtenerPersonalFiltrado();
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PERSONAL_POR_PAGINA));
+  const inicio = (personalPaginaActual - 1) * PERSONAL_POR_PAGINA;
+  const pagina = filtrados.slice(inicio, inicio + PERSONAL_POR_PAGINA);
+  pagina.forEach(p => { if (checked) personalSeleccionados.add(p.id); else personalSeleccionados.delete(p.id); });
+  renderizarTablaPersonal();
+}
+
+function seleccionarTodosLosFiltradosPersonal() {
+  const filtrados = obtenerPersonalFiltrado();
+  filtrados.forEach(p => personalSeleccionados.add(p.id));
+  renderizarTablaPersonal();
+  toast(`✅ ${filtrados.length} registros seleccionados`, 'ok');
+}
+
+function limpiarSeleccionPersonal() {
+  personalSeleccionados.clear();
+  renderizarTablaPersonal();
+}
+
+function actualizarBarraCambioLote() {
+  const barra = $('personal-cambio-lote');
+  if (personalSeleccionados.size === 0) {
+    barra.style.display = 'none';
+    return;
+  }
+  barra.style.display = 'flex';
+  $('personal-cambio-lote-info').textContent = `${personalSeleccionados.size} agente${personalSeleccionados.size !== 1 ? 's' : ''} seleccionado${personalSeleccionados.size !== 1 ? 's' : ''}`;
+
+  const sel = $('personal-cambio-lote-area');
+  if (sel.dataset.poblado !== '1') {
+    obtenerAreasNovedades().then(areas => {
+      sel.innerHTML = areas.map(a => `<option value="${a}">${a}</option>`).join('');
+      sel.dataset.poblado = '1';
+    });
+  }
+}
+
+async function aplicarCambioAreaLote() {
+  const nuevaArea = $('personal-cambio-lote-area').value;
+  if (!nuevaArea) { toast('Elegí un área', 'err'); return; }
+  if (personalSeleccionados.size === 0) return;
+
+  if (!confirm(`¿Cambiar el área de ${personalSeleccionados.size} agente(s) a "${nuevaArea}"?`)) return;
+
+  try {
+    const ids = Array.from(personalSeleccionados);
+    const tamanioLote = 50;
+    for (let i = 0; i < ids.length; i += tamanioLote) {
+      const lote = ids.slice(i, i + tamanioLote);
+      await Promise.all(lote.map(id =>
+        window._fb.setDoc(window._fb.doc(db, 'personal', id), {
+          area: nuevaArea,
+          ultimaActualizacion: new Date()
+        }, { merge: true })
+      ));
+    }
+
+    await registrarEnAuditoria(
+      'cambio_area_lote', nuevaArea, usuario.email, null, null,
+      { cantidad: ids.length },
+      `Cambio de área en lote: ${ids.length} agentes → ${nuevaArea}`
+    );
+
+    toast(`✅ ${ids.length} agentes actualizados a "${nuevaArea}"`, 'ok');
+    limpiarSeleccionPersonal();
+    cargarDirectorioPersonal();
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message, 'err');
+  }
 }
 
 let modalPersonalIdEdicion = null;
@@ -3866,49 +3962,58 @@ async function cargarResumenGeneral() {
   const detalleAusenciasX = [];
 
   const areasReales = await obtenerAreasNovedades();
-  for (const area of areasReales) {
-    try {
-      const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
-      const snap = await window._fb.getDoc(ref);
-      if (!snap.exists()) continue;
-      const data = snap.data();
-      const agentes = data.agentes || [];
-      if (agentes.length === 0) continue;
+  const tbodyProgreso = tbody;
+  const tamanioLoteResumen = 25;
 
-      const conteo = { 'S/N':0, 'OA':0, 'X':0, 'CS':0, 'B':0, 'Li':0, 'V':0, 'PE':0 };
-      agentes.forEach(agente => {
-        const dias = agente.novedadesPorDia || {};
-        let diasConX = 0;
-        Object.values(dias).forEach(codigo => {
-          if (conteo.hasOwnProperty(codigo)) conteo[codigo]++;
-          if (codigo === 'X') diasConX++;
-        });
-        if (diasConX > 0) {
-          detalleAusenciasX.push({
-            area,
-            codigo: agente.codigo || '',
-            grado: agente.grado || '',
-            apellidosNombres: agente.apellidosNombres || '',
-            diasConX
+  for (let i = 0; i < areasReales.length; i += tamanioLoteResumen) {
+    const lote = areasReales.slice(i, i + tamanioLoteResumen);
+    await Promise.all(lote.map(async (area) => {
+      try {
+        const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+        const snap = await window._fb.getDoc(ref);
+        if (!snap.exists()) return;
+        const data = snap.data();
+        const agentes = data.agentes || [];
+        if (agentes.length === 0) return;
+
+        const conteo = { 'S/N':0, 'OA':0, 'X':0, 'CS':0, 'B':0, 'Li':0, 'V':0, 'PE':0 };
+        agentes.forEach(agente => {
+          const dias = agente.novedadesPorDia || {};
+          let diasConX = 0;
+          Object.values(dias).forEach(codigo => {
+            if (conteo.hasOwnProperty(codigo)) conteo[codigo]++;
+            if (codigo === 'X') diasConX++;
           });
-        }
-      });
+          if (diasConX > 0) {
+            detalleAusenciasX.push({
+              area,
+              codigo: agente.codigo || '',
+              grado: agente.grado || '',
+              apellidosNombres: agente.apellidosNombres || '',
+              diasConX
+            });
+          }
+        });
 
-      filasPorArea.push({
-        area,
-        responsable: data.responsable || data.elaboradoPor || '—',
-        totalPersonal: agentes.length,
-        conteo,
-        periodo
-      });
+        filasPorArea.push({
+          area,
+          responsable: data.responsable || data.elaboradoPor || '—',
+          totalPersonal: agentes.length,
+          conteo,
+          periodo
+        });
 
-      totales.total += agentes.length;
-      CODIGOS_VALIDOS.forEach(c => { totales[c] += conteo[c]; });
+        totales.total += agentes.length;
+        CODIGOS_VALIDOS.forEach(c => { totales[c] += conteo[c]; });
 
-    } catch(e) {
-      console.warn(`Sin datos de ${area} para ${periodo}`);
-    }
+      } catch(e) {
+        console.warn(`Sin datos de ${area} para ${periodo}`);
+      }
+    }));
+    tbodyProgreso.innerHTML = `<tr><td colspan="11" class="td-vacio">Cargando... ${Math.min(i + tamanioLoteResumen, areasReales.length)} / ${areasReales.length} áreas revisadas</td></tr>`;
   }
+
+  filasPorArea.sort((a, b) => a.area.localeCompare(b.area));
 
   if (filasPorArea.length === 0) {
     tbody.innerHTML = `<tr><td colspan="11" class="td-vacio">No hay novedades registradas para ese mes</td></tr>`;
@@ -3941,60 +4046,133 @@ async function exportarResumenGeneralExcel() {
     toast('Primero generá el resumen (botón "Generar resumen")', 'err');
     return;
   }
-  if (!window.XLSX) {
+  if (!window.ExcelJS) {
     await new Promise((res, rej) => {
       const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
       s.onload = res; s.onerror = rej; document.head.appendChild(s);
     });
   }
 
   const { filasPorArea, totales, periodo, detalleAusenciasX } = resumenGeneralCache;
-  const [anio, mesNum] = periodo.split('-');
-  const nombreMes = obtenerNombreMes(mesNum);
-  const numCols = 3 + CODIGOS_VALIDOS.length; // Área, Responsable, Total Personal + 8 códigos
+  const [anio] = periodo.split('-');
 
-  const aoa = [];
+  // Colores (mismos que el spreadsheet de referencia)
+  const NAVY   = 'FF1F3864';
+  const ROJO   = 'FFC00000';
+  const ROJO_CLARO = 'FFF4CCCC';
+  const AZUL_CLARO = 'FFDCE6F1';
+  const BLANCO = 'FFFFFFFF';
 
-  // ── Tabla principal ──
-  aoa.push([`RESUMEN GENERAL DE NOVEDADES — CTE ${anio}`]);
-  aoa.push(['ÁREA', 'RESPONSABLE (CÓD. - APELLIDO)', 'TOTAL PERSONAL', 'S/N', 'OA', 'X (Ausentes)', 'CS', 'B (Bajas)', 'Li (Licencias)', 'V', 'PE']);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Resumen General');
 
-  filasPorArea.forEach(fila => {
-    aoa.push([fila.area, fila.responsable, fila.totalPersonal, ...CODIGOS_VALIDOS.map(c => fila.conteo[c])]);
+  const headers = ['ÁREA', 'RESPONSABLE (CÓD. - APELLIDO)', 'TOTAL PERSONAL', 'S/N', 'OA', 'X (Ausentes)', 'CS', 'B (Bajas)', 'Li (Licencias)', 'V', 'PE'];
+  ws.columns = [
+    { width: 34 }, { width: 30 }, { width: 15 },
+    { width: 10 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 }
+  ];
+
+  // ── Título ──
+  ws.mergeCells(1, 1, 1, headers.length);
+  const tituloCell = ws.getCell(1, 1);
+  tituloCell.value = `RESUMEN GENERAL DE NOVEDADES — CTE ${anio}`;
+  tituloCell.font = { bold: true, size: 14, color: { argb: BLANCO } };
+  tituloCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+  tituloCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 24;
+
+  // ── Encabezado ──
+  const filaHeader = ws.addRow(headers);
+  filaHeader.eachCell(cell => {
+    cell.font = { bold: true, color: { argb: BLANCO } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
-  aoa.push(['TOTAL GENERAL', '', totales.total, ...CODIGOS_VALIDOS.map(c => totales[c])]);
+  // ── Filas por área (con X en rojo si hay ausentes) ──
+  filasPorArea.forEach((fila, i) => {
+    const filaRow = ws.addRow([
+      fila.area, fila.responsable, fila.totalPersonal,
+      ...CODIGOS_VALIDOS.map(c => fila.conteo[c])
+    ]);
+    if (i % 2 === 0) {
+      filaRow.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
+      });
+    }
+    const celdaX = filaRow.getCell(6); // columna F = X (Ausentes)
+    if (fila.conteo['X'] > 0) {
+      celdaX.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROJO } };
+      celdaX.font = { bold: true, color: { argb: BLANCO } };
+    }
+    filaRow.eachCell(cell => { cell.alignment = { horizontal: 'center' }; });
+    filaRow.getCell(1).alignment = { horizontal: 'left' };
+    filaRow.getCell(2).alignment = { horizontal: 'left' };
+  });
 
-  // ── Detalle de ausencias injustificadas (X) ──
-  aoa.push([]);
-  aoa.push(['DETALLE DE AUSENCIAS INJUSTIFICADAS (X)']);
-  aoa.push(['ÁREA', 'CÓDIGO', 'GRADO', 'APELLIDOS Y NOMBRES', 'DÍAS CON X']);
+  // ── Total general ──
+  const filaTotal = ws.addRow(['TOTAL GENERAL', '', totales.total, ...CODIGOS_VALIDOS.map(c => totales[c])]);
+  filaTotal.eachCell(cell => {
+    cell.font = { bold: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
+    cell.alignment = { horizontal: 'center' };
+  });
+  filaTotal.getCell(1).alignment = { horizontal: 'left' };
+
+  // ── Bloque de detalle de ausencias injustificadas ──
+  ws.addRow([]);
+  const filaBannerNum = ws.rowCount + 1;
+  ws.mergeCells(filaBannerNum, 1, filaBannerNum, 5);
+  const bannerCell = ws.getCell(filaBannerNum, 1);
+  bannerCell.value = 'DETALLE DE AUSENCIAS INJUSTIFICADAS (X)';
+  bannerCell.font = { bold: true, color: { argb: BLANCO } };
+  bannerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROJO } };
+  bannerCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(filaBannerNum).height = 22;
+
+  const filaHeaderDetalle = ws.addRow(['ÁREA', 'CÓDIGO', 'GRADO', 'APELLIDOS Y NOMBRES', 'DÍAS CON X']);
+  filaHeaderDetalle.eachCell(cell => {
+    cell.font = { bold: true, color: { argb: BLANCO } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+    cell.alignment = { horizontal: 'center' };
+  });
 
   if (detalleAusenciasX && detalleAusenciasX.length > 0) {
     detalleAusenciasX.forEach(d => {
-      aoa.push([d.area, d.codigo, d.grado, d.apellidosNombres, d.diasConX]);
+      const fila = ws.addRow([d.area, d.codigo, d.grado, d.apellidosNombres, d.diasConX]);
+      fila.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROJO_CLARO } };
+        cell.alignment = { horizontal: 'center' };
+      });
+      fila.getCell(1).alignment = { horizontal: 'left' };
+      fila.getCell(4).alignment = { horizontal: 'left' };
     });
-    aoa.push(['TOTAL DE PERSONAS CON AUSENCIA INJUSTIFICADA', '', '', '', detalleAusenciasX.length]);
+
+    ws.mergeCells(ws.rowCount + 1, 1, ws.rowCount + 1, 4);
+    const filaTotalX = ws.addRow(['TOTAL DE PERSONAS CON AUSENCIA INJUSTIFICADA', '', '', '', detalleAusenciasX.length]);
+    filaTotalX.eachCell(cell => {
+      cell.font = { bold: true, color: { argb: BLANCO } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROJO } };
+      cell.alignment = { horizontal: 'center' };
+    });
   } else {
-    aoa.push(['Sin ausencias injustificadas este mes']);
+    ws.addRow(['Sin ausencias injustificadas este mes']);
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // ── Descargar ──
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `resumen_general_novedades_${periodo}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 
-  const filaTituloDetalle = filasPorArea.length + 4; // título(0) + header(1) + filas + total + blank
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: numCols - 1 } },
-    { s: { r: filaTituloDetalle, c: 0 }, e: { r: filaTituloDetalle, c: 4 } }
-  ];
-
-  ws['!cols'] = [{ wch: 32 }, { wch: 28 }, { wch: 14 }, ...CODIGOS_VALIDOS.map(() => ({ wch: 12 }))];
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Resumen General');
-  XLSX.writeFile(wb, `resumen_general_novedades_${periodo}.xlsx`);
-
-  toast('✅ Resumen exportado', 'ok');
+  toast('✅ Resumen exportado con colores', 'ok');
 }
 
 async function mostrarDetalleCodigo(area, periodo, codigo) {
@@ -4102,6 +4280,11 @@ window.editarRegistroPersonal       = editarRegistroPersonal;
 window.cerrarModalPersonal          = cerrarModalPersonal;
 window.guardarRegistroPersonal      = guardarRegistroPersonal;
 window.eliminarRegistroPersonal     = eliminarRegistroPersonal;
+window.toggleSeleccionPersonal      = toggleSeleccionPersonal;
+window.toggleSeleccionarTodosPersonal = toggleSeleccionarTodosPersonal;
+window.seleccionarTodosLosFiltradosPersonal = seleccionarTodosLosFiltradosPersonal;
+window.limpiarSeleccionPersonal     = limpiarSeleccionPersonal;
+window.aplicarCambioAreaLote        = aplicarCambioAreaLote;
 window.confirmarGuardarAcceso       = confirmarGuardarAcceso;
 window.guardarAcceso                = guardarAcceso;
 window.eliminarAcceso               = eliminarAcceso;
