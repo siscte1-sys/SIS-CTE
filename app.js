@@ -829,6 +829,8 @@ function verificarDiasPendientes() {
 let modalAgenteEdicion = null;
 let modalDiaEdicion = null;
 let modalIdxEdicion = null;
+let modalEsEdicionDeCierre = false;
+let resumenGeneralCache = null;
 
 function poblarSelectCodigos(select) {
   if (select.dataset.poblado === '1') return;
@@ -850,6 +852,7 @@ function abrirModalEditarNovedad(agente, dia, idx) {
   modalAgenteEdicion = agente;
   modalDiaEdicion = dia;
   modalIdxEdicion = idx;
+  modalEsEdicionDeCierre = false;
   
   const modal = $('modal-editar-novedad');
   const sub = $('modal-novedad-sub');
@@ -913,10 +916,38 @@ async function guardarNovedad() {
   }
   modalAgenteEdicion.novedadesPorDia[String(modalDiaEdicion)] = codigoNorm;
   modalAgenteEdicion.observaciones = obs;
-  actualizarDiaCompletado(modalDiaEdicion);
-  
+
   // Guardar en Firestore
   try {
+    if (modalEsEdicionDeCierre && cierreMesData) {
+      // Edición de un día desbloqueado dentro de un mes YA CERRADO:
+      // se guarda en el documento de ese período (no en el actual),
+      // y el día se vuelve a bloquear automáticamente al guardar.
+      const { area, periodo, data } = cierreMesData;
+      const diasDesbloqueados = (data.diasDesbloqueados || []).filter(d => d !== modalDiaEdicion);
+
+      const novedadesRef = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+      await window._fb.updateDoc(novedadesRef, {
+        agentes: data.agentes,
+        diasDesbloqueados,
+        ultimaModificacion: new Date()
+      });
+      data.diasDesbloqueados = diasDesbloqueados;
+
+      await registrarEnAuditoria(
+        'modificar_novedad_mes_cerrado', area, usuario.email, modalDiaEdicion, periodo,
+        { codigo: codigoNorm, observaciones: obs },
+        `Corrección en mes cerrado: ${modalAgenteEdicion.apellidosNombres} - Día ${modalDiaEdicion} - ${codigoNorm} (se vuelve a bloquear)`
+      );
+
+      toast('✅ Corrección guardada — el día se volvió a bloquear', 'ok');
+      cerrarModalNovedad();
+      modalEsEdicionDeCierre = false;
+      renderizarTablaSoloLectura($('tabla-cierre-mes'), data, periodo);
+      return;
+    }
+
+    actualizarDiaCompletado(modalDiaEdicion);
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
     await window._fb.updateDoc(novedadesRef, {
       agentes: novedadesActuales.agentes,
@@ -1169,20 +1200,58 @@ function ocultarPantallaCierreMes() {
 
 function renderizarTablaSoloLectura(tabla, data, periodo) {
   const totalDias = diasEnMes(periodo);
+  const diasDesbloqueados = data.diasDesbloqueados || [];
   let html = '<thead><tr><th>Código</th><th>Grado</th><th>Apellidos y Nombres</th>';
-  for (let d = 1; d <= 31; d++) html += `<th style="width:32px;${d > totalDias ? 'opacity:.25' : ''}">${d}</th>`;
+  for (let d = 1; d <= 31; d++) {
+    const desbloqueado = diasDesbloqueados.includes(d);
+    html += `<th style="width:32px;${d > totalDias ? 'opacity:.25' : ''}${desbloqueado ? ';color:var(--green);' : ''}">${d}${desbloqueado ? ' 🔓' : ''}</th>`;
+  }
   html += '<th>Observación</th></tr></thead><tbody>';
 
-  (data.agentes || []).forEach(agente => {
+  (data.agentes || []).forEach((agente, idx) => {
     html += `<tr><td style="font-size:11px">${agente.codigo || ''}</td><td style="font-size:11px">${agente.grado || ''}</td><td style="font-size:11px;text-align:left">${agente.apellidosNombres || ''}</td>`;
     for (let d = 1; d <= 31; d++) {
       const valor = (agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '';
-      html += `<td style="font-size:11px;${d > totalDias ? 'opacity:.25' : ''}">${d > totalDias ? '' : (valor || '—')}</td>`;
+      const desbloqueado = diasDesbloqueados.includes(d);
+      if (d > totalDias) {
+        html += `<td style="font-size:11px;opacity:.25"></td>`;
+      } else if (desbloqueado) {
+        html += `<td style="font-size:11px;cursor:pointer;background:var(--green-l);border:2px solid var(--green);" onclick="abrirModalEditarNovedadCierre(${idx},${d})" title="Día desbloqueado por el admin — clic para editar">${valor || '— (clic para editar)'}</td>`;
+      } else {
+        html += `<td style="font-size:11px;">${valor || '—'}</td>`;
+      }
     }
     html += `<td style="font-size:11px">${agente.observaciones || ''}</td></tr>`;
   });
   html += '</tbody>';
   tabla.innerHTML = html;
+}
+
+async function abrirModalEditarNovedadCierre(idx, dia) {
+  if (!cierreMesData) return;
+  const agente = cierreMesData.data.agentes[idx];
+  if (!agente) return;
+
+  // Reutiliza el mismo modal de edición, pero guardando en el período del cierre (no en mesActual)
+  modalAgenteEdicion = agente;
+  modalDiaEdicion = dia;
+  modalIdxEdicion = idx;
+  modalEsEdicionDeCierre = true; // bandera para que guardarNovedad sepa a qué doc escribir
+
+  const modal = $('modal-editar-novedad');
+  const sub = $('modal-novedad-sub');
+  const codigo = $('modal-novedad-codigo');
+  const obs = $('modal-novedad-obs');
+
+  poblarSelectCodigos(codigo);
+
+  sub.textContent = `Día ${dia} (desbloqueado) — ${agente.apellidosNombres}`;
+  codigo.value = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
+  obs.value = codigo.value ? (CODIGOS_DESC[codigo.value] || '') : '';
+
+  hide('modal-novedad-error');
+  modal.style.display = 'flex';
+  codigo.focus();
 }
 
 async function cerrarYExportarMes() {
@@ -1523,7 +1592,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'envios')      cargarAdmin();
       if (tabName === 'accesos')     cargarAccesos();
       if (tabName === 'auditoria')   cargarAuditoria();
-      if (tabName === 'desbloqueos') cargarDesbloqueos();
+      if (tabName === 'desbloqueos') { cargarDesbloqueos(); poblarSelectoresDesbloqueoDirecto(); }
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
       if (tabName === 'importar') { poblarSelectoresLimpieza(); cargarDirectorioPersonal(); }
     });
@@ -3562,6 +3631,87 @@ async function limpiarAuditoria() {
    PANEL ADMIN — Desbloqueos
 ═════════════════════════════════════════ */
 
+async function poblarSelectoresDesbloqueoDirecto() {
+  const selArea = $('desbloqueo-directo-area');
+  const selMes = $('desbloqueo-directo-mes');
+  const selAnio = $('desbloqueo-directo-anio');
+  const selDia = $('desbloqueo-directo-dia');
+  if (!selArea || !selMes || !selAnio || !selDia) return;
+
+  const areasReales = await obtenerAreasNovedades();
+  selArea.innerHTML = areasReales.map(a => `<option value="${a}">${a}</option>`).join('');
+
+  if (selMes.options.length === 0) {
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    meses.forEach((m, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i + 1).padStart(2, '0');
+      opt.textContent = m;
+      selMes.appendChild(opt);
+    });
+  }
+  if (selAnio.options.length === 0) {
+    const anioActual = new Date().getFullYear();
+    for (let a = anioActual - 1; a <= anioActual + 1; a++) {
+      const opt = document.createElement('option');
+      opt.value = String(a);
+      opt.textContent = String(a);
+      selAnio.appendChild(opt);
+    }
+  }
+  if (selDia.options.length === 0) {
+    for (let d = 1; d <= 31; d++) {
+      const opt = document.createElement('option');
+      opt.value = String(d);
+      opt.textContent = String(d);
+      selDia.appendChild(opt);
+    }
+  }
+
+  const hoy = obtenerFechaParts();
+  selMes.value = hoy.mes;
+  selAnio.value = String(new Date().getFullYear());
+  selDia.value = String(hoy.dia);
+}
+
+async function desbloquearDiaDirecto() {
+  const area = $('desbloqueo-directo-area').value;
+  const mes = $('desbloqueo-directo-mes').value;
+  const anio = $('desbloqueo-directo-anio').value;
+  const dia = parseInt($('desbloqueo-directo-dia').value, 10);
+  if (!area || !mes || !anio || !dia) { toast('Completá todos los campos', 'err'); return; }
+
+  const periodo = `${anio}-${mes}`;
+
+  try {
+    const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+    const snap = await window._fb.getDoc(ref);
+    if (!snap.exists()) {
+      toast(`No hay datos de Novedades para ${area} — ${periodo}`, 'err');
+      return;
+    }
+    const data = snap.data();
+    const diasDesbloqueados = data.diasDesbloqueados || [];
+    if (!diasDesbloqueados.includes(dia)) diasDesbloqueados.push(dia);
+
+    await window._fb.updateDoc(ref, { diasDesbloqueados });
+
+    await registrarEnAuditoria(
+      'desbloqueo_directo', area, usuario.email, dia, periodo, {},
+      `Desbloqueo directo (sin solicitud): ${area} — día ${dia} de ${periodo}, autorizado por ${usuario.email}`
+    );
+
+    toast(`✅ Día ${dia} de ${periodo} desbloqueado para ${area}. Se vuelve a bloquear solo apenas guarden el cambio.`, 'ok');
+
+    // Si es el área/mes que se está viendo, refrescar
+    if (areaActual === area) cargarNovedadesActuales();
+
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
 async function cargarDesbloqueos() {
   try {
     const solicitudes = await window._fb.getDocs(window._fb.collection(db, 'solicitudes'));
@@ -3770,6 +3920,47 @@ async function cargarResumenGeneral() {
   </tr>`;
 
   tbody.innerHTML = html;
+
+  resumenGeneralCache = { filasPorArea, totales, periodo };
+}
+
+async function exportarResumenGeneralExcel() {
+  if (!resumenGeneralCache || !resumenGeneralCache.filasPorArea || resumenGeneralCache.filasPorArea.length === 0) {
+    toast('Primero generá el resumen (botón "Generar resumen")', 'err');
+    return;
+  }
+  if (!window.XLSX) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = res; s.onerror = rej; document.head.appendChild(s);
+    });
+  }
+
+  const { filasPorArea, totales, periodo } = resumenGeneralCache;
+  const [anio, mesNum] = periodo.split('-');
+  const nombreMes = obtenerNombreMes(mesNum);
+
+  const aoa = [];
+  aoa.push([`RESUMEN GENERAL DE NOVEDADES — ${nombreMes} ${anio}`]);
+  aoa.push([]);
+  aoa.push(['ÁREA', 'RESPONSABLE', 'TOTAL PERSONAL', ...CODIGOS_VALIDOS]);
+
+  filasPorArea.forEach(fila => {
+    aoa.push([fila.area, fila.responsable, fila.totalPersonal, ...CODIGOS_VALIDOS.map(c => fila.conteo[c])]);
+  });
+
+  aoa.push(['TOTAL GENERAL', '', totales.total, ...CODIGOS_VALIDOS.map(c => totales[c])]);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 + CODIGOS_VALIDOS.length } }];
+  ws['!cols'] = [{ wch: 30 }, { wch: 28 }, { wch: 14 }, ...CODIGOS_VALIDOS.map(() => ({ wch: 8 }))];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Resumen General');
+  XLSX.writeFile(wb, `resumen_general_novedades_${periodo}.xlsx`);
+
+  toast('✅ Resumen exportado', 'ok');
 }
 
 async function mostrarDetalleCodigo(area, periodo, codigo) {
@@ -3851,6 +4042,7 @@ window.llenarSinNovedadHoy          = llenarSinNovedadHoy;
 window.combinarDuplicadosArea       = combinarDuplicadosArea;
 window.cerrarYExportarMes           = cerrarYExportarMes;
 window.abrirModalEditarNovedad      = abrirModalEditarNovedad;
+window.abrirModalEditarNovedadCierre = abrirModalEditarNovedadCierre;
 window.cerrarModalNovedad           = cerrarModalNovedad;
 window.guardarNovedad               = guardarNovedad;
 window.actualizarObsSegunCodigo     = actualizarObsSegunCodigo;
@@ -3860,6 +4052,7 @@ window.cerrarErrorCodigo            = cerrarErrorCodigo;
 /* Panel Admin — Novedades */
 window.importarBaseDatos            = importarBaseDatos;
 window.eliminarNovedadesAreaMes     = eliminarNovedadesAreaMes;
+window.desbloquearDiaDirecto        = desbloquearDiaDirecto;
 window.borrarTodaLaBaseNovedades    = borrarTodaLaBaseNovedades;
 window.mostrarFormAcceso            = mostrarFormAcceso;
 window.cerrarModalAcceso            = cerrarModalAcceso;
@@ -3884,6 +4077,7 @@ window.limpiarAuditoria             = limpiarAuditoria;
 window.aprobarDesbloqueo            = aprobarDesbloqueo;
 window.rechazarDesbloqueo           = rechazarDesbloqueo;
 window.cargarResumenGeneral         = cargarResumenGeneral;
+window.exportarResumenGeneralExcel  = exportarResumenGeneralExcel;
 window.mostrarDetalleCodigo         = mostrarDetalleCodigo;
 
 /* ══════════════════════════════════
