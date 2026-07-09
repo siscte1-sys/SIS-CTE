@@ -1881,7 +1881,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'desbloqueos') { cargarDesbloqueos(); poblarSelectoresDesbloqueoDirecto(); }
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
       if (tabName === 'importar') { poblarSelectoresLimpieza(); cargarDirectorioPersonal(); }
-      if (tabName === 'permisos') { poblarListaPermisos(); }
+      if (tabName === 'permisos') { poblarListaPermisos(); actualizarVisibilidadTabsPermiso(); }
       aplicarPermisosBotones();
     });
   });
