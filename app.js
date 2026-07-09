@@ -3503,6 +3503,8 @@ async function eliminarPermiso(correo) {
    VISTA REPORTES — actividad de solo lectura (supervisor)
 ═════════════════════════════════════════ */
 
+let reporteActividadCache = [];
+
 async function cargarReportesActividad() {
   const lista = $('rep-actividad-lista');
   lista.innerHTML = `<p class="td-vacio">Cargando...</p>`;
@@ -3519,6 +3521,7 @@ async function cargarReportesActividad() {
     );
 
     const registros = snap.docs.map(d => d.data());
+    reporteActividadCache = registros;
     const esteMs = registros.filter(r => r.timestamp && r.timestamp.toDate && r.timestamp.toDate() >= inicioMes);
     const novedadesEsteMes = esteMs.filter(r => r.accion === 'modificar_novedad' || r.accion === 'modificar_novedad_mes_cerrado').length;
 
@@ -3549,6 +3552,67 @@ async function cargarReportesActividad() {
     console.error(e);
     lista.innerHTML = `<p class="td-vacio">❌ Error cargando la actividad: ${e.message}</p>`;
   }
+}
+
+async function exportarReporteActividadExcel() {
+  if (!reporteActividadCache || reporteActividadCache.length === 0) {
+    toast('No hay actividad para exportar todavía', 'err');
+    return;
+  }
+  if (!window.ExcelJS) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+      s.onload = res; s.onerror = rej; document.head.appendChild(s);
+    });
+  }
+
+  const NAVY = 'FF1F3864';
+  const BLANCO = 'FFFFFFFF';
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Actividad del sistema');
+
+  ws.columns = [
+    { header: 'Fecha y hora', key: 'fecha', width: 20 },
+    { header: 'Realizado por', key: 'admin', width: 26 },
+    { header: 'Acción', key: 'accion', width: 24 },
+    { header: 'Área', key: 'area', width: 22 },
+    { header: 'Descripción', key: 'descripcion', width: 60 },
+  ];
+
+  ws.getRow(1).eachCell(c => {
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+    c.font = { color: { argb: BLANCO }, bold: true };
+  });
+
+  reporteActividadCache.forEach(r => {
+    ws.addRow({
+      fecha: r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString('es-EC') : '',
+      admin: r.admin || '',
+      accion: r.accion || '',
+      area: r.area || '',
+      descripcion: r.descripcion || ''
+    });
+  });
+
+  const bordeDelgado = { style: 'thin', color: { argb: 'FF999999' } };
+  ws.eachRow(row => row.eachCell(c => {
+    c.border = { top: bordeDelgado, left: bordeDelgado, bottom: bordeDelgado, right: bordeDelgado };
+  }));
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `reporte_actividad_${new Date().toISOString().slice(0,10)}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  toast('✅ Reporte descargado', 'ok');
 }
 
 async function poblarSelectoresLimpieza() {
@@ -4769,6 +4833,7 @@ window.cerrarSelectorPersona        = cerrarSelectorPersona;
 window.filtrarListaPersonal         = filtrarListaPersonal;
 window.elegirPersona                = elegirPersona;
 window.generarReportePrueba         = generarReportePrueba;
+window.exportarReporteActividadExcel = exportarReporteActividadExcel;
 window.filtrarPersonal              = filtrarPersonal;
 window.cambiarPaginaPersonal        = cambiarPaginaPersonal;
 window.abrirModalPersonal           = abrirModalPersonal;
