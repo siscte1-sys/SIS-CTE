@@ -2787,6 +2787,12 @@ async function cargarAdmin() {
   }
 }
 
+const POR_PAGINA_ENVIOS = 10;
+let personasCache = [];
+let paginaPersonas = 1;
+let docsCache = [];
+let paginaArchivos = 1;
+
 function renderAdmin(docs) {
   const unicos = [...new Set(docs.map(d=>d.email))];
   $('st-total').textContent  = docs.length;
@@ -2800,7 +2806,37 @@ function renderAdmin(docs) {
     if(d.area) porPersona[d.email].areas.add(d.area);
   });
 
-  $('admin-personas').innerHTML = Object.values(porPersona).sort((a,b)=>b.cant-a.cant).map(p=>`
+  personasCache = Object.values(porPersona).sort((a,b)=>b.cant-a.cant);
+  docsCache = docs;
+  paginaPersonas = 1;
+  paginaArchivos = 1;
+
+  renderizarPersonasPagina();
+  renderizarArchivosPagina();
+
+  $('filtro-resultado').textContent = `${docs.length} registro${docs.length!==1?'s':''} encontrado${docs.length!==1?'s':''}`;
+}
+
+function renderizarControlesPaginacion(contenedorId, totalItems, paginaActual, funcCambiarPagina) {
+  const totalPaginas = Math.max(1, Math.ceil(totalItems / POR_PAGINA_ENVIOS));
+  const cont = $(contenedorId);
+  if (!cont) return;
+  if (totalItems <= POR_PAGINA_ENVIOS) { cont.innerHTML = ''; return; }
+  cont.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+      <span style="font-size:12px;color:var(--txt2);">${totalItems} en total — página ${paginaActual} de ${totalPaginas}</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-acc btn-acc-ghost" ${paginaActual<=1?'disabled':''} onclick="${funcCambiarPagina}(-1)">← Anterior</button>
+        <button class="btn-acc btn-acc-ghost" ${paginaActual>=totalPaginas?'disabled':''} onclick="${funcCambiarPagina}(1)">Siguiente →</button>
+      </div>
+    </div>`;
+}
+
+function renderizarPersonasPagina() {
+  const inicio = (paginaPersonas - 1) * POR_PAGINA_ENVIOS;
+  const pagina = personasCache.slice(inicio, inicio + POR_PAGINA_ENVIOS);
+
+  $('admin-personas').innerHTML = pagina.map(p=>`
     <div class="persona-row">
       <img class="persona-foto" src="${p.foto||avatar(p.nombre)}" alt="" onerror="this.src='${avatar(p.nombre)}'">
       <div class="persona-info">
@@ -2811,11 +2847,24 @@ function renderAdmin(docs) {
       <button type="button" class="persona-badge persona-badge-link" onclick="abrirCarpetaArea('${p.area||''}')" title="Abrir carpeta de ${p.area||'su área'} en Drive">${p.cant} archivo${p.cant>1?'s':''}</button>
     </div>`).join('') || '<p class="cargando-txt">Sin entregas</p>';
 
-  $('tabla-body').innerHTML = !docs.length
+  renderizarControlesPaginacion('admin-personas-paginacion', personasCache.length, paginaPersonas, 'cambiarPaginaPersonasEnvio');
+}
+
+function cambiarPaginaPersonasEnvio(delta) {
+  const totalPaginas = Math.max(1, Math.ceil(personasCache.length / POR_PAGINA_ENVIOS));
+  paginaPersonas = Math.min(totalPaginas, Math.max(1, paginaPersonas + delta));
+  renderizarPersonasPagina();
+}
+
+function renderizarArchivosPagina() {
+  const inicio = (paginaArchivos - 1) * POR_PAGINA_ENVIOS;
+  const pagina = docsCache.slice(inicio, inicio + POR_PAGINA_ENVIOS);
+
+  $('tabla-body').innerHTML = !docsCache.length
     ? `<tr><td colspan="9" class="td-vacio">No hay registros</td></tr>`
-    : docs.map((d,i) => `
+    : pagina.map((d,i) => `
       <tr class="${d.archivado?'tr-archivado':''}">
-        <td class="td-n">${i+1}</td>
+        <td class="td-n">${inicio + i + 1}</td>
         <td><div class="td-user">
           <img class="td-foto" src="${d.foto||avatar(d.nombre)}" alt="" onerror="this.src='${avatar(d.nombre)}'">
           <div><div class="td-nombre">${d.nombre||'—'}</div><div class="td-email">${d.email}</div></div>
@@ -2831,7 +2880,13 @@ function renderAdmin(docs) {
           : `<span class="badge-activo">Activo</span>`}</td>
       </tr>`).join('');
 
-  $('filtro-resultado').textContent = `${docs.length} registro${docs.length!==1?'s':''} encontrado${docs.length!==1?'s':''}`;
+  renderizarControlesPaginacion('tabla-body-paginacion', docsCache.length, paginaArchivos, 'cambiarPaginaArchivosEnvio');
+}
+
+function cambiarPaginaArchivosEnvio(delta) {
+  const totalPaginas = Math.max(1, Math.ceil(docsCache.length / POR_PAGINA_ENVIOS));
+  paginaArchivos = Math.min(totalPaginas, Math.max(1, paginaArchivos + delta));
+  renderizarArchivosPagina();
 }
 
 function renderDescarga(d) {
@@ -3504,6 +3559,29 @@ async function eliminarPermiso(correo) {
 ═════════════════════════════════════════ */
 
 let reporteActividadCache = [];
+let paginaReporteActividad = 1;
+
+function renderizarReporteActividadPagina() {
+  const inicio = (paginaReporteActividad - 1) * POR_PAGINA_ENVIOS;
+  const pagina = reporteActividadCache.slice(inicio, inicio + POR_PAGINA_ENVIOS);
+
+  $('rep-actividad-lista').innerHTML = pagina.map(r => {
+    const fecha = r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString('es-EC') : '—';
+    return `
+      <div style="padding:12px;background:var(--bg);border-radius:8px;border-left:3px solid var(--blue);">
+        <div style="font-size:12px;font-weight:600;">${r.descripcion || r.accion}</div>
+        <div style="font-size:11px;color:var(--txt2);margin-top:2px;">${r.admin || ''} · ${fecha}</div>
+      </div>`;
+  }).join('');
+
+  renderizarControlesPaginacion('rep-actividad-paginacion', reporteActividadCache.length, paginaReporteActividad, 'cambiarPaginaReporteActividad');
+}
+
+function cambiarPaginaReporteActividad(delta) {
+  const totalPaginas = Math.max(1, Math.ceil(reporteActividadCache.length / POR_PAGINA_ENVIOS));
+  paginaReporteActividad = Math.min(totalPaginas, Math.max(1, paginaReporteActividad + delta));
+  renderizarReporteActividadPagina();
+}
 
 async function cargarReportesActividad() {
   const lista = $('rep-actividad-lista');
@@ -3536,17 +3614,12 @@ async function cargarReportesActividad() {
 
     if (registros.length === 0) {
       lista.innerHTML = `<p class="td-vacio">Todavía no hay actividad registrada</p>`;
+      $('rep-actividad-paginacion').innerHTML = '';
       return;
     }
 
-    lista.innerHTML = registros.slice(0, 50).map(r => {
-      const fecha = r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString('es-EC') : '—';
-      return `
-        <div style="padding:12px;background:var(--bg);border-radius:8px;border-left:3px solid var(--blue);">
-          <div style="font-size:12px;font-weight:600;">${r.descripcion || r.accion}</div>
-          <div style="font-size:11px;color:var(--txt2);margin-top:2px;">${r.admin || ''} · ${fecha}</div>
-        </div>`;
-    }).join('');
+    paginaReporteActividad = 1;
+    renderizarReporteActividadPagina();
 
   } catch(e) {
     console.error(e);
@@ -4834,6 +4907,9 @@ window.filtrarListaPersonal         = filtrarListaPersonal;
 window.elegirPersona                = elegirPersona;
 window.generarReportePrueba         = generarReportePrueba;
 window.exportarReporteActividadExcel = exportarReporteActividadExcel;
+window.cambiarPaginaPersonasEnvio   = cambiarPaginaPersonasEnvio;
+window.cambiarPaginaArchivosEnvio   = cambiarPaginaArchivosEnvio;
+window.cambiarPaginaReporteActividad = cambiarPaginaReporteActividad;
 window.filtrarPersonal              = filtrarPersonal;
 window.cambiarPaginaPersonal        = cambiarPaginaPersonal;
 window.abrirModalPersonal           = abrirModalPersonal;
