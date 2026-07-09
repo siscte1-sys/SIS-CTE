@@ -528,7 +528,7 @@ function renderizarTablaNovedades(diaHoy) {
         
         // Bloquear días pasados
         const desbloqueadoPorAdmin = (novedadesActuales.diasDesbloqueados || []).includes(dia);
-        const bloqueado = dia < new Date().getDate() && !desbloqueadoPorAdmin;
+        const bloqueado = dia !== new Date().getDate() && !desbloqueadoPorAdmin;
         if (bloqueado) {
           td.style.opacity = '0.5';
           td.style.cursor = 'not-allowed';
@@ -607,6 +607,8 @@ function renderizarTablaNovedades(diaHoy) {
   }
 }
 
+let solicitudDesbloqueoDiaActual = null;
+
 async function solicitarDesbloqueo(dia) {
   try {
     // Evitar duplicar una solicitud pendiente para el mismo día/área/usuario
@@ -625,10 +627,31 @@ async function solicitarDesbloqueo(dia) {
       return;
     }
 
-    const razon = prompt(`El día ${dia} está bloqueado. Contale al administrador por qué necesitás editarlo:`);
-    if (!razon) return;
+    solicitudDesbloqueoDiaActual = dia;
+    $('solicitud-desbloqueo-sub').textContent = `Día ${dia} — ${areaActual}`;
+    $('solicitud-desbloqueo-razon').value = '';
+    $('modal-solicitar-desbloqueo').style.display = 'flex';
+    $('solicitud-desbloqueo-razon').focus();
 
-    await window._fb.addDoc(solRef, {
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
+function cerrarModalSolicitudDesbloqueo() {
+  $('modal-solicitar-desbloqueo').style.display = 'none';
+  solicitudDesbloqueoDiaActual = null;
+}
+
+async function confirmarSolicitudDesbloqueo() {
+  const razon = $('solicitud-desbloqueo-razon').value.trim();
+  if (!razon) { toast('Contale al administrador el motivo', 'err'); return; }
+  const dia = solicitudDesbloqueoDiaActual;
+  if (!dia) return;
+
+  try {
+    await window._fb.addDoc(window._fb.collection(db, 'solicitudes'), {
       area: areaActual,
       correoUsuario: usuario.email,
       tipo: 'desbloqueo_dia',
@@ -642,6 +665,7 @@ async function solicitarDesbloqueo(dia) {
     });
 
     toast('✅ Solicitud enviada. El administrador la va a revisar.', 'ok');
+    cerrarModalSolicitudDesbloqueo();
   } catch(e) {
     console.error(e);
     toast('❌ Error enviando solicitud: ' + e.message, 'err');
@@ -3910,9 +3934,26 @@ async function aprobarDesbloqueo(docId) {
   }
 }
 
-async function rechazarDesbloqueo(docId) {
-  const razon = prompt('Motivo del rechazo:');
-  if (!razon) return;
+let rechazoDesbloqueoDocId = null;
+
+function rechazarDesbloqueo(docId) {
+  rechazoDesbloqueoDocId = docId;
+  $('rechazo-desbloqueo-razon').value = '';
+  $('modal-rechazar-desbloqueo').style.display = 'flex';
+  $('rechazo-desbloqueo-razon').focus();
+}
+
+function cerrarModalRechazarDesbloqueo() {
+  $('modal-rechazar-desbloqueo').style.display = 'none';
+  rechazoDesbloqueoDocId = null;
+}
+
+async function confirmarRechazarDesbloqueo() {
+  const razon = $('rechazo-desbloqueo-razon').value.trim();
+  if (!razon) { toast('Escribí el motivo del rechazo', 'err'); return; }
+  const docId = rechazoDesbloqueoDocId;
+  if (!docId) return;
+
   try {
     await window._fb.updateDoc(window._fb.doc(db, 'solicitudes', docId), {
       estado: 'rechazada',
@@ -3920,6 +3961,7 @@ async function rechazarDesbloqueo(docId) {
       respuestaAdmin: razon
     });
     toast('❌ Desbloqueo rechazado', 'ok');
+    cerrarModalRechazarDesbloqueo();
     cargarDesbloqueos();
   } catch(e) {
     toast('Error: ' + e.message, 'err');
@@ -4281,6 +4323,8 @@ window.borrarTodaLaBaseNovedades    = borrarTodaLaBaseNovedades;
 window.mostrarFormAcceso            = mostrarFormAcceso;
 window.cerrarModalAcceso            = cerrarModalAcceso;
 window.abrirSelectorPersona         = abrirSelectorPersona;
+window.cerrarModalSolicitudDesbloqueo = cerrarModalSolicitudDesbloqueo;
+window.confirmarSolicitudDesbloqueo = confirmarSolicitudDesbloqueo;
 window.cerrarSelectorPersona        = cerrarSelectorPersona;
 window.filtrarListaPersonal         = filtrarListaPersonal;
 window.elegirPersona                = elegirPersona;
@@ -4305,6 +4349,8 @@ window.filtrarAuditoria             = filtrarAuditoria;
 window.limpiarAuditoria             = limpiarAuditoria;
 window.aprobarDesbloqueo            = aprobarDesbloqueo;
 window.rechazarDesbloqueo           = rechazarDesbloqueo;
+window.cerrarModalRechazarDesbloqueo = cerrarModalRechazarDesbloqueo;
+window.confirmarRechazarDesbloqueo  = confirmarRechazarDesbloqueo;
 window.cargarResumenGeneral         = cargarResumenGeneral;
 window.exportarResumenGeneralExcel  = exportarResumenGeneralExcel;
 window.mostrarDetalleCodigo         = mostrarDetalleCodigo;
