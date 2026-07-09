@@ -2739,29 +2739,53 @@ async function importarBaseDatos() {
       return;
     }
     
+    // Detectar columnas por su encabezado, en vez de asumir una posición fija
+    // (distintos archivos pueden traer GRADO/CÓDIGO en orden diferente)
+    function buscarColumna(headerRow, nombresPosibles) {
+      const normalizado = headerRow.map(h => String(h || '').toUpperCase().trim());
+      for (const nombre of nombresPosibles) {
+        const idx = normalizado.indexOf(nombre);
+        if (idx !== -1) return idx;
+      }
+      return -1;
+    }
+
+    const encabezado = filas[0] || [];
+    let iCodigo = buscarColumna(encabezado, ['CODIGO', 'CÓDIGO', 'N°', 'Nº', 'NUMERO']);
+    let iGrado = buscarColumna(encabezado, ['GRADO']);
+    let iApellidos = buscarColumna(encabezado, ['APELLIDOS']);
+    let iNombres = buscarColumna(encabezado, ['NOMBRES']);
+    let iArea = buscarColumna(encabezado, ['AREA ACTUAL', 'ÁREA ACTUAL', 'AREA', 'ÁREA']);
+
+    // Si no se pudo detectar por encabezado, usar el orden por defecto conocido
+    const usoPorDefecto = [iCodigo, iGrado, iApellidos, iNombres, iArea].some(i => i === -1);
+    if (usoPorDefecto) {
+      iCodigo = 0; iGrado = 1; iApellidos = 2; iNombres = 3; iArea = 4;
+      toast('⚠️ No se detectaron los encabezados del archivo, se usó el orden por defecto (Código, Grado, Apellidos, Nombres, Área). Revisá que los datos importados sean correctos.', 'err');
+    }
+
     // Parsear filas (saltar encabezado)
-    // Estructura real del LIS: [0]=Código/Nº, [1]=Grado, [2]=Apellidos, [3]=Nombres, [4]=Área actual, [5]=concatenado (ignorado)
     const datos = {};
     const personalCompleto = []; // lista completa para autocompletar "Elaborado por" / "Responsable"
     for (let i = 1; i < filas.length; i++) {
       const partes = filas[i];
-      if (!partes || partes.length < 5 || !String(partes[0]).trim()) continue;
+      if (!partes || partes.length < 5 || !String(partes[iCodigo]).trim()) continue;
       
-      const area = sanitizarNombreArea(partes[4] || 'SIN ÁREA');
+      const area = sanitizarNombreArea(partes[iArea] || 'SIN ÁREA');
       if (!datos[area]) datos[area] = [];
       
-      const grado = partes[1] || '';
-      const nombreCompleto = `${partes[2] || ''} ${partes[3] || ''}`.trim();
+      const grado = partes[iGrado] || '';
+      const nombreCompleto = `${partes[iApellidos] || ''} ${partes[iNombres] || ''}`.trim();
 
       datos[area].push({
-        codigo: partes[0],
+        codigo: partes[iCodigo],
         grado: grado,
         apellidosNombres: nombreCompleto,
         novedadesPorDia: {},
         observaciones: ''
       });
 
-      personalCompleto.push(`${partes[0]} - ${grado} ${nombreCompleto}`.trim());
+      personalCompleto.push(`${partes[iCodigo]} - ${grado} ${nombreCompleto}`.trim());
     }
     
     // Guardar la lista completa de personal (para los selectores de "Elaborado por" / "Responsable")
@@ -2929,6 +2953,83 @@ async function eliminarNovedadesAreaMes() {
   } catch(e) {
     console.error(e);
     toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
+async function borrarTodaLaBaseNovedades() {
+  if (!esAdmin()) {
+    toast('❌ Solo el administrador puede hacer esto', 'err');
+    return;
+  }
+
+  const primeraConfirmacion = confirm(
+    '⚠️ ESTO VA A BORRAR TODA LA BASE DE NOVEDADES (todas las áreas, todos los meses).\n\n' +
+    'Los envíos de archivos (pestaña Envíos) no se tocan.\n\n' +
+    '¿Estás seguro de que querés continuar?'
+  );
+  if (!primeraConfirmacion) { toast('Cancelado', 'ok'); return; }
+
+  const segundaConfirmacion = prompt('Para confirmar, escribí exactamente: BORRAR TODO');
+  if (segundaConfirmacion !== 'BORRAR TODO') {
+    toast('Cancelado — no se borró nada', 'ok');
+    return;
+  }
+
+  const progreso = $('borrar-todo-progreso');
+  show('borrar-todo-progreso');
+  progreso.style.display = 'block';
+  progreso.textContent = 'Preparando...';
+
+  try {
+    const areasReales = await obtenerAreasNovedades();
+
+    // Rango de meses a cubrir: desde el año pasado hasta el año que viene
+    const anioActual = new Date().getFullYear();
+    const periodos = [];
+    for (let a = anioActual - 1; a <= anioActual + 1; a++) {
+      for (let m = 1; m <= 12; m++) {
+        periodos.push(`${a}-${String(m).padStart(2, '0')}`);
+      }
+    }
+
+    const combinaciones = [];
+    areasReales.forEach(area => {
+      periodos.forEach(periodo => combinaciones.push({ area, periodo }));
+    });
+
+    let borrados = 0;
+    const tamanioLote = 25;
+    for (let i = 0; i < combinaciones.length; i += tamanioLote) {
+      const lote = combinaciones.slice(i, i + tamanioLote);
+      await Promise.all(lote.map(async ({ area, periodo }) => {
+        try {
+          await window._fb.deleteDoc(window._fb.doc(db, 'novedades', area, periodo, 'datos'));
+        } catch(e) { /* documento no existía, se ignora */ }
+      }));
+      borrados += lote.length;
+      progreso.textContent = `Borrando... ${Math.min(borrados, combinaciones.length)} / ${combinaciones.length} combinaciones revisadas`;
+    }
+
+    // Resetear las listas de áreas y personal para que la próxima importación arranque limpia
+    await window._fb.deleteDoc(window._fb.doc(db, 'sistema', 'areas_novedades')).catch(() => {});
+    await window._fb.deleteDoc(window._fb.doc(db, 'sistema', 'personal_lis')).catch(() => {});
+
+    await registrarEnAuditoria(
+      'borrar_toda_base_novedades', null, usuario.email, null, null,
+      { areasRevisadas: areasReales.length, periodosRevisados: periodos.length },
+      `Borrado total de la base de Novedades por ${usuario.email}`
+    );
+
+    progreso.textContent = `✅ Listo. Se revisaron ${areasReales.length} áreas × ${periodos.length} meses.`;
+    toast('✅ Base de Novedades borrada. Podés volver a importar desde cero.', 'ok');
+
+    novedadesActuales = null;
+    areaActual = null;
+
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message, 'err');
+    progreso.textContent = '❌ Ocurrió un error, revisá la consola.';
   }
 }
 
@@ -3446,6 +3547,7 @@ window.cerrarErrorCodigo            = cerrarErrorCodigo;
 /* Panel Admin — Novedades */
 window.importarBaseDatos            = importarBaseDatos;
 window.eliminarNovedadesAreaMes     = eliminarNovedadesAreaMes;
+window.borrarTodaLaBaseNovedades    = borrarTodaLaBaseNovedades;
 window.mostrarFormAcceso            = mostrarFormAcceso;
 window.cerrarModalAcceso            = cerrarModalAcceso;
 window.confirmarGuardarAcceso       = confirmarGuardarAcceso;
