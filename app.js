@@ -3863,6 +3863,7 @@ async function cargarResumenGeneral() {
 
   const filasPorArea = [];
   const totales = { total: 0, 'S/N':0, 'OA':0, 'X':0, 'CS':0, 'B':0, 'Li':0, 'V':0, 'PE':0 };
+  const detalleAusenciasX = [];
 
   const areasReales = await obtenerAreasNovedades();
   for (const area of areasReales) {
@@ -3877,9 +3878,20 @@ async function cargarResumenGeneral() {
       const conteo = { 'S/N':0, 'OA':0, 'X':0, 'CS':0, 'B':0, 'Li':0, 'V':0, 'PE':0 };
       agentes.forEach(agente => {
         const dias = agente.novedadesPorDia || {};
+        let diasConX = 0;
         Object.values(dias).forEach(codigo => {
           if (conteo.hasOwnProperty(codigo)) conteo[codigo]++;
+          if (codigo === 'X') diasConX++;
         });
+        if (diasConX > 0) {
+          detalleAusenciasX.push({
+            area,
+            codigo: agente.codigo || '',
+            grado: agente.grado || '',
+            apellidosNombres: agente.apellidosNombres || '',
+            diasConX
+          });
+        }
       });
 
       filasPorArea.push({
@@ -3921,7 +3933,7 @@ async function cargarResumenGeneral() {
 
   tbody.innerHTML = html;
 
-  resumenGeneralCache = { filasPorArea, totales, periodo };
+  resumenGeneralCache = { filasPorArea, totales, periodo, detalleAusenciasX };
 }
 
 async function exportarResumenGeneralExcel() {
@@ -3937,14 +3949,16 @@ async function exportarResumenGeneralExcel() {
     });
   }
 
-  const { filasPorArea, totales, periodo } = resumenGeneralCache;
+  const { filasPorArea, totales, periodo, detalleAusenciasX } = resumenGeneralCache;
   const [anio, mesNum] = periodo.split('-');
   const nombreMes = obtenerNombreMes(mesNum);
+  const numCols = 3 + CODIGOS_VALIDOS.length; // Área, Responsable, Total Personal + 8 códigos
 
   const aoa = [];
-  aoa.push([`RESUMEN GENERAL DE NOVEDADES — ${nombreMes} ${anio}`]);
-  aoa.push([]);
-  aoa.push(['ÁREA', 'RESPONSABLE', 'TOTAL PERSONAL', ...CODIGOS_VALIDOS]);
+
+  // ── Tabla principal ──
+  aoa.push([`RESUMEN GENERAL DE NOVEDADES — CTE ${anio}`]);
+  aoa.push(['ÁREA', 'RESPONSABLE (CÓD. - APELLIDO)', 'TOTAL PERSONAL', 'S/N', 'OA', 'X (Ausentes)', 'CS', 'B (Bajas)', 'Li (Licencias)', 'V', 'PE']);
 
   filasPorArea.forEach(fila => {
     aoa.push([fila.area, fila.responsable, fila.totalPersonal, ...CODIGOS_VALIDOS.map(c => fila.conteo[c])]);
@@ -3952,9 +3966,29 @@ async function exportarResumenGeneralExcel() {
 
   aoa.push(['TOTAL GENERAL', '', totales.total, ...CODIGOS_VALIDOS.map(c => totales[c])]);
 
+  // ── Detalle de ausencias injustificadas (X) ──
+  aoa.push([]);
+  aoa.push(['DETALLE DE AUSENCIAS INJUSTIFICADAS (X)']);
+  aoa.push(['ÁREA', 'CÓDIGO', 'GRADO', 'APELLIDOS Y NOMBRES', 'DÍAS CON X']);
+
+  if (detalleAusenciasX && detalleAusenciasX.length > 0) {
+    detalleAusenciasX.forEach(d => {
+      aoa.push([d.area, d.codigo, d.grado, d.apellidosNombres, d.diasConX]);
+    });
+    aoa.push(['TOTAL DE PERSONAS CON AUSENCIA INJUSTIFICADA', '', '', '', detalleAusenciasX.length]);
+  } else {
+    aoa.push(['Sin ausencias injustificadas este mes']);
+  }
+
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 + CODIGOS_VALIDOS.length } }];
-  ws['!cols'] = [{ wch: 30 }, { wch: 28 }, { wch: 14 }, ...CODIGOS_VALIDOS.map(() => ({ wch: 8 }))];
+
+  const filaTituloDetalle = filasPorArea.length + 4; // título(0) + header(1) + filas + total + blank
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: numCols - 1 } },
+    { s: { r: filaTituloDetalle, c: 0 }, e: { r: filaTituloDetalle, c: 4 } }
+  ];
+
+  ws['!cols'] = [{ wch: 32 }, { wch: 28 }, { wch: 14 }, ...CODIGOS_VALIDOS.map(() => ({ wch: 12 }))];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Resumen General');
