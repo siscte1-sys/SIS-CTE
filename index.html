@@ -585,6 +585,22 @@
             </div>
           </div>
         </div>
+
+        <div class="panel-white" style="border:2px solid var(--red);margin-top:16px;">
+          <div style="padding:20px;">
+            <div class="sec-titulo" style="color:var(--red);">🗑️ Borrar TODA la base de datos de Novedades</div>
+            <p style="color:var(--txt2);margin-bottom:8px;font-size:12px;">
+              Esto borra <strong>todas las áreas y todos los meses</strong> de Novedades — pensado para cuando una importación salió mal por completo y preferís empezar de cero.
+            </p>
+            <p style="color:var(--red);margin-bottom:16px;font-size:12px;">
+              ⚠️ Acción irreversible. Borra todo lo que el sistema conoce (áreas detectadas en tus importaciones, en un rango de 3 años). Los envíos de archivos (pestaña Envíos) NO se tocan.
+            </p>
+            <button class="btn-acc btn-acc-red" onclick="borrarTodaLaBaseNovedades()">
+              🗑️ Borrar toda la base de Novedades
+            </button>
+            <div id="borrar-todo-progreso" style="display:none;margin-top:12px;font-size:12px;color:var(--txt2);"></div>
+          </div>
+        </div>
       </div>
 
       <!-- TAB 2: Accesos -->
