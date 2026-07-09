@@ -658,6 +658,13 @@
               <button class="btn-acc btn-acc-green" onclick="abrirModalPersonal()" style="height:38px;">➕ Agregar</button>
             </div>
 
+            <div id="personal-cambio-lote" style="display:none;margin-bottom:16px;padding:12px 16px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;align-items:center;gap:12px;flex-wrap:wrap;">
+              <span id="personal-cambio-lote-info" style="font-size:12px;font-weight:600;color:var(--blue);"></span>
+              <select id="personal-cambio-lote-area" class="form-select" style="max-width:280px;"></select>
+              <button class="btn-acc btn-acc-blue" onclick="aplicarCambioAreaLote()">Aplicar área a los seleccionados</button>
+              <button class="btn-acc btn-acc-ghost" onclick="limpiarSeleccionPersonal()">Cancelar selección</button>
+            </div>
+
             <div id="personal-cargando" style="text-align:center;color:var(--txt2);font-size:12px;padding:20px;">
               Cargando directorio de personal...
             </div>
@@ -665,10 +672,17 @@
             <div id="personal-tabla-container" style="display:none;overflow-x:auto;">
               <table>
                 <thead>
-                  <tr><th>Código</th><th>Grado</th><th>Apellidos</th><th>Nombres</th><th>Área</th><th>Acciones</th></tr>
+                  <tr>
+                    <th style="width:32px;"><input type="checkbox" id="personal-check-todos" onchange="toggleSeleccionarTodosPersonal(this.checked)"></th>
+                    <th>Código</th><th>Grado</th><th>Apellidos</th><th>Nombres</th><th>Área</th><th>Acciones</th>
+                  </tr>
                 </thead>
                 <tbody id="personal-tabla-body"></tbody>
               </table>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+              <button class="btn-acc btn-acc-ghost" id="personal-seleccionar-filtrados" style="display:none;font-size:11px;" onclick="seleccionarTodosLosFiltradosPersonal()"></button>
             </div>
 
             <div id="personal-paginacion" style="display:none;justify-content:space-between;align-items:center;margin-top:16px;">
