@@ -495,6 +495,7 @@
           <div id="rep-actividad-lista" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
             <p class="td-vacio">Cargando...</p>
           </div>
+          <div id="rep-actividad-paginacion"></div>
         </div>
       </div>
     </div>
@@ -575,7 +576,10 @@
 
       <div class="sec-titulo">Quiénes enviaron archivos</div>
       <div class="panel-white" style="margin-bottom:20px">
-        <div id="admin-personas"><p class="cargando-txt">Cargando...</p></div>
+        <div style="padding:16px 20px 4px;">
+          <div id="admin-personas"><p class="cargando-txt">Cargando...</p></div>
+          <div id="admin-personas-paginacion"></div>
+        </div>
       </div>
 
       <div class="sec-titulo">Todos los archivos recibidos</div>
@@ -589,6 +593,9 @@
               <tr><td colspan="9" class="td-vacio">Cargando datos...</td></tr>
             </tbody>
           </table>
+        </div>
+        <div style="padding:0 20px 16px;">
+          <div id="tabla-body-paginacion"></div>
         </div>
       </div>
 
