@@ -112,16 +112,19 @@ async function initFirebase() {
       if (result?.user) console.log('✓ Redirect login:', result.user.email);
     } catch(e) { console.warn('Redirect result:', e.message); }
 
-    onAuthStateChanged(auth, u => {
+    onAuthStateChanged(auth, async u => {
       if (u) {
         usuario = { uid: u.uid, nombre: u.displayName, email: u.email, foto: u.photoURL };
+        await cargarPermisoUsuario();
         actualizarNav();
         show('nb-novedades');                              // Novedades: todos los usuarios
         show('nb-envios');                                  // Envíos: todos los usuarios
-        esAdmin() ? show('nb-admin') : hide('nb-admin');   // Panel de control: solo admin
+        tieneAccesoPanel() ? show('nb-admin') : hide('nb-admin');   // Panel de control: admin o con permiso parcial
+        esSupervisor() ? show('nb-reportes') : hide('nb-reportes'); // Reportes: solo supervisor
         irEnvios();
       } else {
         usuario = null;
+        permisoUsuario = null;
         actualizarNav();
         ir('vista-login');
       }
@@ -169,12 +172,90 @@ const esAdmin = () =>
   usuario && ADMIN_EMAILS.map(x => x.toLowerCase()).includes(usuario.email.toLowerCase());
 
 /* ══════════════════════════════════
+   PERMISOS — acceso parcial al Panel de Control / supervisor de solo lectura
+══════════════════════════════════ */
+
+// Catálogo de acciones concretas que se pueden delegar, agrupadas por pestaña.
+// key = se usa como identificador en Firestore y en los atributos data-permiso del HTML.
+const PERMISOS_DISPONIBLES = [
+  { tab: 'envios', tabLabel: '📤 Envíos', acciones: [
+    { key: 'envios_ver',                label: 'Ver envíos y estadísticas' },
+    { key: 'envios_exportar',           label: 'Exportar Excel (todo / filtrado)' },
+    { key: 'envios_archivar',           label: 'Archivar mes' },
+    { key: 'envios_eliminar_duplicados',label: 'Eliminar registros de la BD' },
+  ]},
+  { tab: 'importar', tabLabel: '📥 Importar BD', acciones: [
+    { key: 'importar_bd',               label: 'Importar base de datos (Excel/CSV)' },
+    { key: 'importar_eliminar_area_mes',label: 'Eliminar Novedades de un área/mes puntual' },
+    { key: 'importar_borrar_todo',      label: 'Borrar TODA la base de Novedades' },
+    { key: 'importar_ver_personal',     label: 'Ver Base de Personal' },
+    { key: 'importar_editar_personal',  label: 'Agregar / editar / eliminar personal' },
+    { key: 'importar_cambio_lote',      label: 'Cambio de área en lote' },
+  ]},
+  { tab: 'accesos', tabLabel: '🔐 Accesos', acciones: [
+    { key: 'accesos_ver',               label: 'Ver accesos' },
+    { key: 'accesos_gestionar',         label: 'Crear / editar / eliminar accesos' },
+  ]},
+  { tab: 'auditoria', tabLabel: '📋 Auditoría', acciones: [
+    { key: 'auditoria_ver',             label: 'Ver auditoría' },
+  ]},
+  { tab: 'desbloqueos', tabLabel: '🔓 Desbloqueos', acciones: [
+    { key: 'desbloqueos_ver',           label: 'Ver solicitudes de desbloqueo' },
+    { key: 'desbloqueos_aprobar',       label: 'Aprobar / rechazar solicitudes' },
+    { key: 'desbloqueos_directo',       label: 'Desbloqueo directo (sin esperar solicitud)' },
+  ]},
+  { tab: 'resumen', tabLabel: '📊 Resumen General', acciones: [
+    { key: 'resumen_ver',               label: 'Ver resumen general' },
+    { key: 'resumen_exportar',          label: 'Exportar resumen a Excel' },
+  ]},
+];
+
+let permisoUsuario = null; // { tipo: 'parcial'|'supervisor', acciones: [...] } o null
+
+async function cargarPermisoUsuario() {
+  permisoUsuario = null;
+  if (!usuario || esAdmin()) return; // el superadmin no necesita permiso, ya tiene todo
+  try {
+    const ref = window._fb.doc(db, 'permisos_panel', usuario.email.toLowerCase());
+    const snap = await window._fb.getDoc(ref);
+    if (snap.exists()) permisoUsuario = snap.data();
+  } catch(e) {
+    console.warn('No se pudo cargar el permiso del usuario:', e);
+  }
+}
+
+const tienePermisoAccion = (key) =>
+  esAdmin() || (permisoUsuario?.tipo === 'parcial' && (permisoUsuario.acciones || []).includes(key));
+
+// Una pestaña se muestra si el usuario tiene AL MENOS una acción de ese grupo
+const tabPermitido = (tabName) => {
+  if (esAdmin()) return true;
+  if (permisoUsuario?.tipo !== 'parcial') return false;
+  const grupo = PERMISOS_DISPONIBLES.find(g => g.tab === tabName);
+  if (!grupo) return false;
+  return grupo.acciones.some(a => (permisoUsuario.acciones || []).includes(a.key));
+};
+
+const tieneAccesoPanel = () => esAdmin() || (permisoUsuario && permisoUsuario.tipo === 'parcial');
+const esSupervisor = () => !esAdmin() && permisoUsuario && permisoUsuario.tipo === 'supervisor';
+
+// Oculta/deshabilita cualquier elemento con data-permiso="clave" si el usuario no la tiene
+function aplicarPermisosBotones() {
+  if (esAdmin()) return; // el admin siempre ve todo
+  document.querySelectorAll('[data-permiso]').forEach(el => {
+    const claves = el.dataset.permiso.split(',').map(k => k.trim());
+    const permitido = claves.some(k => tienePermisoAccion(k));
+    el.style.display = permitido ? '' : 'none';
+  });
+}
+
+/* ══════════════════════════════════
    DOM HELPERS
 ══════════════════════════════════ */
 const $       = id => document.getElementById(id);
 const show    = id => { const e=$(id); if(!e) return; e.style.display = ['nav-sesion','nav-guest','nav-right'].includes(id) ? 'flex' : 'block'; };
 const hide    = id => { const e=$(id); if(e) e.style.display='none'; };
-const hideAll = () => ['vista-login','vista-novedades','vista-envios','vista-exito','vista-admin'].forEach(hide);
+const hideAll = () => ['vista-login','vista-novedades','vista-envios','vista-exito','vista-admin','vista-reportes'].forEach(hide);
 
 function ir(v) {
   hideAll();
@@ -184,9 +265,11 @@ function ir(v) {
   if (v==='vista-envios'||v==='vista-exito') $('nb-envios')?.classList.add('active');
   if (v==='vista-novedades') $('nb-novedades')?.classList.add('active');
   if (v==='vista-admin') $('nb-admin')?.classList.add('active');
+  if (v==='vista-reportes') $('nb-reportes')?.classList.add('active');
 }
 
 function irNovedades() { ir('vista-novedades'); cargarNovedadesActuales(); }
+function irReportes() { ir('vista-reportes'); cargarReportesActividad(); }
 
 function toast(msg, tipo='ok') {
   const t = $('toast');
@@ -218,7 +301,8 @@ function actualizarNav() {
     $('nav-nombre').textContent = usuario.nombre?.split(' ')[0] || usuario.email;
     show('nav-sesion'); hide('nav-guest');
     esAdmin() ? show('nb-envios') : hide('nb-envios');
-    esAdmin() ? show('nb-admin') : hide('nb-admin');
+    tieneAccesoPanel() ? show('nb-admin') : hide('nb-admin');
+    esSupervisor() ? show('nb-reportes') : hide('nb-reportes');
   } else {
     hide('nav-sesion'); show('nav-guest'); hide('nb-admin');
   }
@@ -1217,6 +1301,33 @@ async function generarReportePrueba() {
   }
 }
 
+function aplicarVisibilidadTabsAdmin() {
+  const tabsMap = { envios: '📤 Envíos', importar: '📥 Importar BD', accesos: '🔐 Accesos', auditoria: '📋 Auditoría', desbloqueos: '🔓 Desbloqueos', resumen: '📊 Resumen General' };
+  let primeraVisible = null;
+
+  document.querySelectorAll('.admin-tab').forEach(tab => {
+    const tabName = tab.dataset.tab;
+    if (tabName === 'permisos') {
+      tab.style.display = esAdmin() ? 'inline-flex' : 'none';
+      return;
+    }
+    const permitido = tabPermitido(tabName);
+    tab.style.display = permitido ? 'inline-flex' : 'none';
+    if (permitido && !primeraVisible) primeraVisible = tabName;
+  });
+
+  // Si el usuario no tiene la pestaña "Envíos" (activa por defecto) permitida,
+  // activar automáticamente la primera pestaña que sí tenga.
+  const tabEnviosPermitido = tabPermitido('envios');
+  if (!tabEnviosPermitido && primeraVisible) {
+    const tabBtn = document.querySelector(`.admin-tab[data-tab="${primeraVisible}"]`);
+    if (tabBtn) tabBtn.click();
+  } else if (tabEnviosPermitido) {
+    cargarAdmin();
+  }
+  aplicarPermisosBotones();
+}
+
 function ocultarPantallaCierreMes() {
   hide('cierre-mes-container');
   cierreMesData = null;
@@ -1429,26 +1540,37 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   ws.addRow([]);
 
   // ── Certificación ──
-  ws.mergeCells(ws.rowCount + 1, 1, ws.rowCount + 1, numCols);
-  const filaCertTitulo = ws.getRow(ws.rowCount);
+  const filaCertTituloNum = ws.rowCount + 1;
+  ws.mergeCells(filaCertTituloNum, 1, filaCertTituloNum, numCols);
+  const filaCertTitulo = ws.getRow(filaCertTituloNum);
   filaCertTitulo.getCell(1).value = 'CERTIFICACIÓN';
   filaCertTitulo.eachCell({ includeEmpty: true }, c => estiloNavy(c));
 
   const mitad = Math.floor(numCols / 2);
-  ws.mergeCells(ws.rowCount + 1, 1, ws.rowCount + 1, mitad);
-  ws.mergeCells(ws.rowCount, mitad + 1, ws.rowCount, numCols);
-  const filaCertLabels = ws.getRow(ws.rowCount);
+  const filaLabelsNum = filaCertTituloNum + 1;
+  ws.mergeCells(filaLabelsNum, 1, filaLabelsNum, mitad);
+  ws.mergeCells(filaLabelsNum, mitad + 1, filaLabelsNum, numCols);
+  const filaCertLabels = ws.getRow(filaLabelsNum);
   filaCertLabels.getCell(1).value = 'ELABORADO POR';
   filaCertLabels.getCell(mitad + 1).value = 'RESPONSABLE';
   filaCertLabels.eachCell({ includeEmpty: true }, c => estiloNavy(c));
 
-  ws.mergeCells(ws.rowCount + 1, 1, ws.rowCount + 1, mitad);
-  ws.mergeCells(ws.rowCount, mitad + 1, ws.rowCount, numCols);
-  const filaCertValores = ws.getRow(ws.rowCount);
+  const filaValoresNum = filaLabelsNum + 1;
+  ws.mergeCells(filaValoresNum, 1, filaValoresNum, mitad);
+  ws.mergeCells(filaValoresNum, mitad + 1, filaValoresNum, numCols);
+  const filaCertValores = ws.getRow(filaValoresNum);
   filaCertValores.getCell(1).value = elaboradoPor;
   filaCertValores.getCell(mitad + 1).value = responsable;
   filaCertValores.eachCell({ includeEmpty: true }, c => estiloAmarillo(c));
-  filaCertValores.height = 20;
+  filaCertValores.height = 22;
+
+  // ── Líneas de cuadrícula en toda la hoja ──
+  const bordeDelgado = { style: 'thin', color: { argb: 'FF999999' } };
+  ws.eachRow({ includeEmpty: false }, (row) => {
+    row.eachCell({ includeEmpty: true }, cell => {
+      cell.border = { top: bordeDelgado, left: bordeDelgado, bottom: bordeDelgado, right: bordeDelgado };
+    });
+  });
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/octet-stream' });
@@ -1521,7 +1643,8 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   doc.autoTable({
     head, body,
     startY: 26,
-    styles: { fontSize: 6, cellPadding: 1 },
+    theme: 'grid',
+    styles: { fontSize: 6, cellPadding: 1, lineColor: [150, 150, 150], lineWidth: 0.1 },
     headStyles: { fillColor: NAVY, textColor: BLANCO },
     didParseCell: (hookData) => {
       // Pintar de amarillo las columnas de días (índices 3 al 3+totalDias-1) en el cuerpo
@@ -1533,58 +1656,65 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   });
 
   let y = doc.lastAutoTable.finalY + 6;
+  doc.setDrawColor(150, 150, 150);
+  doc.setLineWidth(0.1);
 
   // ── Nomenclatura ──
   doc.setFillColor(...NAVY);
-  doc.rect(10, y, anchoPagina - 20, 6, 'F');
+  doc.rect(10, y, anchoPagina - 20, 6, 'FD');
   doc.setTextColor(...BLANCO);
   doc.setFontSize(9);
   doc.setFont(undefined, 'bold');
   doc.text('NOMENCLATURA', anchoPagina / 2, y + 4.2, { align: 'center' });
   doc.setTextColor(0, 0, 0);
-  y += 9;
+  y += 6;
 
   doc.setFont(undefined, 'normal');
   doc.setFontSize(8);
+  const altoFilaNom = 4.6;
   CODIGOS_VALIDOS.forEach(c => {
     doc.setFillColor(...VERDE_CLARO);
-    doc.rect(10, y - 3.2, anchoPagina - 20, 4.2, 'F');
+    doc.rect(10, y, anchoPagina - 20, altoFilaNom, 'FD');
     doc.setFont(undefined, 'bold');
-    doc.text(c, 12, y);
+    doc.text(c, 12, y + 3.2);
     doc.setFont(undefined, 'normal');
-    doc.text(`— ${CODIGOS_DESC[c]}`, 22, y);
-    y += 4.6;
+    doc.text(`— ${CODIGOS_DESC[c]}`, 24, y + 3.2);
+    y += altoFilaNom;
   });
 
   y += 6;
 
   // ── Certificación ──
   doc.setFillColor(...NAVY);
-  doc.rect(10, y, anchoPagina - 20, 6, 'F');
+  doc.rect(10, y, anchoPagina - 20, 6, 'FD');
   doc.setTextColor(...BLANCO);
   doc.setFontSize(9);
   doc.setFont(undefined, 'bold');
   doc.text('CERTIFICACIÓN', anchoPagina / 2, y + 4.2, { align: 'center' });
-  y += 10;
+  y += 6;
 
   const mitadPagina = anchoPagina / 2;
+  const anchoCol = mitadPagina - 12;
+
+  // Fila de etiquetas
   doc.setFillColor(...NAVY);
-  doc.rect(10, y - 4.5, mitadPagina - 12, 6, 'F');
-  doc.rect(mitadPagina + 2, y - 4.5, mitadPagina - 12, 6, 'F');
+  doc.rect(10, y, anchoCol, 6, 'FD');
+  doc.rect(mitadPagina + 2, y, anchoCol, 6, 'FD');
   doc.setTextColor(...BLANCO);
   doc.setFontSize(8);
-  doc.text('ELABORADO POR', 10 + (mitadPagina - 12) / 2, y - 0.8, { align: 'center' });
-  doc.text('RESPONSABLE', mitadPagina + 2 + (mitadPagina - 12) / 2, y - 0.8, { align: 'center' });
-  y += 3;
+  doc.text('ELABORADO POR', 10 + anchoCol / 2, y + 4.2, { align: 'center' });
+  doc.text('RESPONSABLE', mitadPagina + 2 + anchoCol / 2, y + 4.2, { align: 'center' });
+  y += 6;
 
+  // Fila de valores
   doc.setFillColor(...AMARILLO);
-  doc.rect(10, y - 4.5, mitadPagina - 12, 7, 'F');
-  doc.rect(mitadPagina + 2, y - 4.5, mitadPagina - 12, 7, 'F');
+  doc.rect(10, y, anchoCol, 8, 'FD');
+  doc.rect(mitadPagina + 2, y, anchoCol, 8, 'FD');
   doc.setTextColor(0, 0, 0);
   doc.setFont(undefined, 'normal');
   doc.setFontSize(9);
-  doc.text(elaboradoPor, 10 + (mitadPagina - 12) / 2, y, { align: 'center' });
-  doc.text(responsable, mitadPagina + 2 + (mitadPagina - 12) / 2, y, { align: 'center' });
+  doc.text(elaboradoPor, 10 + anchoCol / 2, y + 5.2, { align: 'center' });
+  doc.text(responsable, mitadPagina + 2 + anchoCol / 2, y + 5.2, { align: 'center' });
 
   doc.save(`novedades_${area}_${periodo}.pdf`);
 }
@@ -1721,7 +1851,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', logout));
   $('nb-novedades')?.addEventListener('click', () => usuario ? irNovedades() : ir('vista-login'));
   $('nb-envios')?.addEventListener('click', () => usuario ? irEnvios() : ir('vista-login'));
-  $('nb-admin')?.addEventListener('click', () => { if(esAdmin()){ ir('vista-admin'); cargarAdmin(); } });
+  $('nb-admin')?.addEventListener('click', () => {
+    if (!tieneAccesoPanel()) return;
+    ir('vista-admin');
+    aplicarVisibilidadTabsAdmin();
+  });
+  $('nb-reportes')?.addEventListener('click', () => { if (esSupervisor()) irReportes(); });
   $('btn-enviar-otro')?.addEventListener('click', irEnvios);
   $('btn-enviar')?.addEventListener('click', enviarArchivo);
   $('btn-filtrar')?.addEventListener('click', aplicarFiltros);
@@ -1733,6 +1868,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.admin-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       const tabName = tab.dataset.tab;
+      if (tabName !== 'permisos' && !tabPermitido(tabName)) return; // defensa extra, el botón ya está oculto
+      if (tabName === 'permisos' && !esAdmin()) return;
       document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.admin-tab-content').forEach(c => c.style.display = 'none');
       tab.classList.add('active');
@@ -1744,6 +1881,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'desbloqueos') { cargarDesbloqueos(); poblarSelectoresDesbloqueoDirecto(); }
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
       if (tabName === 'importar') { poblarSelectoresLimpieza(); cargarDirectorioPersonal(); }
+      if (tabName === 'permisos') { poblarListaPermisos(); }
+      aplicarPermisosBotones();
     });
   });
 
@@ -3185,7 +3324,10 @@ async function importarBaseDatos() {
         const agentesFinal = dataExistente ? [...(dataExistente.agentes || [])] : [];
 
         agentesNuevos.forEach(nuevo => {
-          const yaExiste = nuevo.codigo && agentesFinal.some(a => String(a.codigo).trim() === String(nuevo.codigo).trim());
+          const codigoNuevoNorm = String(nuevo.codigo || '').replace(/\s+/g, '').toUpperCase();
+          const yaExiste = codigoNuevoNorm && agentesFinal.some(a =>
+            String(a.codigo || '').replace(/\s+/g, '').toUpperCase() === codigoNuevoNorm
+          );
           if (!yaExiste) agentesFinal.push(nuevo);
         });
 
@@ -3237,6 +3379,177 @@ async function importarBaseDatos() {
 /* ═════════════════════════════════════════
    PANEL ADMIN — Corregir/Eliminar datos de un área+mes
 ═════════════════════════════════════════ */
+
+/* ═════════════════════════════════════════
+   PANEL ADMIN — Permisos (acceso parcial / supervisor)
+═════════════════════════════════════════ */
+
+function renderizarGruposPermisos() {
+  const cont = $('permiso-acciones-grupos');
+  if (cont.dataset.renderizado === '1') return;
+  cont.innerHTML = PERMISOS_DISPONIBLES.map(grupo => `
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
+        <span>${grupo.tabLabel}</span>
+        <a href="#" style="font-size:11px;font-weight:600;" onclick="event.preventDefault(); marcarGrupoPermiso('${grupo.tab}', true)">Marcar todo</a>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;padding-left:8px;">
+        ${grupo.acciones.map(a => `
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+            <input type="checkbox" value="${a.key}" data-grupo="${grupo.tab}" class="permiso-accion-check"> ${a.label}
+          </label>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+  cont.dataset.renderizado = '1';
+}
+
+function marcarGrupoPermiso(tab, valor) {
+  document.querySelectorAll(`.permiso-accion-check[data-grupo="${tab}"]`).forEach(c => c.checked = valor);
+}
+
+function actualizarVisibilidadTabsPermiso() {
+  const tipo = $('permiso-tipo').value;
+  renderizarGruposPermisos();
+  $('permiso-tabs-container').style.display = tipo === 'parcial' ? 'block' : 'none';
+}
+
+async function guardarPermiso() {
+  const correo = $('permiso-correo').value.trim().toLowerCase();
+  const tipo = $('permiso-tipo').value;
+
+  if (!correo || !correo.includes('@')) { toast('Ingresá un correo válido', 'err'); return; }
+
+  const acciones = tipo === 'parcial'
+    ? Array.from(document.querySelectorAll('.permiso-accion-check:checked')).map(c => c.value)
+    : [];
+
+  if (tipo === 'parcial' && acciones.length === 0) {
+    toast('Elegí al menos una acción para el acceso parcial', 'err');
+    return;
+  }
+
+  try {
+    await window._fb.setDoc(window._fb.doc(db, 'permisos_panel', correo), {
+      correo, tipo, acciones,
+      asignadoPor: usuario.email,
+      fechaAsignacion: new Date()
+    });
+
+    const resumenAcciones = acciones
+      .map(key => PERMISOS_DISPONIBLES.flatMap(g => g.acciones).find(a => a.key === key)?.label || key)
+      .join(', ');
+
+    await registrarEnAuditoria('asignar_permiso', null, correo, null, null, { tipo, acciones }, `Permiso "${tipo}" asignado a ${correo}${resumenAcciones ? ' — ' + resumenAcciones : ''}`);
+
+    toast(`✅ Permiso asignado a ${correo}`, 'ok');
+    $('permiso-correo').value = '';
+    document.querySelectorAll('.permiso-accion-check').forEach(c => c.checked = false);
+    poblarListaPermisos();
+  } catch(e) {
+    toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
+async function poblarListaPermisos() {
+  const cont = $('permisos-lista');
+  cont.innerHTML = `<p class="td-vacio">Cargando...</p>`;
+
+  try {
+    const snap = await window._fb.getDocs(window._fb.collection(db, 'permisos_panel'));
+    if (snap.empty) {
+      cont.innerHTML = `<p class="td-vacio">Todavía no le asignaste acceso a nadie más</p>`;
+      return;
+    }
+
+    const todasLasAcciones = PERMISOS_DISPONIBLES.flatMap(g => g.acciones);
+
+    cont.innerHTML = snap.docs.map(d => {
+      const data = d.data();
+      const badge = data.tipo === 'supervisor'
+        ? '<span style="background:var(--blue-l);color:var(--blue);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">SUPERVISOR (solo lectura)</span>'
+        : '<span style="background:var(--green-l);color:var(--green);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">ACCESO PARCIAL</span>';
+      const accionesTxt = (data.acciones || [])
+        .map(key => todasLasAcciones.find(a => a.key === key)?.label || key)
+        .join(' · ');
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:12px;background:var(--bg);border-radius:8px;gap:12px;">
+          <div>
+            <div style="font-weight:600;">${data.correo} ${badge}</div>
+            ${accionesTxt ? `<div style="font-size:11px;color:var(--txt2);margin-top:4px;">${accionesTxt}</div>` : ''}
+          </div>
+          <button class="btn-acc btn-acc-red" style="padding:4px 10px;font-size:11px;white-space:nowrap;" onclick="eliminarPermiso('${d.id}')">Quitar acceso</button>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    cont.innerHTML = `<p class="td-vacio">❌ Error cargando permisos: ${e.message}</p>`;
+  }
+}
+
+async function eliminarPermiso(correo) {
+  if (!confirm(`¿Quitarle el acceso a ${correo}?`)) return;
+  try {
+    await window._fb.deleteDoc(window._fb.doc(db, 'permisos_panel', correo));
+    await registrarEnAuditoria('quitar_permiso', null, correo, null, null, {}, `Permiso quitado a ${correo}`);
+    toast('✅ Acceso quitado', 'ok');
+    poblarListaPermisos();
+  } catch(e) {
+    toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
+/* ═════════════════════════════════════════
+   VISTA REPORTES — actividad de solo lectura (supervisor)
+═════════════════════════════════════════ */
+
+async function cargarReportesActividad() {
+  const lista = $('rep-actividad-lista');
+  lista.innerHTML = `<p class="td-vacio">Cargando...</p>`;
+  $('rep-total-acciones').textContent = '—';
+  $('rep-total-novedades').textContent = '—';
+  $('rep-ultima-actividad').textContent = '—';
+
+  try {
+    const hoy = obtenerFechaParts();
+    const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+    const snap = await window._fb.getDocs(
+      window._fb.query(window._fb.collection(db, 'auditoria'), window._fb.orderBy('timestamp', 'desc'), window._fb.limit(200))
+    );
+
+    const registros = snap.docs.map(d => d.data());
+    const esteMs = registros.filter(r => r.timestamp && r.timestamp.toDate && r.timestamp.toDate() >= inicioMes);
+    const novedadesEsteMes = esteMs.filter(r => r.accion === 'modificar_novedad' || r.accion === 'modificar_novedad_mes_cerrado').length;
+
+    $('rep-total-acciones').textContent = esteMs.length;
+    $('rep-total-novedades').textContent = novedadesEsteMes;
+
+    if (registros.length > 0 && registros[0].timestamp?.toDate) {
+      $('rep-ultima-actividad').textContent = registros[0].timestamp.toDate().toLocaleString('es-EC');
+    } else {
+      $('rep-ultima-actividad').textContent = 'Sin registros';
+    }
+
+    if (registros.length === 0) {
+      lista.innerHTML = `<p class="td-vacio">Todavía no hay actividad registrada</p>`;
+      return;
+    }
+
+    lista.innerHTML = registros.slice(0, 50).map(r => {
+      const fecha = r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString('es-EC') : '—';
+      return `
+        <div style="padding:12px;background:var(--bg);border-radius:8px;border-left:3px solid var(--blue);">
+          <div style="font-size:12px;font-weight:600;">${r.descripcion || r.accion}</div>
+          <div style="font-size:11px;color:var(--txt2);margin-top:2px;">${r.admin || ''} · ${fecha}</div>
+        </div>`;
+    }).join('');
+
+  } catch(e) {
+    console.error(e);
+    lista.innerHTML = `<p class="td-vacio">❌ Error cargando la actividad: ${e.message}</p>`;
+  }
+}
 
 async function poblarSelectoresLimpieza() {
   const selArea = $('limpiar-area');
@@ -3350,8 +3663,9 @@ function renderizarTablaPersonal() {
         <td>${p.nombres || ''}</td>
         <td>${p.area || ''}</td>
         <td style="white-space:nowrap;">
+${tienePermisoAccion('importar_editar_personal') ? `
           <button class="btn-acc btn-acc-blue" style="padding:4px 8px;font-size:11px;" onclick="editarRegistroPersonal('${p.id}')">✎</button>
-          <button class="btn-acc btn-acc-red" style="padding:4px 8px;font-size:11px;" onclick="eliminarRegistroPersonal('${p.id}')">🗑️</button>
+          <button class="btn-acc btn-acc-red" style="padding:4px 8px;font-size:11px;" onclick="eliminarRegistroPersonal('${p.id}')">🗑️</button>` : ''}
         </td>
       </tr>
     `).join('');
@@ -3701,8 +4015,9 @@ async function cargarAccesos() {
           <div style="font-weight:600;font-size:13px;">${data.correo}</div>
           <div style="font-size:11px;color:var(--txt2);">${data.area}</div>
         </div>
+        ${tienePermisoAccion('accesos_gestionar') ? `
         <button class="btn-acc btn-acc-blue" onclick="editarAcceso('${doc.id}', '${data.correo.replace(/'/g,"\\'")}', '${data.area.replace(/'/g,"\\'")}')">✎</button>
-        <button class="btn-acc btn-acc-red" onclick="eliminarAcceso('${doc.id}')">🗑</button>
+        <button class="btn-acc btn-acc-red" onclick="eliminarAcceso('${doc.id}')">🗑</button>` : ''}
       `;
       lista.appendChild(div);
     });
@@ -3715,39 +4030,35 @@ async function cargarAccesos() {
 
 let modalAccesoDocIdEdicion = null; // null = creando nuevo, string = editando existente
 
-function poblarSelectAreaAcceso() {
+async function poblarSelectAreaAcceso() {
   const sel = $('modal-acceso-area');
-  if (sel.options.length === 0) {
-    AREAS.forEach(area => {
-      const opt = document.createElement('option');
-      opt.value = area;
-      opt.textContent = area;
-      sel.appendChild(opt);
-    });
+  if (sel.dataset.poblado !== '1') {
+    const areasReales = await obtenerAreasNovedades();
+    sel.innerHTML = areasReales.map(a => `<option value="${a}">${a}</option>`).join('');
+    sel.dataset.poblado = '1';
   }
 }
 
-function mostrarFormAcceso() {
+async function mostrarFormAcceso() {
   modalAccesoDocIdEdicion = null;
-  poblarSelectAreaAcceso();
+  await poblarSelectAreaAcceso();
   $('modal-acceso-titulo').textContent = 'Nuevo Acceso';
   $('modal-acceso-sub').textContent = 'Asigná un área a este correo';
   $('modal-acceso-correo').value = '';
   $('modal-acceso-correo').disabled = false;
-  $('modal-acceso-area').value = AREAS[0];
-  hide('modal-acceso-error');
   $('modal-acceso').style.display = 'flex';
+  hide('modal-acceso-error');
   $('modal-acceso-correo').focus();
 }
 
-function editarAcceso(docId, correoActual, areaActual) {
+async function editarAcceso(docId, correoActual, areaAsignada) {
   modalAccesoDocIdEdicion = docId;
-  poblarSelectAreaAcceso();
+  await poblarSelectAreaAcceso();
   $('modal-acceso-titulo').textContent = 'Editar Acceso';
   $('modal-acceso-sub').textContent = 'Cambiá el área asignada a este correo';
   $('modal-acceso-correo').value = correoActual || docId;
   $('modal-acceso-correo').disabled = true; // el correo es el ID del documento, no se cambia acá
-  $('modal-acceso-area').value = areaActual || AREAS[0];
+  if (areaAsignada) $('modal-acceso-area').value = areaAsignada;
   hide('modal-acceso-error');
   $('modal-acceso').style.display = 'flex';
 }
@@ -4007,7 +4318,7 @@ async function cargarDesbloqueos() {
             <div style="font-size:11px;color:var(--txt2);">${data.area} — ${data.tipo === 'desbloqueo_dia' ? 'Día ' + data.dia : 'Mes ' + data.mes}</div>
             ${data.razon ? `<div style="font-size:11px;color:var(--txt3);margin-top:2px;">"${data.razon}"</div>` : ''}
           </div>
-          ${data.estado === 'pendiente' ? `
+          ${data.estado === 'pendiente' && tienePermisoAccion('desbloqueos_aprobar') ? `
             <div style="display:flex;gap:6px;">
               <button class="btn-acc btn-acc-green" onclick="aprobarDesbloqueo('${doc.id}')">Aprobar</button>
               <button class="btn-acc btn-acc-red" onclick="rechazarDesbloqueo('${doc.id}')">Rechazar</button>
@@ -4443,6 +4754,10 @@ window.cerrarErrorCodigo            = cerrarErrorCodigo;
 /* Panel Admin — Novedades */
 window.importarBaseDatos            = importarBaseDatos;
 window.eliminarNovedadesAreaMes     = eliminarNovedadesAreaMes;
+window.actualizarVisibilidadTabsPermiso = actualizarVisibilidadTabsPermiso;
+window.guardarPermiso               = guardarPermiso;
+window.marcarGrupoPermiso           = marcarGrupoPermiso;
+window.eliminarPermiso              = eliminarPermiso;
 window.desbloquearDiaDirecto        = desbloquearDiaDirecto;
 window.borrarTodaLaBaseNovedades    = borrarTodaLaBaseNovedades;
 window.mostrarFormAcceso            = mostrarFormAcceso;
