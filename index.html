@@ -488,8 +488,11 @@
 
       <div class="panel-white">
         <div style="padding:20px;">
-          <div class="sec-titulo">Actividad reciente</div>
-          <div id="rep-actividad-lista" style="display:flex;flex-direction:column;gap:8px;">
+          <div class="sec-titulo" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Actividad reciente</span>
+            <button class="btn-acc btn-acc-green" onclick="exportarReporteActividadExcel()">📥 Descargar Excel</button>
+          </div>
+          <div id="rep-actividad-lista" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
             <p class="td-vacio">Cargando...</p>
           </div>
         </div>
