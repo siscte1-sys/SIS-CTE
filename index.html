@@ -25,6 +25,7 @@
   <div class="nav-right" id="nav-sesion" style="display:none">
     <button class="nav-btn" id="nb-novedades" style="display:none">📋 Novedades</button>
     <button class="nav-btn" id="nb-envios" style="display:none">📤 Envíos</button>
+    <button class="nav-btn" id="nb-reportes" style="display:none">📊 Reportes</button>
     <button class="nav-btn nav-btn-admin" id="nb-admin" style="display:none">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       Panel de control
@@ -471,6 +472,32 @@
   </div>
 
   <!-- ═══════════════════════════════
+       VISTA REPORTES (solo lectura — supervisor)
+  ═══════════════════════════════ -->
+  <div id="vista-reportes" class="vista" style="display:none">
+    <div class="page-hero">
+      <h1 class="page-hero-titulo">📊 Reportes de Actividad</h1>
+      <p class="page-hero-sub">Vista de solo lectura de lo que se hace en el sistema. No podés modificar nada desde acá.</p>
+    </div>
+    <div class="page-body">
+      <div class="stats-row" style="margin-bottom:20px;">
+        <div class="stat-box"><div class="stat-lbl">Acciones este mes</div><div class="stat-val" id="rep-total-acciones">—</div></div>
+        <div class="stat-box"><div class="stat-lbl">Novedades registradas</div><div class="stat-val" id="rep-total-novedades">—</div></div>
+        <div class="stat-box stat-box-wide"><div class="stat-lbl">Última actividad</div><div class="stat-val stat-val-sm" id="rep-ultima-actividad">—</div></div>
+      </div>
+
+      <div class="panel-white">
+        <div style="padding:20px;">
+          <div class="sec-titulo">Actividad reciente</div>
+          <div id="rep-actividad-lista" style="display:flex;flex-direction:column;gap:8px;">
+            <p class="td-vacio">Cargando...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════
        VISTA ADMIN
   ═══════════════════════════════ -->
   <div id="vista-admin" class="vista" style="display:none">
@@ -488,6 +515,7 @@
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="auditoria">📋 Auditoría</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="desbloqueos">🔓 Desbloqueos</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="resumen">📊 Resumen General</button>
+          <button class="btn-acc btn-acc-blue admin-tab" data-tab="permisos" id="tab-btn-permisos" style="display:none;">🔑 Permisos</button>
         </div>
       </div>
 
@@ -495,19 +523,19 @@
       <div id="admin-tab-envios" class="admin-tab-content" style="display:block">
 
       <div class="admin-acc" style="margin-bottom:20px;">
-        <button class="btn-acc btn-acc-blue" id="btn-excel">
+        <button class="btn-acc btn-acc-blue" id="btn-excel" data-permiso="envios_exportar">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Exportar todo
         </button>
-        <button class="btn-acc btn-acc-green" id="btn-excel-filtrado">
+        <button class="btn-acc btn-acc-green" id="btn-excel-filtrado" data-permiso="envios_exportar">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
           Exportar filtrado
         </button>
-        <button class="btn-acc btn-acc-orange" onclick="abrirModalArchivado()">
+        <button class="btn-acc btn-acc-orange" onclick="abrirModalArchivado()" data-permiso="envios_archivar">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
           Archivar mes
         </button>
-        <button class="btn-acc btn-acc-red" onclick="abrirModalLimpiarDuplicados()">
+        <button class="btn-acc btn-acc-red" onclick="abrirModalLimpiarDuplicados()" data-permiso="envios_eliminar_duplicados">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 4 21 4"/><line x1="19" y1="4" x2="21" y2="6"/><path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></svg>
           Eliminar Registros BD
         </button>
@@ -580,7 +608,7 @@
               <input type="file" id="import-csv" accept=".csv,.xlsx,.xls" class="form-select">
             </div>
             <div class="form-field">
-              <button class="btn-enviar" onclick="importarBaseDatos()">
+              <button class="btn-enviar" onclick="importarBaseDatos()" data-permiso="importar_bd">
                 📥 Importar Base de Datos
               </button>
             </div>
@@ -609,7 +637,7 @@
                 <label class="form-label">Año</label>
                 <select id="limpiar-anio" class="filtro-select"></select>
               </div>
-              <button class="btn-acc btn-acc-red" onclick="eliminarNovedadesAreaMes()" style="height:38px;">
+              <button class="btn-acc btn-acc-red" onclick="eliminarNovedadesAreaMes()" style="height:38px;" data-permiso="importar_eliminar_area_mes">
                 🗑️ Eliminar
               </button>
             </div>
@@ -625,14 +653,14 @@
             <p style="color:var(--red);margin-bottom:16px;font-size:12px;">
               ⚠️ Acción irreversible. Borra todo lo que el sistema conoce (áreas detectadas en tus importaciones, en un rango de 3 años). Los envíos de archivos (pestaña Envíos) NO se tocan.
             </p>
-            <button class="btn-acc btn-acc-red" onclick="borrarTodaLaBaseNovedades()">
+            <button class="btn-acc btn-acc-red" onclick="borrarTodaLaBaseNovedades()" data-permiso="importar_borrar_todo">
               🗑️ Borrar toda la base de Novedades
             </button>
             <div id="borrar-todo-progreso" style="display:none;margin-top:12px;font-size:12px;color:var(--txt2);"></div>
           </div>
         </div>
 
-        <div class="panel-white" style="margin-top:16px;">
+        <div class="panel-white" style="margin-top:16px;" data-permiso="importar_ver_personal">
           <div style="padding:20px;">
             <div class="sec-titulo">📇 Base de Personal (directorio completo)</div>
             <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
@@ -655,7 +683,7 @@
                 <label class="form-label">Área</label>
                 <input type="text" id="personal-filtro-area" class="filtro-input" oninput="filtrarPersonal()" placeholder="Buscar...">
               </div>
-              <button class="btn-acc btn-acc-green" onclick="abrirModalPersonal()" style="height:38px;">➕ Agregar</button>
+              <button class="btn-acc btn-acc-green" onclick="abrirModalPersonal()" style="height:38px;" data-permiso="importar_editar_personal">➕ Agregar</button>
             </div>
 
             <div id="personal-cambio-lote" style="display:none;margin-bottom:16px;padding:12px 16px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -701,7 +729,7 @@
         <div class="panel-white">
           <div style="padding:20px;">
             <div class="sec-titulo">Gestionar Accesos (Correo → Área)</div>
-            <button class="btn-acc btn-acc-green" onclick="mostrarFormAcceso()" style="margin-bottom:16px;">
+            <button class="btn-acc btn-acc-green" onclick="mostrarFormAcceso()" style="margin-bottom:16px;" data-permiso="accesos_gestionar">
               ➕ Nuevo Acceso
             </button>
             <div id="accesos-lista" style="display:flex;flex-direction:column;gap:8px;">
@@ -767,7 +795,7 @@
 
       <!-- TAB 4: Desbloqueos -->
       <div id="admin-tab-desbloqueos" class="admin-tab-content" style="display:none">
-        <div class="panel-white" style="border:2px solid var(--blue-m);margin-bottom:16px;">
+        <div class="panel-white" style="border:2px solid var(--blue-m);margin-bottom:16px;" data-permiso="desbloqueos_directo">
           <div style="padding:20px;">
             <div class="sec-titulo">🔓 Desbloqueo directo (sin esperar solicitud)</div>
             <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
@@ -790,7 +818,7 @@
                 <label class="form-label">Día</label>
                 <select id="desbloqueo-directo-dia" class="filtro-select"></select>
               </div>
-              <button class="btn-acc btn-acc-green" onclick="desbloquearDiaDirecto()" style="height:38px;">🔓 Desbloquear</button>
+              <button class="btn-acc btn-acc-green" onclick="desbloquearDiaDirecto()" style="height:38px;" data-permiso="desbloqueos_directo">🔓 Desbloquear</button>
             </div>
           </div>
         </div>
@@ -835,8 +863,8 @@
               <label class="form-label">Año</label>
               <select id="resumen-anio" class="filtro-select"></select>
             </div>
-            <button class="btn-acc btn-acc-blue" onclick="cargarResumenGeneral()" style="margin-top:18px;">Generar resumen</button>
-            <button class="btn-acc btn-acc-green" onclick="exportarResumenGeneralExcel()" style="margin-top:18px;">📥 Exportar a Excel</button>
+            <button class="btn-acc btn-acc-blue" onclick="cargarResumenGeneral()" style="margin-top:18px;" data-permiso="resumen_ver">Generar resumen</button>
+            <button class="btn-acc btn-acc-green" onclick="exportarResumenGeneralExcel()" style="margin-top:18px;" data-permiso="resumen_exportar">📥 Exportar a Excel</button>
           </div>
         </div>
 
@@ -865,6 +893,49 @@
               </thead>
               <tbody id="resumen-detalle-body"></tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 6: Permisos (solo superadmin) -->
+      <div id="admin-tab-permisos" class="admin-tab-content" style="display:none">
+        <div class="panel-white" style="margin-bottom:16px;">
+          <div style="padding:20px;">
+            <div class="sec-titulo">🔑 Asignar permisos del Panel de Control</div>
+            <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
+              Dale acceso al Panel de Control a otra persona sin hacerla administrador total. Elegí si va a poder <strong>modificar</strong> ciertas pestañas puntuales, o si solo va a poder <strong>ver un reporte de actividad</strong> (de solo lectura, para un jefe o supervisor).
+            </p>
+
+            <div class="form-field">
+              <label class="form-label">Correo</label>
+              <input type="email" id="permiso-correo" class="form-select" placeholder="correo@cte.ec">
+            </div>
+
+            <div class="form-field">
+              <label class="form-label">Tipo de acceso</label>
+              <select id="permiso-tipo" class="form-select" onchange="actualizarVisibilidadTabsPermiso()">
+                <option value="parcial">Parcial — puede usar ciertas pestañas del Panel de Control</option>
+                <option value="supervisor">Supervisor — solo reporte de actividad, de solo lectura</option>
+              </select>
+            </div>
+
+            <div id="permiso-tabs-container" class="form-field">
+              <label class="form-label">Acciones permitidas</label>
+              <div id="permiso-acciones-grupos" style="display:flex;flex-direction:column;gap:14px;">
+                <!-- Se genera dinámicamente desde PERMISOS_DISPONIBLES -->
+              </div>
+            </div>
+
+            <button class="btn-acc btn-acc-green" onclick="guardarPermiso()" style="margin-top:8px;">➕ Asignar permiso</button>
+          </div>
+        </div>
+
+        <div class="panel-white">
+          <div style="padding:20px;">
+            <div class="sec-titulo">Personas con acceso asignado</div>
+            <div id="permisos-lista" style="display:flex;flex-direction:column;gap:8px;">
+              <p class="td-vacio">Cargando...</p>
+            </div>
           </div>
         </div>
       </div>
