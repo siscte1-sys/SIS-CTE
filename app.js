@@ -356,8 +356,12 @@ async function cargarNovedadesActuales() {
     if (esAdmin()) {
       // El admin tiene acceso total: elige el área a gestionar, sin requerir estar en "accesos"
       await poblarSelectorAreaAdmin();
+      show('admin-generar-reporte');
+      $('admin-generar-reporte').style.display = 'block';
+      poblarSelectoresReportePrueba();
     } else {
       hide('admin-selector-area-novedades');
+      hide('admin-generar-reporte');
       // Obtener area del usuario desde accesos
       const accesoRef = window._fb.collection(db, 'accesos');
       const q = window._fb.query(accesoRef, window._fb.where('correo', '==', usuario.email));
@@ -1024,37 +1028,137 @@ function mostrarCierreMes(area, periodo, data) {
 
   renderizarTablaSoloLectura($('tabla-cierre-mes'), data, periodo);
 
-  if (esAdmin()) {
-    show('cierre-mes-form-admin');
-    $('cierre-mes-form-admin').style.display = 'block';
-    hide('cierre-mes-aviso-usuario');
-    $('cierre-elaborado-por').value = data.elaboradoPor || '';
-    $('cierre-responsable').value = data.responsable || '';
-    cargarListaPersonalParaCierre();
-  } else {
-    hide('cierre-mes-form-admin');
-    show('cierre-mes-aviso-usuario');
-    $('cierre-mes-aviso-usuario').style.display = 'block';
-  }
+  hide('cierre-mes-aviso-usuario');
+  show('cierre-mes-form-admin');
+  $('cierre-mes-form-admin').style.display = 'block';
+  $('cierre-elaborado-por').value = data.elaboradoPor || '';
+  $('cierre-responsable').value = data.responsable || '';
+  cargarListaPersonalParaCierre();
 }
 
+let personalListaCache = null; // caché en memoria de sistema/personal_lis
+let selectorPersonaTargetId = null; // en qué input escribir la persona elegida
+
 async function cargarListaPersonalParaCierre() {
+  await obtenerListaPersonal(); // solo precarga el caché
+}
+
+async function obtenerListaPersonal() {
+  if (personalListaCache) return personalListaCache;
   try {
     const ref = window._fb.doc(db, 'sistema', 'personal_lis');
     const snap = await window._fb.getDoc(ref);
-    const datalist = $('lista-personal-lis');
-    if (!datalist) return;
+    personalListaCache = (snap.exists() && snap.data().lista) ? snap.data().lista : [];
+  } catch(e) {
+    console.warn('No se pudo cargar la lista de personal:', e);
+    personalListaCache = [];
+  }
+  return personalListaCache;
+}
 
-    if (!snap.exists() || !snap.data().lista) {
-      datalist.innerHTML = '';
+async function abrirSelectorPersona(targetInputId) {
+  selectorPersonaTargetId = targetInputId;
+  await obtenerListaPersonal();
+  $('buscador-persona').value = '';
+  renderizarListaPersonal(personalListaCache.slice(0, 50));
+  $('modal-seleccionar-persona').style.display = 'flex';
+  $('buscador-persona').focus();
+}
+
+function cerrarSelectorPersona() {
+  $('modal-seleccionar-persona').style.display = 'none';
+  selectorPersonaTargetId = null;
+}
+
+function filtrarListaPersonal() {
+  const q = $('buscador-persona').value.toLowerCase().trim();
+  const lista = personalListaCache || [];
+  const filtrados = q
+    ? lista.filter(nombre => nombre.toLowerCase().includes(q)).slice(0, 50)
+    : lista.slice(0, 50);
+  renderizarListaPersonal(filtrados);
+}
+
+function renderizarListaPersonal(lista) {
+  const cont = $('lista-persona-resultados');
+  if (lista.length === 0) {
+    cont.innerHTML = `<div style="padding:16px;text-align:center;color:var(--txt2);font-size:12px;">Sin resultados</div>`;
+    return;
+  }
+  cont.innerHTML = lista.map(nombre => `
+    <div style="padding:10px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);" 
+         onmouseover="this.style.background='var(--blue-l)'" onmouseout="this.style.background=''"
+         onclick="elegirPersona('${nombre.replace(/'/g, "\\'")}')">
+      ${nombre}
+    </div>
+  `).join('');
+}
+
+function elegirPersona(nombre) {
+  if (selectorPersonaTargetId) $(selectorPersonaTargetId).value = nombre;
+  cerrarSelectorPersona();
+}
+
+function poblarSelectoresReportePrueba() {
+  const selMes = $('reporte-prueba-mes');
+  const selAnio = $('reporte-prueba-anio');
+  if (!selMes || !selAnio) return;
+
+  if (selMes.options.length === 0) {
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    meses.forEach((m, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i + 1).padStart(2, '0');
+      opt.textContent = m;
+      selMes.appendChild(opt);
+    });
+    const hoy = obtenerFechaParts();
+    selMes.value = hoy.mes;
+  }
+  if (selAnio.options.length === 0) {
+    const anioActual = new Date().getFullYear();
+    for (let a = anioActual - 1; a <= anioActual + 1; a++) {
+      const opt = document.createElement('option');
+      opt.value = String(a);
+      opt.textContent = String(a);
+      selAnio.appendChild(opt);
+    }
+    selAnio.value = String(anioActual);
+  }
+}
+
+async function generarReportePrueba() {
+  if (!esAdmin()) { toast('❌ Solo el administrador puede usar esta herramienta', 'err'); return; }
+
+  const mes = $('reporte-prueba-mes').value;
+  const anio = $('reporte-prueba-anio').value;
+  const elaboradoPor = $('reporte-prueba-elaborado-por').value.trim();
+  const responsable = $('reporte-prueba-responsable').value.trim();
+
+  if (!mes || !anio) { toast('Elegí mes y año', 'err'); return; }
+  if (!elaboradoPor || !responsable) { toast('Elegí "Elaborado por" y "Responsable"', 'err'); return; }
+  if (!areaActual) { toast('Elegí un área arriba primero', 'err'); return; }
+
+  const periodo = `${anio}-${mes}`;
+
+  try {
+    toast('⏳ Generando reporte de prueba...', 'ok');
+    const ref = window._fb.doc(db, 'novedades', areaActual, periodo, 'datos');
+    const snap = await window._fb.getDoc(ref);
+
+    if (!snap.exists() || (snap.data().agentes || []).length === 0) {
+      toast(`No hay datos de Novedades para ${areaActual} — ${periodo}`, 'err');
       return;
     }
 
-    datalist.innerHTML = snap.data().lista
-      .map(nombre => `<option value="${nombre.replace(/"/g, '&quot;')}"></option>`)
-      .join('');
+    const data = snap.data();
+    await exportarNovedadesExcel(data, areaActual, periodo, elaboradoPor, responsable);
+    await exportarNovedadesPDF(data, areaActual, periodo, elaboradoPor, responsable);
+
+    toast('✅ Reporte de prueba generado (no se modificó el estado del mes)', 'ok');
   } catch(e) {
-    console.warn('No se pudo cargar la lista de personal:', e);
+    console.error(e);
+    toast('❌ Error: ' + e.message, 'err');
   }
 }
 
@@ -1082,10 +1186,6 @@ function renderizarTablaSoloLectura(tabla, data, periodo) {
 }
 
 async function cerrarYExportarMes() {
-  if (!esAdmin()) {
-    toast('❌ Solo el administrador puede cerrar el mes y generar el reporte', 'err');
-    return;
-  }
   if (!cierreMesData) return;
   const elaboradoPor = $('cierre-elaborado-por').value.trim();
   const responsable = $('cierre-responsable').value.trim();
@@ -1425,7 +1525,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'auditoria')   cargarAuditoria();
       if (tabName === 'desbloqueos') cargarDesbloqueos();
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
-      if (tabName === 'importar') poblarSelectoresLimpieza();
+      if (tabName === 'importar') { poblarSelectoresLimpieza(); cargarDirectorioPersonal(); }
     });
   });
 
@@ -2765,8 +2865,14 @@ async function importarBaseDatos() {
     }
 
     // Parsear filas (saltar encabezado)
+    const resultado = $('import-resultado');
+    show('import-resultado');
+    resultado.style.display = 'block';
+    resultado.innerHTML = '⏳ Procesando archivo...';
+
     const datos = {};
     const personalCompleto = []; // lista completa para autocompletar "Elaborado por" / "Responsable"
+    const registrosPersonal = []; // para la colección plana 'personal' (visor paginado/editable)
     for (let i = 1; i < filas.length; i++) {
       const partes = filas[i];
       if (!partes || partes.length < 5 || !String(partes[iCodigo]).trim()) continue;
@@ -2775,17 +2881,21 @@ async function importarBaseDatos() {
       if (!datos[area]) datos[area] = [];
       
       const grado = partes[iGrado] || '';
-      const nombreCompleto = `${partes[iApellidos] || ''} ${partes[iNombres] || ''}`.trim();
+      const apellidos = partes[iApellidos] || '';
+      const nombres = partes[iNombres] || '';
+      const nombreCompleto = `${apellidos} ${nombres}`.trim();
+      const codigo = String(partes[iCodigo]).trim();
 
       datos[area].push({
-        codigo: partes[iCodigo],
+        codigo: codigo,
         grado: grado,
         apellidosNombres: nombreCompleto,
         novedadesPorDia: {},
         observaciones: ''
       });
 
-      personalCompleto.push(`${partes[iCodigo]} - ${grado} ${nombreCompleto}`.trim());
+      personalCompleto.push(`${codigo} - ${grado} ${nombreCompleto}`.trim());
+      registrosPersonal.push({ codigo, grado, apellidos, nombres, area });
     }
     
     // Guardar la lista completa de personal (para los selectores de "Elaborado por" / "Responsable")
@@ -2814,6 +2924,19 @@ async function importarBaseDatos() {
     } catch(e) {
       console.warn('No se pudo guardar la lista de áreas:', e);
     }
+
+    // Guardar cada persona en la colección plana 'personal' (visor paginado/editable del admin)
+    resultado.innerHTML = '⏳ Guardando el directorio de personal...';
+    const tamanioLotePersonal = 100;
+    for (let i = 0; i < registrosPersonal.length; i += tamanioLotePersonal) {
+      const lote = registrosPersonal.slice(i, i + tamanioLotePersonal);
+      await Promise.all(lote.map(reg =>
+        window._fb.setDoc(window._fb.doc(db, 'personal', reg.codigo), {
+          ...reg,
+          ultimaActualizacion: new Date()
+        }, { merge: true }).catch(() => {})
+      ));
+    }
     
     // Guardar en Firestore — se FUSIONA con lo existente, nunca se sobrescribe
     // (si un agente rota de área a mitad de mes, sigue apareciendo en la anterior
@@ -2821,26 +2944,33 @@ async function importarBaseDatos() {
     const dateParts = obtenerFechaParts();
     const periodo = dateParts.periodo;
 
-    for (const [area, agentesNuevos] of Object.entries(datos)) {
-      const novedadesRef = window._fb.doc(db, 'novedades', area, periodo, 'datos');
-      const existente = await window._fb.getDoc(novedadesRef);
-      const dataExistente = existente.exists() ? existente.data() : null;
-      const agentesFinal = dataExistente ? [...(dataExistente.agentes || [])] : [];
+    const entradas = Object.entries(datos);
+    const tamanioLote = 25;
 
-      agentesNuevos.forEach(nuevo => {
-        const yaExiste = nuevo.codigo && agentesFinal.some(a => String(a.codigo).trim() === String(nuevo.codigo).trim());
-        if (!yaExiste) agentesFinal.push(nuevo);
-      });
+    for (let i = 0; i < entradas.length; i += tamanioLote) {
+      const lote = entradas.slice(i, i + tamanioLote);
+      await Promise.all(lote.map(async ([area, agentesNuevos]) => {
+        const novedadesRef = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+        const existente = await window._fb.getDoc(novedadesRef);
+        const dataExistente = existente.exists() ? existente.data() : null;
+        const agentesFinal = dataExistente ? [...(dataExistente.agentes || [])] : [];
 
-      await window._fb.setDoc(novedadesRef, {
-        agentes: agentesFinal,
-        estado: dataExistente ? dataExistente.estado : 'activo',
-        diasBloqueados: dataExistente ? (dataExistente.diasBloqueados || []) : [],
-        diasDesbloqueados: dataExistente ? (dataExistente.diasDesbloqueados || []) : [],
-        diasNoCompletados: dataExistente ? dataExistente.diasNoCompletados : Array.from({length: 31}, (_, i) => i + 1),
-        fechaCreacion: dataExistente ? dataExistente.fechaCreacion : new Date(),
-        ultimaModificacion: new Date()
-      });
+        agentesNuevos.forEach(nuevo => {
+          const yaExiste = nuevo.codigo && agentesFinal.some(a => String(a.codigo).trim() === String(nuevo.codigo).trim());
+          if (!yaExiste) agentesFinal.push(nuevo);
+        });
+
+        await window._fb.setDoc(novedadesRef, {
+          agentes: agentesFinal,
+          estado: dataExistente ? dataExistente.estado : 'activo',
+          diasBloqueados: dataExistente ? (dataExistente.diasBloqueados || []) : [],
+          diasDesbloqueados: dataExistente ? (dataExistente.diasDesbloqueados || []) : [],
+          diasNoCompletados: dataExistente ? dataExistente.diasNoCompletados : Array.from({length: 31}, (_, i) => i + 1),
+          fechaCreacion: dataExistente ? dataExistente.fechaCreacion : new Date(),
+          ultimaModificacion: new Date()
+        });
+      }));
+      resultado.innerHTML = `⏳ Importando... ${Math.min(i + tamanioLote, entradas.length)} / ${entradas.length} áreas procesadas`;
     }
     
     // Log
@@ -2858,7 +2988,6 @@ async function importarBaseDatos() {
       `Importación de BD: ${coleccion}`
     );
 
-    const resultado = $('import-resultado');
     resultado.innerHTML = `
       ✅ <strong>Importación exitosa</strong><br>
       Colección: ${coleccion}<br>
@@ -2909,6 +3038,190 @@ async function poblarSelectoresLimpieza() {
   const hoy = obtenerFechaParts();
   selMes.value = hoy.mes;
   selAnio.value = String(new Date().getFullYear());
+}
+
+/* ═════════════════════════════════════════
+   PANEL ADMIN — Base de Personal (visor paginado/editable)
+═════════════════════════════════════════ */
+
+let personalDirectorioCache = [];
+let personalPaginaActual = 1;
+const PERSONAL_POR_PAGINA = 20;
+
+async function cargarDirectorioPersonal() {
+  const cargando = $('personal-cargando');
+  const cont = $('personal-tabla-container');
+  hide('personal-paginacion');
+  show('personal-cargando');
+  cargando.style.display = 'block';
+  hide('personal-tabla-container');
+
+  try {
+    const snap = await window._fb.getDocs(window._fb.collection(db, 'personal'));
+    personalDirectorioCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    personalPaginaActual = 1;
+    hide('personal-cargando');
+    show('personal-tabla-container');
+    cont.style.display = 'block';
+    renderizarTablaPersonal();
+  } catch(e) {
+    console.error(e);
+    cargando.textContent = '❌ Error cargando el directorio: ' + e.message;
+  }
+}
+
+function obtenerPersonalFiltrado() {
+  const fCodigo = ($('personal-filtro-codigo')?.value || '').toLowerCase().trim();
+  const fGrado = ($('personal-filtro-grado')?.value || '').toLowerCase().trim();
+  const fNombre = ($('personal-filtro-nombre')?.value || '').toLowerCase().trim();
+  const fArea = ($('personal-filtro-area')?.value || '').toLowerCase().trim();
+
+  return personalDirectorioCache.filter(p => {
+    if (fCodigo && !String(p.codigo || '').toLowerCase().includes(fCodigo)) return false;
+    if (fGrado && !String(p.grado || '').toLowerCase().includes(fGrado)) return false;
+    if (fNombre && !`${p.apellidos || ''} ${p.nombres || ''}`.toLowerCase().includes(fNombre)) return false;
+    if (fArea && !String(p.area || '').toLowerCase().includes(fArea)) return false;
+    return true;
+  });
+}
+
+function filtrarPersonal() {
+  personalPaginaActual = 1;
+  renderizarTablaPersonal();
+}
+
+function cambiarPaginaPersonal(delta) {
+  const filtrados = obtenerPersonalFiltrado();
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PERSONAL_POR_PAGINA));
+  personalPaginaActual = Math.min(totalPaginas, Math.max(1, personalPaginaActual + delta));
+  renderizarTablaPersonal();
+}
+
+function renderizarTablaPersonal() {
+  const filtrados = obtenerPersonalFiltrado();
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PERSONAL_POR_PAGINA));
+  personalPaginaActual = Math.min(personalPaginaActual, totalPaginas);
+
+  const inicio = (personalPaginaActual - 1) * PERSONAL_POR_PAGINA;
+  const pagina = filtrados.slice(inicio, inicio + PERSONAL_POR_PAGINA);
+
+  const tbody = $('personal-tabla-body');
+  if (pagina.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="td-vacio">No se encontraron registros</td></tr>`;
+  } else {
+    tbody.innerHTML = pagina.map(p => `
+      <tr>
+        <td>${p.codigo || ''}</td>
+        <td>${p.grado || ''}</td>
+        <td>${p.apellidos || ''}</td>
+        <td>${p.nombres || ''}</td>
+        <td>${p.area || ''}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn-acc btn-acc-blue" style="padding:4px 8px;font-size:11px;" onclick="editarRegistroPersonal('${p.id}')">✎</button>
+          <button class="btn-acc btn-acc-red" style="padding:4px 8px;font-size:11px;" onclick="eliminarRegistroPersonal('${p.id}')">🗑️</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  show('personal-paginacion');
+  $('personal-paginacion').style.display = 'flex';
+  $('personal-paginacion-info').textContent =
+    `${filtrados.length} registro${filtrados.length !== 1 ? 's' : ''} — página ${personalPaginaActual} de ${totalPaginas}`;
+}
+
+let modalPersonalIdEdicion = null;
+
+function abrirModalPersonal() {
+  modalPersonalIdEdicion = null;
+  $('modal-personal-titulo').textContent = 'Agregar registro';
+  $('modal-personal-codigo').value = '';
+  $('modal-personal-codigo').disabled = false;
+  $('modal-personal-grado').value = '';
+  $('modal-personal-apellidos').value = '';
+  $('modal-personal-nombres').value = '';
+  $('modal-personal-area').value = '';
+  hide('modal-personal-error');
+  $('modal-personal').style.display = 'flex';
+}
+
+function editarRegistroPersonal(id) {
+  const p = personalDirectorioCache.find(x => x.id === id);
+  if (!p) return;
+  modalPersonalIdEdicion = id;
+  $('modal-personal-titulo').textContent = 'Editar registro';
+  $('modal-personal-codigo').value = p.codigo || '';
+  $('modal-personal-codigo').disabled = true; // el código es el ID del documento
+  $('modal-personal-grado').value = p.grado || '';
+  $('modal-personal-apellidos').value = p.apellidos || '';
+  $('modal-personal-nombres').value = p.nombres || '';
+  $('modal-personal-area').value = p.area || '';
+  hide('modal-personal-error');
+  $('modal-personal').style.display = 'flex';
+}
+
+function cerrarModalPersonal() {
+  $('modal-personal').style.display = 'none';
+  modalPersonalIdEdicion = null;
+}
+
+async function guardarRegistroPersonal() {
+  const codigo = $('modal-personal-codigo').value.trim();
+  const grado = $('modal-personal-grado').value.trim();
+  const apellidos = $('modal-personal-apellidos').value.trim();
+  const nombres = $('modal-personal-nombres').value.trim();
+  const area = $('modal-personal-area').value.trim();
+  const errorEl = $('modal-personal-error');
+
+  if (!codigo) { errorEl.textContent = 'El código es obligatorio'; show('modal-personal-error'); return; }
+  if (!area) { errorEl.textContent = 'El área es obligatoria'; show('modal-personal-error'); return; }
+
+  try {
+    const areaSanitizada = sanitizarNombreArea(area);
+    await window._fb.setDoc(window._fb.doc(db, 'personal', codigo), {
+      codigo, grado, apellidos, nombres, area: areaSanitizada,
+      ultimaActualizacion: new Date()
+    }, { merge: true });
+
+    // Mantener sincronizada la lista de áreas conocidas
+    const areasRef = window._fb.doc(db, 'sistema', 'areas_novedades');
+    const areasSnap = await window._fb.getDoc(areasRef);
+    const areasPrevias = areasSnap.exists() ? (areasSnap.data().lista || []) : [];
+    if (!areasPrevias.includes(areaSanitizada)) {
+      await window._fb.setDoc(areasRef, {
+        lista: [...areasPrevias, areaSanitizada].sort(),
+        ultimaActualizacion: new Date()
+      });
+    }
+
+    await registrarEnAuditoria(
+      modalPersonalIdEdicion ? 'editar_personal' : 'crear_personal',
+      areaSanitizada, usuario.email, null, null, { codigo },
+      `${modalPersonalIdEdicion ? 'Editado' : 'Agregado'} registro de personal: ${codigo} — ${apellidos} ${nombres}`
+    );
+
+    toast(`✅ Registro ${modalPersonalIdEdicion ? 'actualizado' : 'agregado'}`, 'ok');
+    cerrarModalPersonal();
+    cargarDirectorioPersonal();
+  } catch(e) {
+    errorEl.textContent = 'Error: ' + e.message;
+    show('modal-personal-error');
+  }
+}
+
+async function eliminarRegistroPersonal(id) {
+  const p = personalDirectorioCache.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`¿Eliminar el registro de "${p.apellidos} ${p.nombres}" (código ${p.codigo})?\n\nEsto NO borra sus novedades ya cargadas en meses anteriores, solo lo saca del directorio de personal.`)) return;
+
+  try {
+    await window._fb.deleteDoc(window._fb.doc(db, 'personal', id));
+    await registrarEnAuditoria('eliminar_personal', p.area, usuario.email, null, null, { codigo: p.codigo }, `Registro de personal eliminado: ${p.codigo} — ${p.apellidos} ${p.nombres}`);
+    toast('✅ Registro eliminado', 'ok');
+    cargarDirectorioPersonal();
+  } catch(e) {
+    toast('❌ Error: ' + e.message, 'err');
+  }
 }
 
 async function eliminarNovedadesAreaMes() {
@@ -3550,6 +3863,18 @@ window.eliminarNovedadesAreaMes     = eliminarNovedadesAreaMes;
 window.borrarTodaLaBaseNovedades    = borrarTodaLaBaseNovedades;
 window.mostrarFormAcceso            = mostrarFormAcceso;
 window.cerrarModalAcceso            = cerrarModalAcceso;
+window.abrirSelectorPersona         = abrirSelectorPersona;
+window.cerrarSelectorPersona        = cerrarSelectorPersona;
+window.filtrarListaPersonal         = filtrarListaPersonal;
+window.elegirPersona                = elegirPersona;
+window.generarReportePrueba         = generarReportePrueba;
+window.filtrarPersonal              = filtrarPersonal;
+window.cambiarPaginaPersonal        = cambiarPaginaPersonal;
+window.abrirModalPersonal           = abrirModalPersonal;
+window.editarRegistroPersonal       = editarRegistroPersonal;
+window.cerrarModalPersonal          = cerrarModalPersonal;
+window.guardarRegistroPersonal      = guardarRegistroPersonal;
+window.eliminarRegistroPersonal     = eliminarRegistroPersonal;
 window.confirmarGuardarAcceso       = confirmarGuardarAcceso;
 window.guardarAcceso                = guardarAcceso;
 window.eliminarAcceso               = eliminarAcceso;
