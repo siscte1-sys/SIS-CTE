@@ -175,6 +175,11 @@ body.dark-mode .tabla-novedades tbody tr:hover td{
   background:var(--blue-l);
 }
 
+.admin-tab.active:hover{
+  background:var(--blue);
+  color:#fff;
+}
+
 .admin-tab-content{
   display:none;
 }
