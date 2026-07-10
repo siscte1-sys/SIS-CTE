@@ -121,7 +121,7 @@ async function initFirebase() {
         show('nb-envios');                                  // Envíos: todos los usuarios
         tieneAccesoPanel() ? show('nb-admin') : hide('nb-admin');   // Panel de control: admin o con permiso parcial
         esSupervisor() ? show('nb-reportes') : hide('nb-reportes'); // Reportes: solo supervisor
-        irEnvios();
+        irNovedades();
       } else {
         usuario = null;
         permisoUsuario = null;
@@ -4272,40 +4272,57 @@ async function eliminarAcceso(docId) {
    PANEL ADMIN — Auditoría
 ═════════════════════════════════════════ */
 
+let auditoriaCache = [];
+let paginaAuditoria = 1;
+
 async function cargarAuditoria() {
   try {
-    const auditSnapshot = await window._fb.getDocs(window._fb.collection(db, 'auditoria'));
-    const tbody = $('auditoria-body');
-    const vacio = $('auditoria-vacio');
-    
-    tbody.innerHTML = '';
-    
-    if (auditSnapshot.empty) {
+    const auditSnapshot = await window._fb.getDocs(
+      window._fb.query(window._fb.collection(db, 'auditoria'), window._fb.orderBy('timestamp', 'desc'))
+    );
+
+    auditoriaCache = auditSnapshot.docs.map(doc => doc.data());
+    paginaAuditoria = 1;
+
+    if (auditoriaCache.length === 0) {
       show('auditoria-vacio');
+      $('auditoria-body').innerHTML = '';
+      $('auditoria-paginacion').innerHTML = '';
       return;
     }
-    
+
     hide('auditoria-vacio');
-    
-    auditSnapshot.forEach(doc => {
-      const data = doc.data();
-      const tr = document.createElement('tr');
-      
-      const fecha = data.timestamp ? data.timestamp.toDate ? data.timestamp.toDate().toLocaleString() : new Date(data.timestamp).toLocaleString() : '';
-      
-      tr.innerHTML = `
-        <td style="font-size:10px;">${fecha}</td>
-        <td style="font-size:10px;">${data.admin || '—'}</td>
-        <td style="font-size:10px;">${data.accion || '—'}</td>
-        <td style="font-size:10px;">${data.descripcion || '—'}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-    
+    renderizarAuditoriaPagina();
+
   } catch(e) {
     console.error('Error:', e);
     toast('Error cargando auditoría: ' + e.message, 'err');
   }
+}
+
+function renderizarAuditoriaPagina() {
+  const inicio = (paginaAuditoria - 1) * POR_PAGINA_ENVIOS;
+  const pagina = auditoriaCache.slice(inicio, inicio + POR_PAGINA_ENVIOS);
+  const tbody = $('auditoria-body');
+
+  tbody.innerHTML = pagina.map(data => {
+    const fecha = data.timestamp ? (data.timestamp.toDate ? data.timestamp.toDate().toLocaleString() : new Date(data.timestamp).toLocaleString()) : '';
+    return `
+      <tr>
+        <td style="font-size:10px;">${fecha}</td>
+        <td style="font-size:10px;">${data.admin || '—'}</td>
+        <td style="font-size:10px;">${data.accion || '—'}</td>
+        <td style="font-size:10px;">${data.descripcion || '—'}</td>
+      </tr>`;
+  }).join('');
+
+  renderizarControlesPaginacion('auditoria-paginacion', auditoriaCache.length, paginaAuditoria, 'cambiarPaginaAuditoria');
+}
+
+function cambiarPaginaAuditoria(delta) {
+  const totalPaginas = Math.max(1, Math.ceil(auditoriaCache.length / POR_PAGINA_ENVIOS));
+  paginaAuditoria = Math.min(totalPaginas, Math.max(1, paginaAuditoria + delta));
+  renderizarAuditoriaPagina();
 }
 
 async function filtrarAuditoria() {
@@ -4910,6 +4927,7 @@ window.exportarReporteActividadExcel = exportarReporteActividadExcel;
 window.cambiarPaginaPersonasEnvio   = cambiarPaginaPersonasEnvio;
 window.cambiarPaginaArchivosEnvio   = cambiarPaginaArchivosEnvio;
 window.cambiarPaginaReporteActividad = cambiarPaginaReporteActividad;
+window.cambiarPaginaAuditoria       = cambiarPaginaAuditoria;
 window.filtrarPersonal              = filtrarPersonal;
 window.cambiarPaginaPersonal        = cambiarPaginaPersonal;
 window.abrirModalPersonal           = abrirModalPersonal;
