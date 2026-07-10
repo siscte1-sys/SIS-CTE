@@ -206,6 +206,7 @@ const PERMISOS_DISPONIBLES = [
   ]},
   { tab: 'auditoria', tabLabel: '📋 Auditoría', acciones: [
     { key: 'auditoria_ver',             label: 'Ver auditoría' },
+    { key: 'auditoria_limpiar',         label: 'Limpiar historial de auditoría' },
   ]},
   { tab: 'desbloqueos', tabLabel: '🔓 Desbloqueos', acciones: [
     { key: 'desbloqueos_ver',           label: 'Ver solicitudes de desbloqueo' },
@@ -232,19 +233,27 @@ async function cargarPermisoUsuario() {
   }
 }
 
-const tienePermisoAccion = (key) =>
-  esAdmin() || (permisoUsuario?.tipo === 'parcial' && (permisoUsuario.acciones || []).includes(key));
+const tienePermisoAccion = (key) => {
+  if (esAdmin()) return true;
+  if (permisoUsuario?.tipo === 'parcial') return (permisoUsuario.acciones || []).includes(key);
+  // El supervisor puede ver y exportar cualquier cosa, pero nunca crear/editar/eliminar/aprobar/importar
+  if (permisoUsuario?.tipo === 'supervisor') return key.endsWith('_ver') || key.endsWith('_exportar');
+  return false;
+};
 
 // Una pestaña se muestra si el usuario tiene AL MENOS una acción de ese grupo
+// (el supervisor ve todas las pestañas sustantivas, siempre en modo solo lectura)
 const tabPermitido = (tabName) => {
   if (esAdmin()) return true;
+  if (permisoUsuario?.tipo === 'supervisor') return true;
   if (permisoUsuario?.tipo !== 'parcial') return false;
   const grupo = PERMISOS_DISPONIBLES.find(g => g.tab === tabName);
   if (!grupo) return false;
   return grupo.acciones.some(a => (permisoUsuario.acciones || []).includes(a.key));
 };
 
-const tieneAccesoPanel = () => esAdmin() || (permisoUsuario && permisoUsuario.tipo === 'parcial');
+const tieneAccesoPanel = () =>
+  esAdmin() || (permisoUsuario && (permisoUsuario.tipo === 'parcial' || permisoUsuario.tipo === 'supervisor'));
 const esSupervisor = () => !esAdmin() && permisoUsuario && permisoUsuario.tipo === 'supervisor';
 
 async function usuarioTieneAreaAsignada() {
@@ -290,7 +299,11 @@ function ir(v) {
 }
 
 function irNovedades() { ir('vista-novedades'); cargarNovedadesActuales(); }
-function irReportes() { ir('vista-reportes'); cargarReportesActividad(); }
+function irReportes() {
+  ir('vista-reportes');
+  cargarReportesActividad();
+  poblarSelectoresResumen('rep-resumen');
+}
 
 function toast(msg, tipo='ok') {
   const t = $('toast');
@@ -473,7 +486,7 @@ async function cargarNovedadesActuales() {
       const querySnapshot = await window._fb.getDocs(q);
 
       if (querySnapshot.empty) {
-        toast('❌ Tu correo no está configurado en el sistema. Contacta a soporte.', 'err');
+        toast('❌ Su correo no está configurado en el sistema. Contacte a soporte.', 'err');
         hide('tabla-novedades-container');
         hide('cierre-mes-container');
         hide('novedades-top-controles');
@@ -703,7 +716,7 @@ function renderizarTablaNovedades(diaHoy) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.colSpan = 40;
-    td.textContent = '⚠️ No hay agentes configurados para tu área';
+    td.textContent = '⚠️ No hay agentes configurados para su área';
     td.style.textAlign = 'center';
     td.style.padding = '20px';
     td.style.color = 'var(--txt3)';
@@ -728,7 +741,7 @@ async function solicitarDesbloqueo(dia) {
     );
     const existentes = await window._fb.getDocs(q);
     if (!existentes.empty) {
-      toast('Ya tenés una solicitud pendiente para ese día. Esperá la respuesta del administrador.', 'ok');
+      toast('Ya tiene una solicitud pendiente para ese día. Espere la respuesta del administrador.', 'ok');
       return;
     }
 
@@ -823,7 +836,7 @@ function abrirMenuAccionRapida(idx, btnRef) {
 
 async function aplicarCodigoRapido(idx, dia, codigo) {
   if (!esAdmin() && dia !== new Date().getDate()) {
-    toast('❌ Solo podés editar el día de hoy. Para días anteriores, solicitá desbloqueo.', 'err');
+    toast('❌ Solo puede editar el día de hoy. Para días anteriores, solicite desbloqueo.', 'err');
     return;
   }
   const agente = novedadesActuales.agentes[idx];
@@ -869,7 +882,7 @@ async function combinarDuplicadosArea() {
 
   const resumen = duplicados.map(([cod, lista]) => `Código ${cod}: ${lista.length} registros`).join('\n');
   const confirmar = confirm(
-    `Se van a combinar estos duplicados en un solo registro por agente, uniendo los días que cada uno tenga cargados:\n\n${resumen}\n\n¿Confirmás?`
+    `Se van a combinar estos duplicados en un solo registro por agente, uniendo los días que cada uno tenga cargados:\n\n${resumen}\n\n¿Confirma?`
   );
   if (!confirmar) return;
 
@@ -1416,7 +1429,7 @@ async function cerrarYExportarMes() {
   const responsable = $('cierre-responsable').value.trim();
 
   if (!elaboradoPor || !responsable) {
-    toast('❌ Completá "Elaborado por" y "Responsable" antes de cerrar el mes', 'err');
+    toast('❌ Complete "Elaborado por" y "Responsable" antes de cerrar el mes', 'err');
     return;
   }
 
@@ -1748,7 +1761,7 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
 /* ══════════════════════════════════
    AREAS
 ══════════════════════════════════ */
-function poblarAreas(selectId, placeholder='— Selecciona tu área —') {
+function poblarAreas(selectId, placeholder='— Seleccione su área —') {
   const sel = $(selectId); if (!sel) return;
   sel.innerHTML = `<option value="">${placeholder}</option>`;
   AREAS.forEach(a => { const o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o); });
@@ -1821,7 +1834,7 @@ function irEnvios() {
 ══════════════════════════════════ */
 async function cargarMisEnvios() {
   const lista=$('mis-envios-lista'); if(!lista||!usuario) return;
-  lista.innerHTML=`<div class="mis-envios-vacio"><p style="font-size:12px;color:var(--txt3);">Cargando tus envíos...</p></div>`;
+  lista.innerHTML=`<div class="mis-envios-vacio"><p style="font-size:12px;color:var(--txt3);">Cargando envíos...</p></div>`;
   try {
     const {where}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
     const q=window._fb.query(window._fb.collection(db,'entregas'),where('uid','==',usuario.uid));
@@ -2143,7 +2156,7 @@ function actualizarBotonEnviar() {
   const hint = $('enviar-hint');
   if (hint) {
     if (!archivoSeleccionado)
-      hint.textContent = 'Sube el archivo comprimido (RAR o ZIP) para habilitar el envío';
+      hint.textContent = 'Suba el archivo comprimido (RAR o ZIP) para habilitar el envío';
     else if (!informeSeleccionado)
       hint.textContent = '⚠️ El Informe de Entrega PDF es obligatorio';
     else if (!actaSeleccionada && actaObligatoria)
@@ -2402,7 +2415,7 @@ async function subirComprobantePDFaDrive(dataUrl, registro) {
    ENVIAR ARCHIVO — FLUJO PRINCIPAL
 ══════════════════════════════════ */
 async function enviarArchivo() {
-  if (!archivoSeleccionado) { toast('Selecciona un archivo comprimido (RAR o ZIP) primero','err'); return; }
+  if (!archivoSeleccionado) { toast('Seleccione un archivo comprimido (RAR o ZIP) primero','err'); return; }
   if (!informeSeleccionado) { toast('El Informe de Entrega PDF es obligatorio','err'); return; }
 
   const actaObligatoria = actaEsObligatoriaHoy();
@@ -2413,7 +2426,7 @@ async function enviarArchivo() {
   }
 
   const areaVal    = $('area-select').value;
-  if (!areaVal) { toast('Debes seleccionar tu área','err'); return; }
+  if (!areaVal) { toast('Debe seleccionar su área','err'); return; }
   const detalleVal = ($('detalle-envio')?.value||'').trim();
 
   /* Nombres estandarizados: NRO_MES_MES_AREA_AÑO (+ sufijo según tipo) */
@@ -2618,7 +2631,7 @@ async function generarComprobantePDFComoURL(d) {
     doc.text('¡Archivo registrado exitosamente!', W/2, 78, { align:'center' });
     doc.setFontSize(10); doc.setFont('helvetica','normal');
     doc.setTextColor(100,116,139);
-    doc.text('Tu entrega fue guardada correctamente en el sistema SISCTE.', W/2, 85, { align:'center' });
+    doc.text('Su entrega fue guardada correctamente en el sistema SISCTE.', W/2, 85, { align:'center' });
 
     const campos = [
       ['ENVIADO POR', d.nombre],
@@ -2660,9 +2673,9 @@ async function generarComprobantePDFComoURL(d) {
     doc.setDrawColor(245,158,11); doc.setLineWidth(0.8);
     doc.line(14, y, 14, y+16);
     doc.setTextColor(120,53,15); doc.setFontSize(8); doc.setFont('helvetica','bold');
-    doc.text('Guarda este comprobante como respaldo de tu entrega en el sistema SISCTE.', 20, y+6);
+    doc.text('Guarde este comprobante como respaldo de su entrega en el sistema SISCTE.', 20, y+6);
     doc.setFont('helvetica','normal');
-    doc.text('Tu archivo fue almacenado en Google Drive y el registro queda permanente.', 20, y+12);
+    doc.text('Su archivo fue almacenado en Google Drive y el registro queda permanente.', 20, y+12);
 
     doc.setFillColor(37,99,235);
     doc.rect(0, 275, W, 22, 'F');
@@ -2670,7 +2683,7 @@ async function generarComprobantePDFComoURL(d) {
     doc.text('Sistema SISCTE — Generado el '+d.fecha+' a las '+d.hora, 14, 284);
     doc.text('siscte1-sys.github.io/SIS-CTE', W-14, 284, { align:'right' });
     doc.setFontSize(7); doc.setTextColor(179,207,255);
-    doc.text('Este documento es un comprobante automático de tu entrega.', W/2, 290, { align:'center' });
+    doc.text('Este documento es un comprobante automático de su entrega.', W/2, 290, { align:'center' });
 
     return doc.output('datauristring');
   } catch(e) {
@@ -3002,7 +3015,7 @@ function abrirModalArchivado() {
   if (!meses.length) { toast('No hay archivos pendientes de archivar'); return; }
 
   const sel = $('arch-mes-select');
-  sel.innerHTML = '<option value="">— Selecciona el mes —</option>';
+  sel.innerHTML = '<option value="">— Seleccione el mes —</option>';
   meses.forEach(([k,v]) => {
     const o=document.createElement('option'); o.value=k;
     o.textContent=`${v.label} (${v.docs.length} archivo${v.docs.length>1?'s':''})`;
@@ -3232,12 +3245,12 @@ async function importarBaseDatos() {
     const fileInput = $('import-csv');
     
     if (!coleccion) {
-      toast('⚠️ Ingresa un nombre para la colección', 'warn');
+      toast('⚠️ Ingrese un nombre para la colección', 'warn');
       return;
     }
     
     if (!fileInput.files || fileInput.files.length === 0) {
-      toast('⚠️ Selecciona un archivo CSV o Excel', 'warn');
+      toast('⚠️ Seleccione un archivo CSV o Excel', 'warn');
       return;
     }
     
@@ -3294,7 +3307,7 @@ async function importarBaseDatos() {
     const usoPorDefecto = [iCodigo, iGrado, iApellidos, iNombres, iArea].some(i => i === -1);
     if (usoPorDefecto) {
       iCodigo = 0; iGrado = 1; iApellidos = 2; iNombres = 3; iArea = 4;
-      toast('⚠️ No se detectaron los encabezados del archivo, se usó el orden por defecto (Código, Grado, Apellidos, Nombres, Área). Revisá que los datos importados sean correctos.', 'err');
+      toast('⚠️ No se detectaron los encabezados del archivo, se usó el orden por defecto (Código, Grado, Apellidos, Nombres, Área). Revise que los datos importados sean correctos.', 'err');
     }
 
     // Parsear filas (saltar encabezado)
@@ -3379,7 +3392,7 @@ async function importarBaseDatos() {
     }
     if (personalErrorEjemplo) {
       console.error('Error guardando el directorio de personal:', personalErrorEjemplo);
-      toast(`⚠️ Se guardaron ${personalGuardados}/${registrosPersonal.length} registros en la Base de Personal. Hubo errores — revisá los permisos de Firestore para la colección "personal". Detalle: ${personalErrorEjemplo.message || personalErrorEjemplo}`, 'err');
+      toast(`⚠️ Se guardaron ${personalGuardados}/${registrosPersonal.length} registros en la Base de Personal. Hubo errores — revise los permisos de Firestore para la colección "personal". Detalle: ${personalErrorEjemplo.message || personalErrorEjemplo}`, 'err');
     }
     
     // Guardar en Firestore — se FUSIONA con lo existente, nunca se sobrescribe
@@ -4059,7 +4072,7 @@ async function eliminarNovedadesAreaMes() {
   const confirmacion = prompt(
     `Esto va a BORRAR PERMANENTEMENTE todas las novedades de:\n\n` +
     `Área: ${area}\nMes: ${periodo}\n\n` +
-    `Esta acción no se puede deshacer. Escribí BORRAR para confirmar:`
+    `Esta acción no se puede deshacer. Escriba BORRAR para confirmar:`
   );
   if (confirmacion !== 'BORRAR') {
     toast('Cancelado — no se borró nada', 'ok');
@@ -4107,7 +4120,7 @@ async function borrarTodaLaBaseNovedades() {
   );
   if (!primeraConfirmacion) { toast('Cancelado', 'ok'); return; }
 
-  const segundaConfirmacion = prompt('Para confirmar, escribí exactamente: BORRAR TODO');
+  const segundaConfirmacion = prompt('Para confirmar, escriba exactamente: BORRAR TODO');
   if (segundaConfirmacion !== 'BORRAR TODO') {
     toast('Cancelado — no se borró nada', 'ok');
     return;
@@ -4159,7 +4172,7 @@ async function borrarTodaLaBaseNovedades() {
     );
 
     progreso.textContent = `✅ Listo. Se revisaron ${areasReales.length} áreas × ${periodos.length} meses.`;
-    toast('✅ Base de Novedades borrada. Podés volver a importar desde cero.', 'ok');
+    toast('✅ Base de Novedades borrada. Puede volver a importar desde cero.', 'ok');
 
     novedadesActuales = null;
     areaActual = null;
@@ -4167,7 +4180,7 @@ async function borrarTodaLaBaseNovedades() {
   } catch(e) {
     console.error(e);
     toast('❌ Error: ' + e.message, 'err');
-    progreso.textContent = '❌ Ocurrió un error, revisá la consola.';
+    progreso.textContent = '❌ Ocurrió un error, revise la consola.';
   }
 }
 
@@ -4240,7 +4253,7 @@ async function editarAcceso(docId, correoActual, areaAsignada) {
   modalAccesoDocIdEdicion = docId;
   await poblarSelectAreaAcceso();
   $('modal-acceso-titulo').textContent = 'Editar Acceso';
-  $('modal-acceso-sub').textContent = 'Cambiá el área asignada a este correo';
+  $('modal-acceso-sub').textContent = 'Cambie el área asignada a este correo';
   $('modal-acceso-correo').value = correoActual || docId;
   $('modal-acceso-correo').disabled = true; // el correo es el ID del documento, no se cambia acá
   if (areaAsignada) $('modal-acceso-area').value = areaAsignada;
@@ -4449,7 +4462,7 @@ async function desbloquearDiaDirecto() {
   const mes = $('desbloqueo-directo-mes').value;
   const anio = $('desbloqueo-directo-anio').value;
   const dia = parseInt($('desbloqueo-directo-dia').value, 10);
-  if (!area || !mes || !anio || !dia) { toast('Completá todos los campos', 'err'); return; }
+  if (!area || !mes || !anio || !dia) { toast('Complete todos los campos', 'err'); return; }
 
   const periodo = `${anio}-${mes}`;
 
@@ -4588,7 +4601,7 @@ function cerrarModalRechazarDesbloqueo() {
 
 async function confirmarRechazarDesbloqueo() {
   const razon = $('rechazo-desbloqueo-razon').value.trim();
-  if (!razon) { toast('Escribí el motivo del rechazo', 'err'); return; }
+  if (!razon) { toast('Escriba el motivo del rechazo', 'err'); return; }
   const docId = rechazoDesbloqueoDocId;
   if (!docId) return;
 
@@ -4610,9 +4623,9 @@ async function confirmarRechazarDesbloqueo() {
    PANEL ADMIN — Resumen General de Novedades
 ═════════════════════════════════════════ */
 
-function poblarSelectoresResumen() {
-  const selMes = $('resumen-mes');
-  const selAnio = $('resumen-anio');
+function poblarSelectoresResumen(prefix = 'resumen') {
+  const selMes = $(`${prefix}-mes`);
+  const selAnio = $(`${prefix}-anio`);
   if (!selMes || !selAnio) return;
 
   if (selMes.options.length === 0) {
@@ -4639,19 +4652,32 @@ function poblarSelectoresResumen() {
   selAnio.value = String(new Date().getFullYear());
 }
 
-async function cargarResumenGeneral() {
-  const mes = $('resumen-mes').value;
-  const anio = $('resumen-anio').value;
-  if (!mes || !anio) { toast('Elegí mes y año', 'err'); return; }
+async function cargarResumenGeneral(prefix = 'resumen') {
+  const mes = $(`${prefix}-mes`).value;
+  const anio = $(`${prefix}-anio`).value;
+  if (!mes || !anio) { toast('Elija mes y año', 'err'); return; }
   const periodo = `${anio}-${mes}`;
 
-  const tbody = $('resumen-tabla-body');
-  tbody.innerHTML = `<tr><td colspan="11" class="td-vacio">Cargando...</td></tr>`;
-  hide('resumen-detalle-container');
+  const tbody = $(`${prefix}-tabla-body`);
+  tbody.innerHTML = `<tr><td colspan="12" class="td-vacio">Cargando...</td></tr>`;
+  const detalleCont = $(`${prefix}-detalle-container`);
+  if (detalleCont) hide(`${prefix}-detalle-container`);
 
   const filasPorArea = [];
   const totales = { total: 0, 'S/N':0, 'OA':0, 'X':0, 'CS':0, 'B':0, 'Li':0, 'V':0, 'PE':0 };
   const detalleAusenciasX = [];
+
+  // Reemplazos temporales (R) por área — se cuentan desde la Base de Personal
+  const reemplazosPorArea = {};
+  try {
+    const personalSnap = await window._fb.getDocs(window._fb.collection(db, 'personal'));
+    personalSnap.docs.forEach(d => {
+      const p = d.data();
+      if (p.areaTemporal) reemplazosPorArea[p.areaTemporal] = (reemplazosPorArea[p.areaTemporal] || 0) + 1;
+    });
+  } catch(e) {
+    console.warn('No se pudo cargar el conteo de reemplazos temporales:', e);
+  }
 
   const areasReales = await obtenerAreasNovedades();
   const tbodyProgreso = tbody;
@@ -4691,6 +4717,7 @@ async function cargarResumenGeneral() {
           area,
           responsable: data.responsable || data.elaboradoPor || '—',
           totalPersonal: agentes.length,
+          reemplazos: reemplazosPorArea[area] || 0,
           conteo,
           periodo
         });
@@ -4702,13 +4729,14 @@ async function cargarResumenGeneral() {
         console.warn(`Sin datos de ${area} para ${periodo}`);
       }
     }));
-    tbodyProgreso.innerHTML = `<tr><td colspan="11" class="td-vacio">Cargando... ${Math.min(i + tamanioLoteResumen, areasReales.length)} / ${areasReales.length} áreas revisadas</td></tr>`;
+    tbodyProgreso.innerHTML = `<tr><td colspan="12" class="td-vacio">Cargando... ${Math.min(i + tamanioLoteResumen, areasReales.length)} / ${areasReales.length} áreas revisadas</td></tr>`;
   }
 
   filasPorArea.sort((a, b) => a.area.localeCompare(b.area));
+  const totalReemplazos = filasPorArea.reduce((s, f) => s + f.reemplazos, 0);
 
   if (filasPorArea.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11" class="td-vacio">No hay novedades registradas para ese mes</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" class="td-vacio">No hay novedades registradas para ese mes</td></tr>`;
     return;
   }
 
@@ -4718,24 +4746,26 @@ async function cargarResumenGeneral() {
       <td>${fila.area}</td>
       <td>${fila.responsable}</td>
       <td style="text-align:center">${fila.totalPersonal}</td>
-      ${CODIGOS_VALIDOS.map(c => `<td style="text-align:center;cursor:pointer;text-decoration:underline;" onclick="mostrarDetalleCodigo('${fila.area.replace(/'/g,"\\'")}','${fila.periodo}','${c}')">${fila.conteo[c]}</td>`).join('')}
+      <td style="text-align:center">${fila.reemplazos > 0 ? `<span style="background:var(--gold-l);color:var(--gold);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">R · ${fila.reemplazos}</span>` : '—'}</td>
+      ${CODIGOS_VALIDOS.map(c => `<td style="text-align:center;cursor:pointer;text-decoration:underline;" onclick="mostrarDetalleCodigo('${fila.area.replace(/'/g,"\\'")}','${fila.periodo}','${c}','${prefix}')">${fila.conteo[c]}</td>`).join('')}
     </tr>`;
   });
 
   html += `<tr style="font-weight:700;background:var(--bg);">
     <td>TOTAL GENERAL</td><td></td>
     <td style="text-align:center">${totales.total}</td>
+    <td style="text-align:center">${totalReemplazos}</td>
     ${CODIGOS_VALIDOS.map(c => `<td style="text-align:center">${totales[c]}</td>`).join('')}
   </tr>`;
 
   tbody.innerHTML = html;
 
-  resumenGeneralCache = { filasPorArea, totales, periodo, detalleAusenciasX };
+  resumenGeneralCache = { filasPorArea, totales, periodo, detalleAusenciasX, totalReemplazos };
 }
 
 async function exportarResumenGeneralExcel() {
   if (!resumenGeneralCache || !resumenGeneralCache.filasPorArea || resumenGeneralCache.filasPorArea.length === 0) {
-    toast('Primero generá el resumen (botón "Generar resumen")', 'err');
+    toast('Primero genere el resumen (botón "Generar resumen")', 'err');
     return;
   }
   if (!window.ExcelJS) {
@@ -4746,7 +4776,7 @@ async function exportarResumenGeneralExcel() {
     });
   }
 
-  const { filasPorArea, totales, periodo, detalleAusenciasX } = resumenGeneralCache;
+  const { filasPorArea, totales, periodo, detalleAusenciasX, totalReemplazos } = resumenGeneralCache;
   const [anio] = periodo.split('-');
 
   // Colores (mismos que el spreadsheet de referencia)
@@ -4754,14 +4784,15 @@ async function exportarResumenGeneralExcel() {
   const ROJO   = 'FFC00000';
   const ROJO_CLARO = 'FFF4CCCC';
   const AZUL_CLARO = 'FFDCE6F1';
+  const DORADO_CLARO = 'FFFFF2CC';
   const BLANCO = 'FFFFFFFF';
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Resumen General');
 
-  const headers = ['ÁREA', 'RESPONSABLE (CÓD. - APELLIDO)', 'TOTAL PERSONAL', 'S/N', 'OA', 'X (Ausentes)', 'CS', 'B (Bajas)', 'Li (Licencias)', 'V', 'PE'];
+  const headers = ['ÁREA', 'RESPONSABLE (CÓD. - APELLIDO)', 'TOTAL PERSONAL', 'REEMPLAZOS (R)', 'S/N', 'OA', 'X (Ausentes)', 'CS', 'B (Bajas)', 'Li (Licencias)', 'V', 'PE'];
   ws.columns = [
-    { width: 34 }, { width: 30 }, { width: 15 },
+    { width: 34 }, { width: 30 }, { width: 15 }, { width: 15 },
     { width: 10 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 }
   ];
 
@@ -4782,10 +4813,10 @@ async function exportarResumenGeneralExcel() {
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
-  // ── Filas por área (con X en rojo si hay ausentes) ──
+  // ── Filas por área (con X en rojo si hay ausentes, R en dorado si hay reemplazos) ──
   filasPorArea.forEach((fila, i) => {
     const filaRow = ws.addRow([
-      fila.area, fila.responsable, fila.totalPersonal,
+      fila.area, fila.responsable, fila.totalPersonal, fila.reemplazos || 0,
       ...CODIGOS_VALIDOS.map(c => fila.conteo[c])
     ]);
     if (i % 2 === 0) {
@@ -4793,7 +4824,12 @@ async function exportarResumenGeneralExcel() {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
       });
     }
-    const celdaX = filaRow.getCell(6); // columna F = X (Ausentes)
+    const celdaR = filaRow.getCell(4); // columna D = Reemplazos (R)
+    if (fila.reemplazos > 0) {
+      celdaR.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DORADO_CLARO } };
+      celdaR.font = { bold: true };
+    }
+    const celdaX = filaRow.getCell(7); // columna G = X (Ausentes)
     if (fila.conteo['X'] > 0) {
       celdaX.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROJO } };
       celdaX.font = { bold: true, color: { argb: BLANCO } };
@@ -4804,7 +4840,7 @@ async function exportarResumenGeneralExcel() {
   });
 
   // ── Total general ──
-  const filaTotal = ws.addRow(['TOTAL GENERAL', '', totales.total, ...CODIGOS_VALIDOS.map(c => totales[c])]);
+  const filaTotal = ws.addRow(['TOTAL GENERAL', '', totales.total, totalReemplazos || 0, ...CODIGOS_VALIDOS.map(c => totales[c])]);
   filaTotal.eachCell(cell => {
     cell.font = { bold: true };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
@@ -4867,7 +4903,7 @@ async function exportarResumenGeneralExcel() {
   toast('✅ Resumen exportado con colores', 'ok');
 }
 
-async function mostrarDetalleCodigo(area, periodo, codigo) {
+async function mostrarDetalleCodigo(area, periodo, codigo, prefix = 'resumen') {
   try {
     const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
     const snap = await window._fb.getDoc(ref);
@@ -4883,12 +4919,12 @@ async function mostrarDetalleCodigo(area, periodo, codigo) {
       }
     });
 
-    $('resumen-detalle-titulo').textContent = `Detalle — ${area} — Código "${codigo}" (${CODIGOS_DESC[codigo] || ''})`;
+    $(`${prefix}-detalle-titulo`).textContent = `Detalle — ${area} — Código "${codigo}" (${CODIGOS_DESC[codigo] || ''})`;
 
     if (filas.length === 0) {
-      $('resumen-detalle-body').innerHTML = `<tr><td colspan="5" class="td-vacio">Sin registros</td></tr>`;
+      $(`${prefix}-detalle-body`).innerHTML = `<tr><td colspan="5" class="td-vacio">Sin registros</td></tr>`;
     } else {
-      $('resumen-detalle-body').innerHTML = filas.map(f => `
+      $(`${prefix}-detalle-body`).innerHTML = filas.map(f => `
         <tr>
           <td>${f.area}</td><td>${f.codigo}</td><td>${f.grado}</td><td>${f.nombre}</td>
           <td style="text-align:center">${f.cantidad}</td>
@@ -4899,8 +4935,8 @@ async function mostrarDetalleCodigo(area, periodo, codigo) {
         </tr>`;
     }
 
-    show('resumen-detalle-container');
-    $('resumen-detalle-container').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    show(`${prefix}-detalle-container`);
+    $(`${prefix}-detalle-container`).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   } catch(e) {
     toast('Error: ' + e.message, 'err');
