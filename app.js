@@ -117,12 +117,22 @@ async function initFirebase() {
         usuario = { uid: u.uid, nombre: u.displayName, email: u.email, foto: u.photoURL };
         await cargarPermisoUsuario();
         actualizarNav();
-        esSupervisor() ? hide('nb-novedades') : show('nb-novedades'); // Novedades: todos menos el supervisor puro
-        esSupervisor() ? hide('nb-envios') : show('nb-envios');       // Envíos: todos menos el supervisor puro
-        tieneAccesoPanel() ? show('nb-admin') : hide('nb-admin');   // Panel de control: admin o con permiso parcial
-        (esSupervisor() || tienePermisoAccion('actividad_ver')) ? show('nb-reportes') : hide('nb-reportes'); // Reportes: supervisor legado o acción 'actividad_ver'
 
-        if (esSupervisor() && !esAdmin()) {
+        // Novedades/Envíos son para personal operativo (con área asignada en Accesos).
+        // Si la persona tiene algún permiso del Panel de Control pero NO tiene área
+        // asignada, no es personal operativo — no debe ver esas dos pestañas,
+        // sin importar qué tipo de permiso se le haya dado.
+        const tieneArea = permisoUsuario ? await usuarioTieneAreaAsignada() : true;
+        const debeVerOperativas = esAdmin() || tieneArea;
+
+        debeVerOperativas ? show('nb-novedades') : hide('nb-novedades');
+        debeVerOperativas ? show('nb-envios') : hide('nb-envios');
+        tieneAccesoPanel() ? show('nb-admin') : hide('nb-admin');   // Panel de control: admin o con permiso
+        (esSupervisor() || tienePermisoAccion('actividad_ver')) ? show('nb-reportes') : hide('nb-reportes');
+
+        if (!debeVerOperativas && tieneAccesoPanel()) {
+          irAdmin();
+        } else if (!debeVerOperativas && (esSupervisor() || tienePermisoAccion('actividad_ver'))) {
           irReportes();
         } else {
           irNovedades();
@@ -303,6 +313,12 @@ function irReportes() {
   ir('vista-reportes');
   cargarReportesActividad();
   poblarSelectoresResumen('rep-resumen');
+}
+
+function irAdmin() {
+  if (!tieneAccesoPanel()) return;
+  ir('vista-admin');
+  aplicarVisibilidadTabsAdmin();
 }
 
 function toast(msg, tipo='ok') {
@@ -1931,11 +1947,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', logout));
   $('nb-novedades')?.addEventListener('click', () => usuario ? irNovedades() : ir('vista-login'));
   $('nb-envios')?.addEventListener('click', () => usuario ? irEnvios() : ir('vista-login'));
-  $('nb-admin')?.addEventListener('click', () => {
-    if (!tieneAccesoPanel()) return;
-    ir('vista-admin');
-    aplicarVisibilidadTabsAdmin();
-  });
+  $('nb-admin')?.addEventListener('click', irAdmin);
   $('nb-reportes')?.addEventListener('click', () => { if (esSupervisor() || tienePermisoAccion('actividad_ver')) irReportes(); });
   $('btn-enviar-otro')?.addEventListener('click', irEnvios);
   $('btn-enviar')?.addEventListener('click', enviarArchivo);
@@ -3626,11 +3638,33 @@ async function poblarListaPermisos() {
             <div style="font-weight:600;">${data.correo} ${badge}</div>
             ${accionesTxt ? `<div style="font-size:11px;color:var(--txt2);margin-top:4px;">${accionesTxt}</div>` : ''}
           </div>
-          <button class="btn-acc btn-acc-red" style="padding:4px 10px;font-size:11px;white-space:nowrap;" onclick="eliminarPermiso('${d.id}')">Quitar acceso</button>
+          <div style="display:flex;gap:6px;white-space:nowrap;">
+            <button class="btn-acc btn-acc-blue" style="padding:4px 10px;font-size:11px;" onclick="editarPermiso('${d.id}')">✎ Editar</button>
+            <button class="btn-acc btn-acc-red" style="padding:4px 10px;font-size:11px;" onclick="eliminarPermiso('${d.id}')">Quitar acceso</button>
+          </div>
         </div>`;
     }).join('');
   } catch(e) {
     cont.innerHTML = `<p class="td-vacio">❌ Error cargando permisos: ${e.message}</p>`;
+  }
+}
+
+async function editarPermiso(correo) {
+  try {
+    const snap = await window._fb.getDoc(window._fb.doc(db, 'permisos_panel', correo));
+    if (!snap.exists()) { toast('No se encontró ese permiso', 'err'); return; }
+    const data = snap.data();
+
+    renderizarGruposPermisos();
+    $('permiso-correo').value = data.correo;
+    document.querySelectorAll('.permiso-accion-check').forEach(c => {
+      c.checked = (data.acciones || []).includes(c.value);
+    });
+
+    $('permiso-correo').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    toast(`Editando permiso de ${correo} — ajuste las casillas y presione "Asignar permiso" para guardar`, 'ok');
+  } catch(e) {
+    toast('❌ Error: ' + e.message, 'err');
   }
 }
 
@@ -5051,6 +5085,7 @@ window.actualizarVisibilidadTabsPermiso = actualizarVisibilidadTabsPermiso;
 window.guardarPermiso               = guardarPermiso;
 window.marcarGrupoPermiso           = marcarGrupoPermiso;
 window.eliminarPermiso              = eliminarPermiso;
+window.editarPermiso                = editarPermiso;
 window.desbloquearDiaDirecto        = desbloquearDiaDirecto;
 window.borrarTodaLaBaseNovedades    = borrarTodaLaBaseNovedades;
 window.mostrarFormAcceso            = mostrarFormAcceso;
