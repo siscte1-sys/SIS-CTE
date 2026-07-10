@@ -88,7 +88,7 @@
       <!-- Panel derecho — SOLO GOOGLE -->
       <div class="login-panel-right">
         <div class="lpr-bienvenida">Bienvenido</div>
-        <p class="login-card-desc">Accede con tu cuenta de Google para continuar.</p>
+        <p class="login-card-desc">Acceda con su cuenta de Google para continuar.</p>
 
         <button class="btn-google" id="btn-google">
           <svg width="18" height="18" viewBox="0 0 48 48">
@@ -114,7 +114,7 @@
   <div id="vista-novedades" class="vista" style="display:none">
     <div class="page-hero">
       <h1 class="page-hero-titulo">📋 Novedades Mensuales</h1>
-      <p class="page-hero-sub">Registra las novedades diarias de tu área. <strong id="hero-area"></strong> · Mes: <strong id="hero-mes"></strong></p>
+      <p class="page-hero-sub">Registre las novedades diarias de su área. <strong id="hero-area"></strong> · Mes: <strong id="hero-mes"></strong></p>
       <div id="admin-selector-area-novedades" style="display:none;margin-top:12px;">
         <label class="form-label" style="color:#fff;opacity:.85;">Área a gestionar (admin)</label>
         <select id="select-area-admin-novedades" class="form-select" style="max-width:320px;"></select>
@@ -126,7 +126,7 @@
       <div id="admin-generar-reporte" class="panel-white" style="display:none;padding:20px;margin-bottom:20px;border:2px solid var(--blue-m);">
         <div class="sec-titulo">🧪 Generar reporte (admin — cualquier momento)</div>
         <p style="font-size:12px;color:var(--txt2);margin-bottom:16px;">
-          Generá el Excel/PDF del área y mes que quieras para probar, sin esperar al cierre de mes. No afecta el estado del mes ni bloquea nada — lo podés hacer las veces que necesites.
+          Genere el Excel/PDF del área y mes que quiera para probar, sin esperar al cierre de mes. No afecta el estado del mes ni bloquea nada — lo puede hacer las veces que necesite.
         </p>
         <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;margin-bottom:16px;">
           <div class="form-field" style="margin-bottom:0;">
@@ -286,7 +286,7 @@
   <div id="vista-envios" class="vista" style="display:none">
     <div class="page-hero">
       <h1 class="page-hero-titulo">Registro de Envíos</h1>
-      <p class="page-hero-sub">Hola, <strong id="hero-nombre"></strong>. Sube tu archivo comprimido (RAR o ZIP) y registrá los detalles de cada envío.</p>
+      <p class="page-hero-sub">Hola, <strong id="hero-nombre"></strong>. Suba su archivo comprimido (RAR o ZIP) y registre los detalles de cada envío.</p>
     </div>
     <div class="page-body">
 
@@ -297,13 +297,13 @@
           </div>
           <div>
             <div class="envio-card-titulo">Nuevo Envío</div>
-            <div class="envio-card-sub">Completá los datos y adjuntá el archivo comprimido (RAR o ZIP) correspondiente.</div>
+            <div class="envio-card-sub">Complete los datos y adjunte el archivo comprimido (RAR o ZIP) correspondiente.</div>
           </div>
         </div>
 
         <div class="form-field">
           <label class="form-label">Detalles del Envío</label>
-          <textarea id="detalle-envio" class="form-textarea" placeholder="Describí los detalles del envío..."></textarea>
+          <textarea id="detalle-envio" class="form-textarea" placeholder="Describa los detalles del envío..."></textarea>
         </div>
 
         <div class="form-field">
@@ -319,7 +319,7 @@
             <div class="dz-upload-ico">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             </div>
-            <span class="dz-label">Hacé clic para seleccionar</span>
+            <span class="dz-label">Haga clic para seleccionar</span>
             <span class="dz-hint">Solo .rar o .zip</span>
           </div>
           <input type="file" id="file-input" accept=".rar,.zip">
@@ -348,7 +348,7 @@
             <div class="dz-upload-ico">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>
             </div>
-            <span class="dz-label">Hacé clic para seleccionar el Informe de Entrega</span>
+            <span class="dz-label">Haga clic para seleccionar el Informe de Entrega</span>
             <span class="dz-hint">Solo .pdf — Siempre obligatorio</span>
           </div>
           <input type="file" id="informe-input" accept=".pdf" style="display:none" onchange="if(this.files[0])seleccionarInforme(this.files[0])">
@@ -387,7 +387,7 @@
             <div class="dz-upload-ico">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>
             </div>
-            <span class="dz-label">Hacé clic para seleccionar el Informe de Atraso</span>
+            <span class="dz-label">Haga clic para seleccionar el Informe de Atraso</span>
             <span class="dz-hint">Solo .pdf</span>
           </div>
           <input type="file" id="acta-input" accept=".pdf" style="display:none" onchange="if(this.files[0])seleccionarActa(this.files[0])">
@@ -419,7 +419,7 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           Registrar Envío
         </button>
-        <p id="enviar-hint" style="text-align:center;font-size:12px;color:#ef4444;margin-top:6px;">Sube el archivo comprimido (RAR o ZIP) para habilitar el envío</p>
+        <p id="enviar-hint" style="text-align:center;font-size:12px;color:#ef4444;margin-top:6px;">Suba el archivo comprimido (RAR o ZIP) para habilitar el envío</p>
       </div>
 
       <!-- ── MIS ENVÍOS ── -->
@@ -442,7 +442,7 @@
   <div id="vista-exito" class="vista" style="display:none">
     <div class="page-hero">
       <h1 class="page-hero-titulo">Registro de Envíos</h1>
-      <p class="page-hero-sub">Tu envío fue registrado exitosamente.</p>
+      <p class="page-hero-sub">Su envío fue registrado exitosamente.</p>
     </div>
     <div class="page-body">
       <div class="exito-card">
@@ -450,7 +450,7 @@
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
         <h2 class="exito-titulo">¡Archivo registrado!</h2>
-        <p class="exito-desc">Tu entrega fue guardada correctamente. Revisa tu correo para el comprobante.</p>
+        <p class="exito-desc">Su entrega fue guardada correctamente. Revise su correo para el comprobante.</p>
         <div class="exito-datos">
           <div class="exito-row full"><label>Enviado por</label><span id="ex-nombre"></span></div>
           <div class="exito-row full"><label>Correo</label><span id="ex-email"></span></div>
@@ -462,7 +462,7 @@
         </div>
         <div class="exito-correo-aviso">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          Se envió un correo de confirmación a tu cuenta como respaldo.
+          Se envió un correo de confirmación a su cuenta como respaldo.
         </div>
         <button class="btn-registrar" id="btn-enviar-otro" style="margin-top:8px">
           Registrar otro envío
@@ -477,7 +477,7 @@
   <div id="vista-reportes" class="vista" style="display:none">
     <div class="page-hero">
       <h1 class="page-hero-titulo">📊 Reportes de Actividad</h1>
-      <p class="page-hero-sub">Vista de solo lectura de lo que se hace en el sistema. No podés modificar nada desde acá.</p>
+      <p class="page-hero-sub">Vista de solo lectura de lo que se hace en el sistema. No puede modificar nada desde acá.</p>
     </div>
     <div class="page-body">
       <div class="stats-row" style="margin-bottom:20px;">
@@ -496,6 +496,49 @@
             <p class="td-vacio">Cargando...</p>
           </div>
           <div id="rep-actividad-paginacion"></div>
+        </div>
+      </div>
+
+      <div class="panel-white" style="margin-top:20px;">
+        <div style="padding:20px;">
+          <div class="sec-titulo">Resumen General de Novedades por Área (solo lectura)</div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 16px;">
+            <div class="form-field" style="margin-bottom:0;">
+              <label class="form-label">Mes</label>
+              <select id="rep-resumen-mes" class="filtro-select"></select>
+            </div>
+            <div class="form-field" style="margin-bottom:0;">
+              <label class="form-label">Año</label>
+              <select id="rep-resumen-anio" class="filtro-select"></select>
+            </div>
+            <button class="btn-acc btn-acc-blue" onclick="cargarResumenGeneral('rep-resumen')" style="margin-top:18px;">Generar resumen</button>
+            <button class="btn-acc btn-acc-green" onclick="exportarResumenGeneralExcel()" style="margin-top:18px;">📥 Exportar a Excel</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Área</th><th>Responsable</th><th>Total Personal</th><th>Reemplazos (R)</th>
+                  <th>S/N</th><th>OA</th><th>X</th><th>CS</th><th>B</th><th>Li</th><th>V</th><th>PE</th>
+                </tr>
+              </thead>
+              <tbody id="rep-resumen-tabla-body">
+                <tr><td colspan="12" class="td-vacio">Elija un mes y haga clic en "Generar resumen"</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="rep-resumen-detalle-container" class="panel-white" style="display:none;margin-top:16px;padding:20px;">
+          <div class="sec-titulo" id="rep-resumen-detalle-titulo"></div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead>
+                <tr><th>Área</th><th>Código</th><th>Grado</th><th>Apellidos y Nombres</th><th>Días con este código</th></tr>
+              </thead>
+              <tbody id="rep-resumen-detalle-body"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -661,7 +704,7 @@
               Esto borra <strong>todas las áreas y todos los meses</strong> de Novedades — pensado para cuando una importación salió mal por completo y preferís empezar de cero.
             </p>
             <p style="color:var(--red);margin-bottom:16px;font-size:12px;">
-              ⚠️ Acción irreversible. Borra todo lo que el sistema conoce (áreas detectadas en tus importaciones, en un rango de 3 años). Los envíos de archivos (pestaña Envíos) NO se tocan.
+              ⚠️ Acción irreversible. Borra todo lo que el sistema conoce (áreas detectadas en sus importaciones, en un rango de 3 años). Los envíos de archivos (pestaña Envíos) NO se tocan.
             </p>
             <button class="btn-acc btn-acc-red" onclick="borrarTodaLaBaseNovedades()" data-permiso="importar_borrar_todo">
               🗑️ Borrar toda la base de Novedades
@@ -674,7 +717,7 @@
           <div style="padding:20px;">
             <div class="sec-titulo">📇 Base de Personal (directorio completo)</div>
             <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
-              Todos los registros importados. Filtrá por cualquier campo, y agregá, editá o eliminá registros puntuales.
+              Todos los registros importados. Filtre por cualquier campo, y agregue, edite o elimine registros puntuales.
             </p>
             <div style="display:grid;grid-template-columns:repeat(4,1fr) auto;gap:10px;align-items:end;margin-bottom:16px;">
               <div class="form-field" style="margin-bottom:0;">
@@ -699,7 +742,7 @@
             <div id="personal-cambio-lote" style="display:none;margin-bottom:16px;padding:12px 16px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;align-items:center;gap:12px;flex-wrap:wrap;">
               <span id="personal-cambio-lote-info" style="font-size:12px;font-weight:600;color:var(--blue);"></span>
               <select id="personal-cambio-lote-area" class="form-select" style="max-width:280px;"></select>
-              <button class="btn-acc btn-acc-blue" onclick="aplicarCambioAreaLote()">Aplicar área a los seleccionados</button>
+              <button class="btn-acc btn-acc-blue" onclick="aplicarCambioAreaLote()" data-permiso="importar_editar_personal">Aplicar área a los seleccionados</button>
               <button class="btn-acc btn-acc-ghost" onclick="limpiarSeleccionPersonal()">Cancelar selección</button>
             </div>
 
@@ -779,7 +822,7 @@
               </div>
             </div>
             <button class="btn-filtrar" onclick="filtrarAuditoria()">Filtrar</button>
-            <button class="btn-limpiar" onclick="limpiarAuditoria()">Limpiar Auditoría</button>
+            <button class="btn-limpiar" onclick="limpiarAuditoria()" data-permiso="auditoria_limpiar">Limpiar Auditoría</button>
             
             <div id="auditoria-tabla" style="margin-top:16px;overflow-x:auto;">
               <table style="font-size:11px;">
@@ -810,7 +853,7 @@
           <div style="padding:20px;">
             <div class="sec-titulo">🔓 Desbloqueo directo (sin esperar solicitud)</div>
             <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
-              Como admin podés habilitar la edición de un día puntual para cualquier área y mes — incluso si el mes ya cerró (días 28 al 31) y ya pasó al mes siguiente. El usuario va a poder editar <strong>solo ese día</strong>; en cuanto guarde el cambio, se vuelve a bloquear solo y reaparece el botón de generar el reporte.
+              Como admin puede habilitar la edición de un día puntual para cualquier área y mes — incluso si el mes ya cerró (días 28 al 31) y ya pasó al mes siguiente. El usuario va a poder editar <strong>solo ese día</strong>; en cuanto guarde el cambio, se vuelve a bloquear solo y reaparece el botón de generar el reporte.
             </p>
             <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:end;">
               <div class="form-field" style="margin-bottom:0;">
@@ -884,12 +927,12 @@
             <table>
               <thead>
                 <tr>
-                  <th>Área</th><th>Responsable</th><th>Total Personal</th>
+                  <th>Área</th><th>Responsable</th><th>Total Personal</th><th>Reemplazos (R)</th>
                   <th>S/N</th><th>OA</th><th>X</th><th>CS</th><th>B</th><th>Li</th><th>V</th><th>PE</th>
                 </tr>
               </thead>
               <tbody id="resumen-tabla-body">
-                <tr><td colspan="11" class="td-vacio">Elegí un mes y hacé clic en "Generar resumen"</td></tr>
+                <tr><td colspan="12" class="td-vacio">Elija un mes y haga clic en "Generar resumen"</td></tr>
               </tbody>
             </table>
           </div>
@@ -914,7 +957,7 @@
           <div style="padding:20px;">
             <div class="sec-titulo">🔑 Asignar permisos del Panel de Control</div>
             <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
-              Dale acceso al Panel de Control a otra persona sin hacerla administrador total. Elegí si va a poder <strong>modificar</strong> ciertas pestañas puntuales, o si solo va a poder <strong>ver un reporte de actividad</strong> (de solo lectura, para un jefe o supervisor).
+              Dele acceso al Panel de Control a otra persona sin hacerla administrador total. Elija si va a poder <strong>modificar</strong> ciertas pestañas puntuales, o si solo va a poder <strong>ver un reporte de actividad</strong> (de solo lectura, para un jefe o supervisor).
             </p>
 
             <div class="form-field">
@@ -996,7 +1039,7 @@
           <option value="">— No aplica —</option>
         </select>
         <p style="font-size:11px;color:var(--txt2);margin-top:4px;">
-          Si elegís un área acá, esta persona sigue perteneciendo a su área original de arriba, pero se marca con estado "R" (Reemplazo) en el área temporal.
+          Si elige un área acá, esta persona sigue perteneciendo a su área original de arriba, pero se marca con estado "R" (Reemplazo) en el área temporal.
         </p>
       </div>
       <div id="modal-personal-error" style="display:none;padding:10px 12px;background:var(--red);color:white;border-radius:8px;font-size:12px;margin-bottom:16px;"></div>
@@ -1023,7 +1066,7 @@
     <div class="modal-body">
       <div class="form-field">
         <label class="form-label">Motivo del rechazo</label>
-        <textarea id="rechazo-desbloqueo-razon" class="form-textarea" placeholder="Ej: El día ya fue reportado, contactá a tu supervisor..." rows="3"></textarea>
+        <textarea id="rechazo-desbloqueo-razon" class="form-textarea" placeholder="Ej: El día ya fue reportado, contacte a su supervisor..." rows="3"></textarea>
       </div>
       <div class="modal-footer">
         <button class="btn-modal-cancel" onclick="cerrarModalRechazarDesbloqueo()">Cancelar</button>
@@ -1072,7 +1115,7 @@
     </div>
     <div class="modal-body">
       <div class="form-field">
-        <input type="text" id="buscador-persona" class="form-select" placeholder="Escribí para buscar..." oninput="filtrarListaPersonal()">
+        <input type="text" id="buscador-persona" class="form-select" placeholder="Escriba para buscar..." oninput="filtrarListaPersonal()">
       </div>
       <div id="lista-persona-resultados" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
         <!-- resultados -->
@@ -1209,7 +1252,7 @@
       </div>
       <div>
         <div class="modal-titulo">Eliminar registros BD</div>
-        <div class="modal-sub">Elimina registros de Firestore (no afecta Google Drive)</div>
+        <div class="modal-sub">Elimine registros de Firestore (no afecta Google Drive)</div>
       </div>
       <button class="modal-cerrar" onclick="cerrarModalLimpiarDuplicados()">✕</button>
     </div>
@@ -1219,7 +1262,7 @@
 
       <div class="elim-aviso-rojo">
         <span>⚠️</span>
-        <strong>Esta acción es IRREVERSIBLE — elige bien el rango</strong>
+        <strong>Esta acción es IRREVERSIBLE — elija bien el rango</strong>
       </div>
 
       <div class="elim-fechas">
@@ -1281,11 +1324,11 @@
     </div>
 
     <div id="arch-paso1" class="modal-body">
-      <p class="modal-desc">Selecciona el mes a archivar. Los archivos se abrirán desde Drive y luego podrás marcarlos como archivados. El historial queda siempre.</p>
+      <p class="modal-desc">Seleccione el mes a archivar. Los archivos se abrirán desde Drive y luego podrá marcarlos como archivados. El historial queda siempre.</p>
       <div class="form-field" style="margin-top:14px">
         <label class="form-label">Mes a archivar</label>
         <select id="arch-mes-select" class="form-select" onchange="seleccionarMesArchivado()">
-          <option value="">— Selecciona el mes —</option>
+          <option value="">— Seleccione el mes —</option>
         </select>
       </div>
       <div id="arch-resumen" style="margin-top:12px;max-height:250px;overflow-y:auto;"></div>
