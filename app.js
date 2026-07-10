@@ -121,7 +121,15 @@ async function initFirebase() {
         show('nb-envios');                                  // Envíos: todos los usuarios
         tieneAccesoPanel() ? show('nb-admin') : hide('nb-admin');   // Panel de control: admin o con permiso parcial
         esSupervisor() ? show('nb-reportes') : hide('nb-reportes'); // Reportes: solo supervisor
-        irNovedades();
+
+        // Si es supervisor y no tiene un área de Novedades propia asignada,
+        // aterrizarlo en Reportes en vez del error de "correo no configurado"
+        if (esSupervisor() && !esAdmin()) {
+          const tieneAreaNovedades = await usuarioTieneAreaAsignada();
+          tieneAreaNovedades ? irNovedades() : irReportes();
+        } else {
+          irNovedades();
+        }
       } else {
         usuario = null;
         permisoUsuario = null;
@@ -238,6 +246,19 @@ const tabPermitido = (tabName) => {
 
 const tieneAccesoPanel = () => esAdmin() || (permisoUsuario && permisoUsuario.tipo === 'parcial');
 const esSupervisor = () => !esAdmin() && permisoUsuario && permisoUsuario.tipo === 'supervisor';
+
+async function usuarioTieneAreaAsignada() {
+  try {
+    const q = window._fb.query(
+      window._fb.collection(db, 'accesos'),
+      window._fb.where('correo', '==', usuario.email.toLowerCase())
+    );
+    const snap = await window._fb.getDocs(q);
+    return !snap.empty;
+  } catch(e) {
+    return false;
+  }
+}
 
 // Oculta/deshabilita cualquier elemento con data-permiso="clave" si el usuario no la tiene
 function aplicarPermisosBotones() {
@@ -3476,6 +3497,16 @@ async function guardarPermiso() {
 
   if (!correo || !correo.includes('@')) { toast('Ingresá un correo válido', 'err'); return; }
 
+  try {
+    const existente = await window._fb.getDoc(window._fb.doc(db, 'permisos_panel', correo));
+    if (existente.exists()) {
+      const actual = existente.data();
+      const tipoActualTxt = actual.tipo === 'supervisor' ? 'Supervisor' : 'Acceso parcial';
+      const continuar = confirm(`El correo ${correo} ya tiene un permiso asignado (${tipoActualTxt}).\n\n¿Querés reemplazarlo por el nuevo que elegiste?`);
+      if (!continuar) return;
+    }
+  } catch(e) { /* si falla la verificación, seguimos igual */ }
+
   const acciones = tipo === 'parcial'
     ? Array.from(document.querySelectorAll('.permiso-accion-check:checked')).map(c => c.value)
     : [];
@@ -3789,7 +3820,7 @@ function renderizarTablaPersonal() {
 
   const tbody = $('personal-tabla-body');
   if (pagina.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="td-vacio">No se encontraron registros</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="td-vacio">No se encontraron registros</td></tr>`;
   } else {
     tbody.innerHTML = pagina.map(p => `
       <tr>
@@ -3799,6 +3830,8 @@ function renderizarTablaPersonal() {
         <td>${p.apellidos || ''}</td>
         <td>${p.nombres || ''}</td>
         <td>${p.area || ''}</td>
+        <td>${p.areaTemporal || '<span style="color:var(--txt3)">—</span>'}</td>
+        <td>${p.areaTemporal ? '<span style="background:var(--gold-l);color:var(--gold);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">R</span>' : ''}</td>
         <td style="white-space:nowrap;">
 ${tienePermisoAccion('importar_editar_personal') ? `
           <button class="btn-acc btn-acc-blue" style="padding:4px 8px;font-size:11px;" onclick="editarRegistroPersonal('${p.id}')">✎</button>
@@ -3909,8 +3942,17 @@ async function aplicarCambioAreaLote() {
 
 let modalPersonalIdEdicion = null;
 
-function abrirModalPersonal() {
+async function poblarSelectAreaTemporal() {
+  const sel = $('modal-personal-area-temporal');
+  if (sel.dataset.poblado === '1') return;
+  const areasReales = await obtenerAreasNovedades();
+  sel.innerHTML = '<option value="">— No aplica —</option>' + areasReales.map(a => `<option value="${a}">${a}</option>`).join('');
+  sel.dataset.poblado = '1';
+}
+
+async function abrirModalPersonal() {
   modalPersonalIdEdicion = null;
+  await poblarSelectAreaTemporal();
   $('modal-personal-titulo').textContent = 'Agregar registro';
   $('modal-personal-codigo').value = '';
   $('modal-personal-codigo').disabled = false;
@@ -3918,14 +3960,16 @@ function abrirModalPersonal() {
   $('modal-personal-apellidos').value = '';
   $('modal-personal-nombres').value = '';
   $('modal-personal-area').value = '';
+  $('modal-personal-area-temporal').value = '';
   hide('modal-personal-error');
   $('modal-personal').style.display = 'flex';
 }
 
-function editarRegistroPersonal(id) {
+async function editarRegistroPersonal(id) {
   const p = personalDirectorioCache.find(x => x.id === id);
   if (!p) return;
   modalPersonalIdEdicion = id;
+  await poblarSelectAreaTemporal();
   $('modal-personal-titulo').textContent = 'Editar registro';
   $('modal-personal-codigo').value = p.codigo || '';
   $('modal-personal-codigo').disabled = true; // el código es el ID del documento
@@ -3933,6 +3977,7 @@ function editarRegistroPersonal(id) {
   $('modal-personal-apellidos').value = p.apellidos || '';
   $('modal-personal-nombres').value = p.nombres || '';
   $('modal-personal-area').value = p.area || '';
+  $('modal-personal-area-temporal').value = p.areaTemporal || '';
   hide('modal-personal-error');
   $('modal-personal').style.display = 'flex';
 }
@@ -3948,6 +3993,7 @@ async function guardarRegistroPersonal() {
   const apellidos = $('modal-personal-apellidos').value.trim();
   const nombres = $('modal-personal-nombres').value.trim();
   const area = $('modal-personal-area').value.trim();
+  const areaTemporal = $('modal-personal-area-temporal').value.trim();
   const errorEl = $('modal-personal-error');
 
   if (!codigo) { errorEl.textContent = 'El código es obligatorio'; show('modal-personal-error'); return; }
@@ -3957,6 +4003,8 @@ async function guardarRegistroPersonal() {
     const areaSanitizada = sanitizarNombreArea(area);
     await window._fb.setDoc(window._fb.doc(db, 'personal', codigo), {
       codigo, grado, apellidos, nombres, area: areaSanitizada,
+      areaTemporal: areaTemporal || null,
+      estadoTemporal: areaTemporal ? 'R' : null,
       ultimaActualizacion: new Date()
     }, { merge: true });
 
@@ -3973,8 +4021,8 @@ async function guardarRegistroPersonal() {
 
     await registrarEnAuditoria(
       modalPersonalIdEdicion ? 'editar_personal' : 'crear_personal',
-      areaSanitizada, usuario.email, null, null, { codigo },
-      `${modalPersonalIdEdicion ? 'Editado' : 'Agregado'} registro de personal: ${codigo} — ${apellidos} ${nombres}`
+      areaSanitizada, usuario.email, null, null, { codigo, areaTemporal },
+      `${modalPersonalIdEdicion ? 'Editado' : 'Agregado'} registro de personal: ${codigo} — ${apellidos} ${nombres}${areaTemporal ? ` (reemplazo temporal en ${areaTemporal})` : ''}`
     );
 
     toast(`✅ Registro ${modalPersonalIdEdicion ? 'actualizado' : 'agregado'}`, 'ok');
