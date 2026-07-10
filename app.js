@@ -117,16 +117,13 @@ async function initFirebase() {
         usuario = { uid: u.uid, nombre: u.displayName, email: u.email, foto: u.photoURL };
         await cargarPermisoUsuario();
         actualizarNav();
-        show('nb-novedades');                              // Novedades: todos los usuarios
-        show('nb-envios');                                  // Envíos: todos los usuarios
+        esSupervisor() ? hide('nb-novedades') : show('nb-novedades'); // Novedades: todos menos el supervisor puro
+        esSupervisor() ? hide('nb-envios') : show('nb-envios');       // Envíos: todos menos el supervisor puro
         tieneAccesoPanel() ? show('nb-admin') : hide('nb-admin');   // Panel de control: admin o con permiso parcial
-        esSupervisor() ? show('nb-reportes') : hide('nb-reportes'); // Reportes: solo supervisor
+        (esSupervisor() || tienePermisoAccion('actividad_ver')) ? show('nb-reportes') : hide('nb-reportes'); // Reportes: supervisor legado o acción 'actividad_ver'
 
-        // Si es supervisor y no tiene un área de Novedades propia asignada,
-        // aterrizarlo en Reportes en vez del error de "correo no configurado"
         if (esSupervisor() && !esAdmin()) {
-          const tieneAreaNovedades = await usuarioTieneAreaAsignada();
-          tieneAreaNovedades ? irNovedades() : irReportes();
+          irReportes();
         } else {
           irNovedades();
         }
@@ -186,7 +183,7 @@ const esAdmin = () =>
 // Catálogo de acciones concretas que se pueden delegar, agrupadas por pestaña.
 // key = se usa como identificador en Firestore y en los atributos data-permiso del HTML.
 const PERMISOS_DISPONIBLES = [
-  { tab: 'envios', tabLabel: '📤 Envíos', acciones: [
+  { tab: 'envios', tabLabel: '📤 Envíos realizados', acciones: [
     { key: 'envios_ver',                label: 'Ver envíos y estadísticas' },
     { key: 'envios_exportar',           label: 'Exportar Excel (todo / filtrado)' },
     { key: 'envios_archivar',           label: 'Archivar mes' },
@@ -216,6 +213,9 @@ const PERMISOS_DISPONIBLES = [
   { tab: 'resumen', tabLabel: '📊 Resumen General', acciones: [
     { key: 'resumen_ver',               label: 'Ver resumen general' },
     { key: 'resumen_exportar',          label: 'Exportar resumen a Excel' },
+  ]},
+  { tab: 'actividad', tabLabel: '📈 Actividad del Administrador', acciones: [
+    { key: 'actividad_ver',             label: 'Ver actividad del administrador (auditoría resumida) y descargarla' },
   ]},
 ];
 
@@ -336,7 +336,7 @@ function actualizarNav() {
     show('nav-sesion'); hide('nav-guest');
     esAdmin() ? show('nb-envios') : hide('nb-envios');
     tieneAccesoPanel() ? show('nb-admin') : hide('nb-admin');
-    esSupervisor() ? show('nb-reportes') : hide('nb-reportes');
+    (esSupervisor() || tienePermisoAccion('actividad_ver')) ? show('nb-reportes') : hide('nb-reportes');
   } else {
     hide('nav-sesion'); show('nav-guest'); hide('nb-admin');
   }
@@ -881,8 +881,9 @@ async function combinarDuplicadosArea() {
   }
 
   const resumen = duplicados.map(([cod, lista]) => `Código ${cod}: ${lista.length} registros`).join('\n');
-  const confirmar = confirm(
-    `Se van a combinar estos duplicados en un solo registro por agente, uniendo los días que cada uno tenga cargados:\n\n${resumen}\n\n¿Confirma?`
+  const confirmar = await confirmarAccion(
+    `Se van a combinar estos duplicados en un solo registro por agente, uniendo los días que cada uno tenga cargados:\n\n${resumen}\n\n¿Confirma?`,
+    'Combinar duplicados'
   );
   if (!confirmar) return;
 
@@ -967,6 +968,51 @@ function verificarDiasPendientes() {
 /* ═════════════════════════════════════════
    MODAL: Editar Novedad
 ═════════════════════════════════════════ */
+
+let _resolveConfirmacion = null;
+let _confirmacionTextoEsperado = null;
+
+function confirmarAccion(mensaje, titulo = 'Confirmar') {
+  return new Promise((resolve) => {
+    _resolveConfirmacion = resolve;
+    _confirmacionTextoEsperado = null;
+    hide('confirmacion-generica-input-wrap');
+    $('confirmacion-generica-titulo').textContent = titulo;
+    $('confirmacion-generica-mensaje').textContent = mensaje;
+    $('modal-confirmacion-generica').style.display = 'flex';
+  });
+}
+
+function confirmarConTexto(mensaje, textoEsperado, titulo = 'Confirmar') {
+  return new Promise((resolve) => {
+    _resolveConfirmacion = resolve;
+    _confirmacionTextoEsperado = textoEsperado;
+    $('confirmacion-generica-input').value = '';
+    show('confirmacion-generica-input-wrap');
+    $('confirmacion-generica-input-wrap').style.display = 'flex';
+    $('confirmacion-generica-titulo').textContent = titulo;
+    $('confirmacion-generica-mensaje').textContent = mensaje;
+    $('modal-confirmacion-generica').style.display = 'flex';
+    setTimeout(() => $('confirmacion-generica-input')?.focus(), 50);
+  });
+}
+
+function intentarConfirmarGenerico() {
+  if (_confirmacionTextoEsperado !== null) {
+    const val = $('confirmacion-generica-input').value.trim();
+    if (val !== _confirmacionTextoEsperado) {
+      toast(`Debe escribir exactamente: ${_confirmacionTextoEsperado}`, 'err');
+      return;
+    }
+  }
+  responderConfirmacion(true);
+}
+
+function responderConfirmacion(valor) {
+  $('modal-confirmacion-generica').style.display = 'none';
+  _confirmacionTextoEsperado = null;
+  if (_resolveConfirmacion) { _resolveConfirmacion(valor); _resolveConfirmacion = null; }
+}
 
 let modalAgenteEdicion = null;
 let modalDiaEdicion = null;
@@ -1890,7 +1936,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ir('vista-admin');
     aplicarVisibilidadTabsAdmin();
   });
-  $('nb-reportes')?.addEventListener('click', () => { if (esSupervisor()) irReportes(); });
+  $('nb-reportes')?.addEventListener('click', () => { if (esSupervisor() || tienePermisoAccion('actividad_ver')) irReportes(); });
   $('btn-enviar-otro')?.addEventListener('click', irEnvios);
   $('btn-enviar')?.addEventListener('click', enviarArchivo);
   $('btn-filtrar')?.addEventListener('click', aplicarFiltros);
@@ -3499,33 +3545,35 @@ function marcarGrupoPermiso(tab, valor) {
 }
 
 function actualizarVisibilidadTabsPermiso() {
-  const tipo = $('permiso-tipo').value;
   renderizarGruposPermisos();
-  $('permiso-tabs-container').style.display = tipo === 'parcial' ? 'block' : 'none';
+}
+
+function marcarSoloVerYExportar() {
+  renderizarGruposPermisos();
+  document.querySelectorAll('.permiso-accion-check').forEach(c => {
+    c.checked = c.value.endsWith('_ver') || c.value.endsWith('_exportar');
+  });
+  toast('✅ Se marcaron solo las acciones de ver/exportar', 'ok');
 }
 
 async function guardarPermiso() {
   const correo = $('permiso-correo').value.trim().toLowerCase();
-  const tipo = $('permiso-tipo').value;
+  const tipo = 'parcial';
 
-  if (!correo || !correo.includes('@')) { toast('Ingresá un correo válido', 'err'); return; }
+  if (!correo || !correo.includes('@')) { toast('Ingrese un correo válido', 'err'); return; }
 
   try {
     const existente = await window._fb.getDoc(window._fb.doc(db, 'permisos_panel', correo));
     if (existente.exists()) {
-      const actual = existente.data();
-      const tipoActualTxt = actual.tipo === 'supervisor' ? 'Supervisor' : 'Acceso parcial';
-      const continuar = confirm(`El correo ${correo} ya tiene un permiso asignado (${tipoActualTxt}).\n\n¿Querés reemplazarlo por el nuevo que elegiste?`);
+      const continuar = await confirmarAccion(`El correo ${correo} ya tiene un permiso asignado.\n\n¿Quiere reemplazarlo por el nuevo que eligió?`, 'Permiso ya existente');
       if (!continuar) return;
     }
   } catch(e) { /* si falla la verificación, seguimos igual */ }
 
-  const acciones = tipo === 'parcial'
-    ? Array.from(document.querySelectorAll('.permiso-accion-check:checked')).map(c => c.value)
-    : [];
+  const acciones = Array.from(document.querySelectorAll('.permiso-accion-check:checked')).map(c => c.value);
 
-  if (tipo === 'parcial' && acciones.length === 0) {
-    toast('Elegí al menos una acción para el acceso parcial', 'err');
+  if (acciones.length === 0) {
+    toast('Marque al menos una acción', 'err');
     return;
   }
 
@@ -3587,7 +3635,7 @@ async function poblarListaPermisos() {
 }
 
 async function eliminarPermiso(correo) {
-  if (!confirm(`¿Quitarle el acceso a ${correo}?`)) return;
+  if (!(await confirmarAccion(`¿Quitarle el acceso a ${correo}?`, 'Quitar acceso'))) return;
   try {
     await window._fb.deleteDoc(window._fb.doc(db, 'permisos_panel', correo));
     await registrarEnAuditoria('quitar_permiso', null, correo, null, null, {}, `Permiso quitado a ${correo}`);
@@ -3923,7 +3971,7 @@ async function aplicarCambioAreaLote() {
   if (!nuevaArea) { toast('Elegí un área', 'err'); return; }
   if (personalSeleccionados.size === 0) return;
 
-  if (!confirm(`¿Cambiar el área de ${personalSeleccionados.size} agente(s) a "${nuevaArea}"?`)) return;
+  if (!(await confirmarAccion(`¿Cambiar el área de ${personalSeleccionados.size} agente(s) a "${nuevaArea}"?`, 'Cambiar área en lote'))) return;
 
   try {
     const ids = Array.from(personalSeleccionados);
@@ -4050,7 +4098,7 @@ async function guardarRegistroPersonal() {
 async function eliminarRegistroPersonal(id) {
   const p = personalDirectorioCache.find(x => x.id === id);
   if (!p) return;
-  if (!confirm(`¿Eliminar el registro de "${p.apellidos} ${p.nombres}" (código ${p.codigo})?\n\nEsto NO borra sus novedades ya cargadas en meses anteriores, solo lo saca del directorio de personal.`)) return;
+  if (!(await confirmarAccion(`¿Eliminar el registro de "${p.apellidos} ${p.nombres}" (código ${p.codigo})?\n\nEsto NO borra sus novedades ya cargadas en meses anteriores, solo lo saca del directorio de personal.`, 'Eliminar registro de personal'))) return;
 
   try {
     await window._fb.deleteDoc(window._fb.doc(db, 'personal', id));
@@ -4066,15 +4114,17 @@ async function eliminarNovedadesAreaMes() {
   const area = $('limpiar-area').value;
   const mes = $('limpiar-mes').value;
   const anio = $('limpiar-anio').value;
-  if (!area || !mes || !anio) { toast('Elegí área, mes y año', 'err'); return; }
+  if (!area || !mes || !anio) { toast('Elija área, mes y año', 'err'); return; }
   const periodo = `${anio}-${mes}`;
 
-  const confirmacion = prompt(
+  const confirmado = await confirmarConTexto(
     `Esto va a BORRAR PERMANENTEMENTE todas las novedades de:\n\n` +
     `Área: ${area}\nMes: ${periodo}\n\n` +
-    `Esta acción no se puede deshacer. Escriba BORRAR para confirmar:`
+    `Esta acción no se puede deshacer. Escriba BORRAR para confirmar:`,
+    'BORRAR',
+    'Eliminar Novedades de un área/mes'
   );
-  if (confirmacion !== 'BORRAR') {
+  if (!confirmado) {
     toast('Cancelado — no se borró nada', 'ok');
     return;
   }
@@ -4113,15 +4163,20 @@ async function borrarTodaLaBaseNovedades() {
     return;
   }
 
-  const primeraConfirmacion = confirm(
+  const primeraConfirmacion = await confirmarAccion(
     '⚠️ ESTO VA A BORRAR TODA LA BASE DE NOVEDADES (todas las áreas, todos los meses).\n\n' +
     'Los envíos de archivos (pestaña Envíos) no se tocan.\n\n' +
-    '¿Estás seguro de que querés continuar?'
+    '¿Está seguro de que quiere continuar?',
+    'Borrar toda la base de Novedades'
   );
   if (!primeraConfirmacion) { toast('Cancelado', 'ok'); return; }
 
-  const segundaConfirmacion = prompt('Para confirmar, escriba exactamente: BORRAR TODO');
-  if (segundaConfirmacion !== 'BORRAR TODO') {
+  const segundaConfirmacion = await confirmarConTexto(
+    'Para confirmar, escriba exactamente: BORRAR TODO',
+    'BORRAR TODO',
+    'Confirmación final'
+  );
+  if (!segundaConfirmacion) {
     toast('Cancelado — no se borró nada', 'ok');
     return;
   }
@@ -4319,7 +4374,7 @@ async function guardarAcceso(correo, area) {
 }
 
 async function eliminarAcceso(docId) {
-  if (!confirm('¿Eliminar este acceso?')) return;
+  if (!(await confirmarAccion('¿Eliminar este acceso?', 'Eliminar acceso'))) return;
   try {
     await window._fb.deleteDoc(window._fb.doc(db, 'accesos', docId));
     toast('✅ Acceso eliminado', 'ok');
@@ -4392,7 +4447,7 @@ async function filtrarAuditoria() {
 }
 
 async function limpiarAuditoria() {
-  if (!confirm('¿Eliminar TODO el historial de auditoría? Esta acción no se puede deshacer.')) return;
+  if (!(await confirmarAccion('¿Eliminar TODO el historial de auditoría? Esta acción no se puede deshacer.', 'Limpiar auditoría'))) return;
   try {
     const auditSnapshot = await window._fb.getDocs(window._fb.collection(db, 'auditoria'));
     const batch = window._fb.writeBatch(db);
@@ -5033,6 +5088,8 @@ window.limpiarAuditoria             = limpiarAuditoria;
 window.aprobarDesbloqueo            = aprobarDesbloqueo;
 window.rechazarDesbloqueo           = rechazarDesbloqueo;
 window.cerrarModalRechazarDesbloqueo = cerrarModalRechazarDesbloqueo;
+window.responderConfirmacion        = responderConfirmacion;
+window.intentarConfirmarGenerico    = intentarConfirmarGenerico;
 window.confirmarRechazarDesbloqueo  = confirmarRechazarDesbloqueo;
 window.cargarResumenGeneral         = cargarResumenGeneral;
 window.exportarResumenGeneralExcel  = exportarResumenGeneralExcel;
