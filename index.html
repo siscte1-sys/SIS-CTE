@@ -713,7 +713,7 @@
           </div>
         </div>
 
-        <div class="panel-white" style="margin-top:16px;" data-permiso="importar_ver_personal">
+        <div class="panel-white" style="margin-top:16px;" data-permiso="importar_ver_personal,importar_editar_personal">
           <div style="padding:20px;">
             <div class="sec-titulo">📇 Base de Personal (directorio completo)</div>
             <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
@@ -742,7 +742,7 @@
             <div id="personal-cambio-lote" style="display:none;margin-bottom:16px;padding:12px 16px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;align-items:center;gap:12px;flex-wrap:wrap;">
               <span id="personal-cambio-lote-info" style="font-size:12px;font-weight:600;color:var(--blue);"></span>
               <select id="personal-cambio-lote-area" class="form-select" style="max-width:280px;"></select>
-              <button class="btn-acc btn-acc-blue" onclick="aplicarCambioAreaLote()" data-permiso="importar_editar_personal">Aplicar área a los seleccionados</button>
+              <button class="btn-acc btn-acc-blue" onclick="aplicarCambioAreaLote()" data-permiso="importar_editar_personal,importar_cambio_lote">Aplicar área a los seleccionados</button>
               <button class="btn-acc btn-acc-ghost" onclick="limpiarSeleccionPersonal()">Cancelar selección</button>
             </div>
 
@@ -917,7 +917,7 @@
               <label class="form-label">Año</label>
               <select id="resumen-anio" class="filtro-select"></select>
             </div>
-            <button class="btn-acc btn-acc-blue" onclick="cargarResumenGeneral()" style="margin-top:18px;" data-permiso="resumen_ver">Generar resumen</button>
+            <button class="btn-acc btn-acc-blue" onclick="cargarResumenGeneral()" style="margin-top:18px;" data-permiso="resumen_ver,resumen_exportar">Generar resumen</button>
             <button class="btn-acc btn-acc-green" onclick="exportarResumenGeneralExcel()" style="margin-top:18px;" data-permiso="resumen_exportar">📥 Exportar a Excel</button>
           </div>
         </div>
