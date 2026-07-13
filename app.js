@@ -571,16 +571,55 @@ async function cargarNovedadesActuales() {
   }
 }
 
+/* ═════════════════════════════════════════
+   Agrupar agentes duplicados por código válido
+   o por nombre (cubre el caso de campos
+   código/grado invertidos por una mala carga)
+═════════════════════════════════════════ */
+function agruparAgentesPorIdentidad(agentes) {
+  const n = agentes.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+  function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+
+  const porCodigo = {};
+  const porNombre = {};
+
+  agentes.forEach((a, i) => {
+    const codigo = String(a.codigo || '').trim();
+    const esCodigoValido = /^\d+$/.test(codigo);
+    const nombre = String(a.apellidosNombres || '').trim().toUpperCase().replace(/\s+/g, ' ');
+
+    if (esCodigoValido) {
+      if (porCodigo[codigo] !== undefined) union(i, porCodigo[codigo]);
+      else porCodigo[codigo] = i;
+    }
+    if (nombre) {
+      if (porNombre[nombre] !== undefined) union(i, porNombre[nombre]);
+      else porNombre[nombre] = i;
+    }
+  });
+
+  const grupos = {};
+  agentes.forEach((a, i) => {
+    const raiz = find(i);
+    if (!grupos[raiz]) grupos[raiz] = [];
+    grupos[raiz].push(a);
+  });
+
+  return Object.values(grupos);
+}
+
 function renderizarTablaNovedades(diaHoy) {
   const tabla = $('tabla-novedades');
   const thead = tabla.querySelector('thead tr');
   const tbody = $('tabla-novedades-body');
 
-  // Detectar si hay agentes duplicados (mismo código) — solo relevante para admin
+  // Detectar si hay agentes duplicados (por código o por nombre) — solo relevante para admin
   const btnCombinar = $('btn-combinar-duplicados');
   if (btnCombinar) {
-    const codigos = (novedadesActuales.agentes || []).map(a => String(a.codigo || '').trim()).filter(Boolean);
-    const hayDuplicados = new Set(codigos).size !== codigos.length;
+    const grupos = agruparAgentesPorIdentidad(novedadesActuales.agentes || []);
+    const hayDuplicados = grupos.some(g => g.length > 1);
     btnCombinar.style.display = (esAdmin() && hayDuplicados) ? 'inline-flex' : 'none';
   }
   
@@ -882,21 +921,18 @@ async function aplicarCodigoRapido(idx, dia, codigo) {
 
 async function combinarDuplicadosArea() {
   const agentes = novedadesActuales.agentes || [];
-  const grupos = {};
-  agentes.forEach(a => {
-    const clave = String(a.codigo || '').trim();
-    if (!clave) return;
-    if (!grupos[clave]) grupos[clave] = [];
-    grupos[clave].push(a);
-  });
+  const grupos = agruparAgentesPorIdentidad(agentes);
+  const duplicados = grupos.filter(g => g.length > 1);
 
-  const duplicados = Object.entries(grupos).filter(([, lista]) => lista.length > 1);
   if (duplicados.length === 0) {
     toast('No se encontraron duplicados en esta área', 'ok');
     return;
   }
 
-  const resumen = duplicados.map(([cod, lista]) => `Código ${cod}: ${lista.length} registros`).join('\n');
+  const resumen = duplicados.map(g => {
+    const nombre = (g.find(a => (a.apellidosNombres || '').trim()) || {}).apellidosNombres || '(sin nombre)';
+    return `${nombre}: ${g.length} registros`;
+  }).join('\n');
   const confirmar = await confirmarAccion(
     `Se van a combinar estos duplicados en un solo registro por agente, uniendo los días que cada uno tenga cargados:\n\n${resumen}\n\n¿Confirma?`,
     'Combinar duplicados'
@@ -904,25 +940,25 @@ async function combinarDuplicadosArea() {
   if (!confirmar) return;
 
   try {
-    const agentesFinal = [];
-    const yaProcesados = new Set();
+    const agentesFinal = grupos.map(grupo => {
+      if (grupo.length === 1) return grupo[0];
 
-    agentes.forEach(a => {
-      const clave = String(a.codigo || '').trim();
-      if (!clave || yaProcesados.has(clave)) return;
-      yaProcesados.add(clave);
+      // Preferir como base el registro con código numérico válido
+      // (cubre el caso de un registro con código/grado invertidos)
+      const conCodigoValido = grupo.filter(a => /^\d+$/.test(String(a.codigo || '').trim()));
+      const candidatos = conCodigoValido.length ? conCodigoValido : grupo;
 
-      const grupo = grupos[clave];
-      if (grupo.length === 1) {
-        agentesFinal.push(a);
-        return;
-      }
+      // Entre los candidatos, preferir el que tenga el grado más completo
+      const base = candidatos.reduce((mejor, actual) => {
+        const gradoActual = String(actual.grado || '').trim();
+        const gradoMejor = String(mejor.grado || '').trim();
+        if (gradoActual.length !== gradoMejor.length) {
+          return gradoActual.length > gradoMejor.length ? actual : mejor;
+        }
+        return (actual.apellidosNombres || '').length > (mejor.apellidosNombres || '').length ? actual : mejor;
+      });
 
-      // Fusionar: preferir el nombre/grado más largo (más completo),
-      // y unir los días cargados de todas las copias (el valor no vacío gana)
-      const base = grupo.reduce((mejor, actual) =>
-        (actual.apellidosNombres || '').length > (mejor.apellidosNombres || '').length ? actual : mejor
-      );
+      // Unir los días cargados de todas las copias (el valor no vacío gana)
       const novedadesPorDiaUnidas = {};
       grupo.forEach(g => {
         Object.entries(g.novedadesPorDia || {}).forEach(([dia, val]) => {
@@ -931,13 +967,13 @@ async function combinarDuplicadosArea() {
       });
       const observacionUnida = grupo.map(g => g.observaciones).find(o => o) || '';
 
-      agentesFinal.push({
+      return {
         codigo: base.codigo,
         grado: base.grado,
         apellidosNombres: base.apellidosNombres,
         novedadesPorDia: novedadesPorDiaUnidas,
         observaciones: observacionUnida
-      });
+      };
     });
 
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
