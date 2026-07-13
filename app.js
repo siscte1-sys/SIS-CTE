@@ -1626,6 +1626,13 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   const filaHeader = ws.addRow(headerRow);
   filaHeader.eachCell(c => estiloNavy(c));
 
+  // ── Repetir el banner (título + área/mes) y encabezado de columnas en cada página impresa ──
+  ws.pageSetup.printTitlesRow = '1:4';
+  ws.pageSetup.orientation = 'landscape';
+  ws.pageSetup.fitToPage = true;
+  ws.pageSetup.fitToWidth = 1;
+  ws.pageSetup.fitToHeight = 0;
+
   // ── Filas de agentes — días en amarillo (zona de datos, como la plantilla) ──
   (data.agentes || []).forEach(agente => {
     const fila = [agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
@@ -1760,19 +1767,22 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
   const anchoPagina = doc.internal.pageSize.getWidth();
 
-  // ── Banners de título ──
-  doc.setFillColor(...NAVY);
-  doc.rect(10, 8, anchoPagina - 20, 8, 'F');
-  doc.setTextColor(...BLANCO);
-  doc.setFontSize(12);
-  doc.setFont(undefined, 'bold');
-  doc.text('COMISIÓN DE TRÁNSITO DEL ECUADOR — CONTROL DE NOVEDADES MENSUAL', anchoPagina / 2, 13.5, { align: 'center' });
+  // ── Banners de título (se redibujan en cada página vía didDrawPage) ──
+  const dibujarBanner = () => {
+    doc.setFillColor(...NAVY);
+    doc.rect(10, 8, anchoPagina - 20, 8, 'F');
+    doc.setTextColor(...BLANCO);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('COMISIÓN DE TRÁNSITO DEL ECUADOR — CONTROL DE NOVEDADES MENSUAL', anchoPagina / 2, 13.5, { align: 'center' });
 
-  doc.setFillColor(...NAVY);
-  doc.rect(10, 16, anchoPagina - 20, 7, 'F');
-  doc.setFontSize(10);
-  doc.text(`ÁREA: ${area}   ·   MES: ${nombreMes.toUpperCase()} ${anio}`, anchoPagina / 2, 21, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
+    doc.setFillColor(...NAVY);
+    doc.rect(10, 16, anchoPagina - 20, 7, 'F');
+    doc.setFontSize(10);
+    doc.text(`ÁREA: ${area}   ·   MES: ${nombreMes.toUpperCase()} ${anio}`, anchoPagina / 2, 21, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+  };
+  dibujarBanner();
 
   const head = [['Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
   const body = (data.agentes || []).map(agente => {
@@ -1785,6 +1795,7 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   doc.autoTable({
     head, body,
     startY: 26,
+    margin: { top: 26 },
     theme: 'grid',
     styles: { fontSize: 6, cellPadding: 1, lineColor: [150, 150, 150], lineWidth: 0.1 },
     headStyles: { fillColor: NAVY, textColor: BLANCO },
@@ -1794,6 +1805,9 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
       if (hookData.section === 'body' && idx >= 3 && idx < 3 + totalDias) {
         hookData.cell.styles.fillColor = AMARILLO;
       }
+    },
+    didDrawPage: () => {
+      dibujarBanner();
     }
   });
 
