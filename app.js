@@ -1660,6 +1660,16 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   filaCertValores.eachCell({ includeEmpty: true }, c => estiloAmarillo(c));
   filaCertValores.height = 22;
 
+  // ── Recuadro de firma (en blanco) ──
+  const filaFirmaNum = filaValoresNum + 1;
+  ws.mergeCells(filaFirmaNum, 1, filaFirmaNum, mitad);
+  ws.mergeCells(filaFirmaNum, mitad + 1, filaFirmaNum, numCols);
+  const filaFirma = ws.getRow(filaFirmaNum);
+  filaFirma.eachCell({ includeEmpty: true }, c => {
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLANCO } };
+  });
+  filaFirma.height = 45;
+
   // ── Líneas de cuadrícula en toda la hoja ──
   const bordeDelgado = { style: 'thin', color: { argb: 'FF999999' } };
   ws.eachRow({ includeEmpty: false }, (row) => {
@@ -1811,6 +1821,13 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   doc.setFontSize(9);
   doc.text(elaboradoPor, 10 + anchoCol / 2, y + 5.2, { align: 'center' });
   doc.text(responsable, mitadPagina + 2 + anchoCol / 2, y + 5.2, { align: 'center' });
+  y += 8;
+
+  // ── Recuadro de firma (en blanco) ──
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(255, 255, 255);
+  doc.rect(10, y, anchoCol, 18, 'FD');
+  doc.rect(mitadPagina + 2, y, anchoCol, 18, 'FD');
 
   doc.save(`novedades_${area}_${periodo}.pdf`);
 }
