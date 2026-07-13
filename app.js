@@ -1892,10 +1892,10 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   const totalPaginas = doc.internal.getNumberOfPages();
   for (let p = 1; p <= totalPaginas; p++) {
     doc.setPage(p);
-    doc.setFontSize(8);
-    doc.setFont(undefined, 'normal');
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Página ${p} de ${totalPaginas}`, anchoPagina - 12, altoPagina - 5, { align: 'right' });
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Página ${p} de ${totalPaginas}`, anchoPagina - 12, altoPagina - 4, { align: 'right' });
   }
 
   doc.save(`novedades_${area}_${periodo}.pdf`);
