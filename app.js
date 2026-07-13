@@ -1634,6 +1634,10 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   ws.pageSetup.fitToWidth = 1;
   ws.pageSetup.fitToHeight = 0;
 
+  // ── Contador de hojas al pie de cada página impresa ──
+  ws.headerFooter.oddFooter = '&CPágina &P de &N';
+  ws.headerFooter.evenFooter = '&CPágina &P de &N';
+
   // ── Filas de agentes — días en amarillo (zona de datos, como la plantilla) ──
   (data.agentes || []).forEach((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
@@ -1882,6 +1886,17 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   doc.setFillColor(255, 255, 255);
   doc.rect(10, y, anchoCol, 18, 'FD');
   doc.rect(mitadPagina + 2, y, anchoCol, 18, 'FD');
+
+  // ── Contador de páginas (pie de cada hoja) ──
+  const altoPagina = doc.internal.pageSize.getHeight();
+  const totalPaginas = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= totalPaginas; p++) {
+    doc.setPage(p);
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Página ${p} de ${totalPaginas}`, anchoPagina - 12, altoPagina - 5, { align: 'right' });
+  }
 
   doc.save(`novedades_${area}_${periodo}.pdf`);
 }
