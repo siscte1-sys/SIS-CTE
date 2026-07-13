@@ -1577,7 +1577,7 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   const totalDias = diasEnMes(periodo);
   const [anio, mesNum] = periodo.split('-');
   const nombreMes = obtenerNombreMes(mesNum);
-  const numCols = 3 + 31 + 1; // código, grado, nombres + 31 días + observación
+  const numCols = 1 + 3 + 31 + 1; // N°, código, grado, nombres + 31 días + observación
 
   // Colores de la plantilla oficial
   const NAVY = 'FF1F3864';
@@ -1589,7 +1589,7 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   const ws = wb.addWorksheet('Novedades');
 
   ws.columns = [
-    { width: 8 }, { width: 12 }, { width: 30 },
+    { width: 5 }, { width: 8 }, { width: 12 }, { width: 30 },
     ...Array.from({ length: 31 }, () => ({ width: 4 })),
     { width: 22 }
   ];
@@ -1612,15 +1612,16 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   ws.getRow(1).height = 22;
 
   // ── Área ──
+  const totalEfectivo = (data.agentes || []).length;
   ws.mergeCells(2, 1, 2, numCols);
   const areaCell = ws.getCell(2, 1);
-  areaCell.value = `ÁREA: ${area}   ·   MES: ${nombreMes.toUpperCase()} ${anio}`;
+  areaCell.value = `ÁREA: ${area}   ·   MES: ${nombreMes.toUpperCase()} ${anio}   ·   EFECTIVO: ${totalEfectivo}`;
   estiloNavy(areaCell);
 
   ws.addRow([]);
 
   // ── Encabezado de columnas ──
-  const headerRow = ['CÓDIGO', 'GRADO', 'APELLIDOS Y NOMBRES'];
+  const headerRow = ['N°', 'CÓDIGO', 'GRADO', 'APELLIDOS Y NOMBRES'];
   for (let d = 1; d <= 31; d++) headerRow.push(d);
   headerRow.push('OBSERVACIÓN');
   const filaHeader = ws.addRow(headerRow);
@@ -1634,8 +1635,8 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   ws.pageSetup.fitToHeight = 0;
 
   // ── Filas de agentes — días en amarillo (zona de datos, como la plantilla) ──
-  (data.agentes || []).forEach(agente => {
-    const fila = [agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
+  (data.agentes || []).forEach((agente, idx) => {
+    const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= 31; d++) {
       fila.push(d > totalDias ? '' : ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || ''));
     }
@@ -1643,10 +1644,11 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
     const row = ws.addRow(fila);
 
     row.getCell(1).alignment = { horizontal: 'center' };
-    row.getCell(2).alignment = { horizontal: 'left' };
+    row.getCell(2).alignment = { horizontal: 'center' };
     row.getCell(3).alignment = { horizontal: 'left' };
+    row.getCell(4).alignment = { horizontal: 'left' };
     for (let d = 1; d <= 31; d++) {
-      const cell = row.getCell(3 + d);
+      const cell = row.getCell(4 + d);
       if (d > totalDias) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
       } else {
@@ -1766,6 +1768,7 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
   const anchoPagina = doc.internal.pageSize.getWidth();
+  const totalEfectivo = (data.agentes || []).length;
 
   // ── Banners de título (se redibujan en cada página vía didDrawPage) ──
   const dibujarBanner = () => {
@@ -1779,14 +1782,14 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
     doc.setFillColor(...NAVY);
     doc.rect(10, 16, anchoPagina - 20, 7, 'F');
     doc.setFontSize(10);
-    doc.text(`ÁREA: ${area}   ·   MES: ${nombreMes.toUpperCase()} ${anio}`, anchoPagina / 2, 21, { align: 'center' });
+    doc.text(`ÁREA: ${area}   ·   MES: ${nombreMes.toUpperCase()} ${anio}   ·   EFECTIVO: ${totalEfectivo}`, anchoPagina / 2, 21, { align: 'center' });
     doc.setTextColor(0, 0, 0);
   };
   dibujarBanner();
 
-  const head = [['Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
-  const body = (data.agentes || []).map(agente => {
-    const fila = [agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
+  const head = [['N°', 'Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
+  const body = (data.agentes || []).map((agente, idx) => {
+    const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= totalDias; d++) fila.push((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '');
     fila.push(agente.observaciones || '');
     return fila;
@@ -1799,10 +1802,11 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
     theme: 'grid',
     styles: { fontSize: 6, cellPadding: 1, lineColor: [150, 150, 150], lineWidth: 0.1 },
     headStyles: { fillColor: NAVY, textColor: BLANCO },
+    columnStyles: { 0: { cellWidth: 7, halign: 'center' } },
     didParseCell: (hookData) => {
-      // Pintar de amarillo las columnas de días (índices 3 al 3+totalDias-1) en el cuerpo
+      // Pintar de amarillo las columnas de días (índices 4 al 4+totalDias-1) en el cuerpo
       const idx = hookData.column.index;
-      if (hookData.section === 'body' && idx >= 3 && idx < 3 + totalDias) {
+      if (hookData.section === 'body' && idx >= 4 && idx < 4 + totalDias) {
         hookData.cell.styles.fillColor = AMARILLO;
       }
     },
