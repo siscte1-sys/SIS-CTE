@@ -696,6 +696,7 @@ function renderizarTablaNovedades(diaHoy) {
     agentesOrdenados.forEach(({ agente, origIdx }, posicion) => {
       const idx = origIdx; // idx real dentro de novedadesActuales.agentes (para editar/guardar)
       const tr = document.createElement('tr');
+      tr.dataset.codigo = String(agente.codigo || '').toLowerCase();
       
       // Columnas fijas
       const tdNum = document.createElement('td');
@@ -812,6 +813,38 @@ function renderizarTablaNovedades(diaHoy) {
     td.style.color = 'var(--txt3)';
     tr.appendChild(td);
     tbody.appendChild(tr);
+  }
+
+  filtrarTablaPorCodigo();
+}
+
+function filtrarTablaPorCodigo() {
+  const input = $('buscar-codigo-agente');
+  if (!input) return;
+  const texto = input.value.trim().toLowerCase();
+  const tbody = $('tabla-novedades-body');
+  if (!tbody) return;
+
+  let visibles = 0;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    if (tr.dataset.codigo === undefined) return; // fila de "sin agentes", no filtrar
+    const coincide = !texto || tr.dataset.codigo.includes(texto);
+    tr.style.display = coincide ? '' : 'none';
+    if (coincide) visibles++;
+  });
+
+  let avisoVacio = $('aviso-busqueda-sin-resultados');
+  if (texto && visibles === 0) {
+    if (!avisoVacio) {
+      avisoVacio = document.createElement('div');
+      avisoVacio.id = 'aviso-busqueda-sin-resultados';
+      avisoVacio.style.cssText = 'text-align:center;padding:16px;color:var(--txt3);font-size:13px;';
+      tbody.parentElement.appendChild(avisoVacio);
+    }
+    avisoVacio.textContent = `Sin resultados para el código "${input.value.trim()}"`;
+    avisoVacio.style.display = '';
+  } else if (avisoVacio) {
+    avisoVacio.style.display = 'none';
   }
 }
 
@@ -5227,6 +5260,7 @@ window.abrirCarpetaArea             = abrirCarpetaArea;
 /* Novedades */
 window.irNovedades                  = irNovedades;
 window.llenarSinNovedadHoy          = llenarSinNovedadHoy;
+window.filtrarTablaPorCodigo        = filtrarTablaPorCodigo;
 window.combinarDuplicadosArea       = combinarDuplicadosArea;
 window.cerrarYExportarMes           = cerrarYExportarMes;
 window.abrirModalEditarNovedad      = abrirModalEditarNovedad;
