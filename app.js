@@ -634,12 +634,15 @@ function renderizarTablaNovedades(diaHoy) {
   for (let dia = 1; dia <= 31; dia++) {
     const th = document.createElement('th');
     th.style.width = '45px';
+    th.style.cursor = 'pointer';
+    th.title = `Clic para marcar "Sin Novedad" (S/N) en todos los agentes — día ${dia}`;
     th.textContent = dia;
     if (dia === diaHoy) {
       th.style.backgroundColor = 'var(--green)';
       th.style.color = '#fff';
       th.style.fontWeight = '700';
     }
+    th.addEventListener('click', () => seleccionarDiaColumna(dia));
     thead.appendChild(th);
   }
   
@@ -1104,7 +1107,7 @@ function abrirModalEditarNovedad(agente, dia, idx) {
   
   sub.textContent = `Día ${dia} — ${agente.apellidosNombres}`;
   codigo.value = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
-  obs.value = codigo.value ? (CODIGOS_DESC[codigo.value] || '') : '';
+  obs.value = agente.observaciones || (codigo.value ? (CODIGOS_DESC[codigo.value] || '') : '');
   
   hide('modal-novedad-error');
   
@@ -1149,7 +1152,7 @@ async function guardarNovedad() {
     return;
   }
   
-  const obs = CODIGOS_DESC[codigoNorm] || '';
+  const obs = $('modal-novedad-obs').value.trim() || CODIGOS_DESC[codigoNorm] || '';
   
   // Actualizar en memoria
   if (!modalAgenteEdicion.novedadesPorDia) {
@@ -1234,20 +1237,18 @@ function cerrarErrorCodigo() {
    ACCIONES: Llenar S/N, Exportar
 ═════════════════════════════════════════ */
 
-async function llenarSinNovedadHoy() {
-  const hoy = new Date().getDate();
-  
+async function llenarSinNovedadDia(dia) {
   try {
-    // Llenar todos los agentes con S/N
+    // Llenar todos los agentes con S/N para el día indicado
     if (novedadesActuales.agentes) {
       novedadesActuales.agentes.forEach(agente => {
         if (!agente.novedadesPorDia) agente.novedadesPorDia = {};
-        agente.novedadesPorDia[String(hoy)] = 'S/N';
+        agente.novedadesPorDia[String(dia)] = 'S/N';
         agente.observaciones = CODIGOS_DESC['S/N'];
       });
     }
-    actualizarDiaCompletado(hoy);
-    
+    actualizarDiaCompletado(dia);
+
     // Guardar en Firestore
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
     await window._fb.updateDoc(novedadesRef, {
@@ -1255,25 +1256,39 @@ async function llenarSinNovedadHoy() {
       diasNoCompletados: novedadesActuales.diasNoCompletados,
       ultimaModificacion: new Date()
     });
-    
+
     // Log
     await registrarEnAuditoria(
       'rellenar_sin_novedad',
       areaActual,
       usuario.email,
-      hoy,
+      dia,
       mesActual,
       { cantidadAgentes: novedadesActuales.agentes.length },
-      `Auto-relleno S/N: ${novedadesActuales.agentes.length} agentes - Día ${hoy}`
+      `Auto-relleno S/N: ${novedadesActuales.agentes.length} agentes - Día ${dia}`
     );
-    
-    renderizarTablaNovedades(hoy);
-    toast('✅ Se llenó "Sin Novedad" para todos los agentes de hoy', 'ok');
-    
+
+    renderizarTablaNovedades(new Date().getDate());
+    toast(`✅ Se llenó "Sin Novedad" para todos los agentes del día ${dia}`, 'ok');
+
   } catch(e) {
     console.error('Error:', e);
     toast('❌ Error: ' + e.message, 'err');
   }
+}
+
+async function llenarSinNovedadHoy() {
+  const hoy = new Date().getDate();
+  await llenarSinNovedadDia(hoy);
+}
+
+async function seleccionarDiaColumna(dia) {
+  const confirmar = await confirmarAccion(
+    `¿Marcar "Sin Novedad" (S/N) para todos los agentes en el día ${dia}? Esto sobrescribe lo que ya esté cargado ese día.`,
+    `Día ${dia}`
+  );
+  if (!confirmar) return;
+  await llenarSinNovedadDia(dia);
 }
 
 function diasEnMes(periodo) {
@@ -1513,7 +1528,7 @@ async function abrirModalEditarNovedadCierre(idx, dia) {
 
   sub.textContent = `Día ${dia} (desbloqueado) — ${agente.apellidosNombres}`;
   codigo.value = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
-  obs.value = codigo.value ? (CODIGOS_DESC[codigo.value] || '') : '';
+  obs.value = agente.observaciones || (codigo.value ? (CODIGOS_DESC[codigo.value] || '') : '');
 
   hide('modal-novedad-error');
   modal.style.display = 'flex';
