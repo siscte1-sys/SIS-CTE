@@ -611,6 +611,21 @@ function agruparAgentesPorIdentidad(agentes) {
   return Object.values(grupos);
 }
 
+/* ═════════════════════════════════════════
+   Ordenar agentes por código (numérico, menor a mayor)
+═════════════════════════════════════════ */
+function compararPorCodigo(codigoA, codigoB) {
+  const a = parseInt(String(codigoA).replace(/\D/g, ''), 10);
+  const b = parseInt(String(codigoB).replace(/\D/g, ''), 10);
+  if (isNaN(a) && isNaN(b)) return 0;
+  if (isNaN(a)) return 1;
+  if (isNaN(b)) return -1;
+  return a - b;
+}
+function ordenarAgentesPorCodigo(agentes) {
+  return [...(agentes || [])].sort((x, y) => compararPorCodigo(x.codigo, y.codigo));
+}
+
 function renderizarTablaNovedades(diaHoy) {
   const tabla = $('tabla-novedades');
   const thead = tabla.querySelector('thead tr');
@@ -672,14 +687,19 @@ function renderizarTablaNovedades(diaHoy) {
   // Limpiar cuerpo
   tbody.innerHTML = '';
   
-  // Renderizar filas de agentes
+  // Renderizar filas de agentes — ordenadas por código, de menor a mayor
   if (novedadesActuales.agentes && novedadesActuales.agentes.length > 0) {
-    novedadesActuales.agentes.forEach((agente, idx) => {
+    const agentesOrdenados = novedadesActuales.agentes
+      .map((agente, origIdx) => ({ agente, origIdx }))
+      .sort((a, b) => compararPorCodigo(a.agente.codigo, b.agente.codigo));
+
+    agentesOrdenados.forEach(({ agente, origIdx }, posicion) => {
+      const idx = origIdx; // idx real dentro de novedadesActuales.agentes (para editar/guardar)
       const tr = document.createElement('tr');
       
       // Columnas fijas
       const tdNum = document.createElement('td');
-      tdNum.textContent = agente.numero || (idx + 1);
+      tdNum.textContent = posicion + 1;
       tdNum.style.textAlign = 'center';
       tdNum.style.fontSize = '11px';
       tdNum.style.color = 'var(--txt3)';
@@ -1524,7 +1544,11 @@ function renderizarTablaSoloLectura(tabla, data, periodo) {
   }
   html += '<th>Observación</th></tr></thead><tbody>';
 
-  (data.agentes || []).forEach((agente, idx) => {
+  (data.agentes || [])
+    .map((agente, origIdx) => ({ agente, origIdx }))
+    .sort((a, b) => compararPorCodigo(a.agente.codigo, b.agente.codigo))
+    .forEach(({ agente, origIdx }) => {
+    const idx = origIdx; // índice real en data.agentes (para editar el agente correcto)
     html += `<tr><td style="font-size:11px">${agente.codigo || ''}</td><td style="font-size:11px">${agente.grado || ''}</td><td style="font-size:11px;text-align:left">${agente.apellidosNombres || ''}</td>`;
     for (let d = 1; d <= 31; d++) {
       const valor = (agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '';
@@ -1688,7 +1712,7 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   ws.headerFooter.evenFooter = '&CPágina &P de &N';
 
   // ── Filas de agentes — días en amarillo (zona de datos, como la plantilla) ──
-  (data.agentes || []).forEach((agente, idx) => {
+  ordenarAgentesPorCodigo(data.agentes).forEach((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= 31; d++) {
       fila.push(d > totalDias ? '' : ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || ''));
@@ -1841,7 +1865,7 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   dibujarBanner();
 
   const head = [['N°', 'Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
-  const body = (data.agentes || []).map((agente, idx) => {
+  const body = ordenarAgentesPorCodigo(data.agentes).map((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= totalDias; d++) fila.push((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '');
     fila.push(agente.observaciones || '');
