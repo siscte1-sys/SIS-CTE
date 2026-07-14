@@ -882,6 +882,19 @@ function abrirMenuAccionRapida(idx, btnRef) {
   titulo.textContent = `Marcar día ${dia} como:`;
   menu.appendChild(titulo);
 
+  const itemObs = document.createElement('div');
+  itemObs.style.cssText = 'padding:6px 8px;font-size:12px;cursor:pointer;border-radius:6px;font-weight:600;color:var(--blue-m);border-bottom:1px solid var(--border);margin-bottom:4px;';
+  itemObs.textContent = '✏️ Editar observación...';
+  itemObs.addEventListener('mouseover', () => itemObs.style.background = 'var(--blue-l)');
+  itemObs.addEventListener('mouseout', () => itemObs.style.background = '');
+  itemObs.addEventListener('click', (e) => {
+    e.stopPropagation();
+    cerrarMenuAccionRapida();
+    const agente = novedadesActuales.agentes[idx];
+    if (agente) abrirModalEditarNovedad(agente, dia, idx);
+  });
+  menu.appendChild(itemObs);
+
   CODIGOS_VALIDOS.forEach(c => {
     const item = document.createElement('div');
     item.style.cssText = 'padding:6px 8px;font-size:12px;cursor:pointer;border-radius:6px;';
@@ -914,7 +927,10 @@ async function aplicarCodigoRapido(idx, dia, codigo) {
 
   if (!agente.novedadesPorDia) agente.novedadesPorDia = {};
   agente.novedadesPorDia[String(dia)] = codigo;
-  agente.observaciones = CODIGOS_DESC[codigo] || '';
+  // Solo autocompletar con la descripción del código si aún no hay una observación personalizada
+  if (!agente.observaciones) {
+    agente.observaciones = CODIGOS_DESC[codigo] || '';
+  }
   actualizarDiaCompletado(dia);
 
   try {
