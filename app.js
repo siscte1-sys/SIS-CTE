@@ -634,15 +634,26 @@ function renderizarTablaNovedades(diaHoy) {
   for (let dia = 1; dia <= 31; dia++) {
     const th = document.createElement('th');
     th.style.width = '45px';
-    th.style.cursor = 'pointer';
-    th.title = `Clic para marcar "Sin Novedad" (S/N) en todos los agentes — día ${dia}`;
     th.textContent = dia;
     if (dia === diaHoy) {
       th.style.backgroundColor = 'var(--green)';
       th.style.color = '#fff';
       th.style.fontWeight = '700';
     }
-    th.addEventListener('click', () => seleccionarDiaColumna(dia));
+
+    const desbloqueadoPorAdmin = (novedadesActuales.diasDesbloqueados || []).includes(dia);
+    const bloqueado = dia !== diaHoy && !desbloqueadoPorAdmin;
+
+    if (!bloqueado || esAdmin()) {
+      th.style.cursor = 'pointer';
+      th.title = `Clic para marcar "Sin Novedad" (S/N) en todos los agentes — día ${dia}`;
+      th.addEventListener('click', () => seleccionarDiaColumna(dia));
+    } else {
+      th.style.cursor = 'not-allowed';
+      th.title = 'Día bloqueado — clic para solicitar desbloqueo al administrador';
+      th.addEventListener('click', () => solicitarDesbloqueo(dia));
+    }
+
     thead.appendChild(th);
   }
   
@@ -1283,6 +1294,13 @@ async function llenarSinNovedadHoy() {
 }
 
 async function seleccionarDiaColumna(dia) {
+  const desbloqueadoPorAdmin = (novedadesActuales.diasDesbloqueados || []).includes(dia);
+  const bloqueado = dia !== new Date().getDate() && !desbloqueadoPorAdmin;
+  if (bloqueado && !esAdmin()) {
+    toast('❌ Ese día está bloqueado. Solicite desbloqueo al administrador si necesita corregirlo.', 'err');
+    return;
+  }
+
   const confirmar = await confirmarAccion(
     `¿Marcar "Sin Novedad" (S/N) para todos los agentes en el día ${dia}? Esto sobrescribe lo que ya esté cargado ese día.`,
     `Día ${dia}`
