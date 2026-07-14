@@ -246,6 +246,10 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             Sin novedad hoy
           </button>
+          <div style="position:relative;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt3);pointer-events:none;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="buscar-codigo-agente" class="filtro-input" placeholder="Buscar por código..." style="padding-left:32px;width:180px;" oninput="filtrarTablaPorCodigo()">
+          </div>
           <button class="btn-acc btn-acc-orange" id="btn-combinar-duplicados" onclick="combinarDuplicadosArea()" style="display:none;">
             🧹 Combinar duplicados de esta área
           </button>
