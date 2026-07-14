@@ -490,12 +490,8 @@ async function cargarNovedadesActuales() {
     if (esAdmin()) {
       // El admin tiene acceso total: elige el área a gestionar, sin requerir estar en "accesos"
       await poblarSelectorAreaAdmin();
-      show('admin-generar-reporte');
-      $('admin-generar-reporte').style.display = 'block';
-      poblarSelectoresReportePrueba();
     } else {
       hide('admin-selector-area-novedades');
-      hide('admin-generar-reporte');
       // Obtener area del usuario desde accesos
       const accesoRef = window._fb.collection(db, 'accesos');
       const q = window._fb.query(accesoRef, window._fb.where('correo', '==', usuario.email));
@@ -513,6 +509,11 @@ async function cargarNovedadesActuales() {
 
       areaActual = querySnapshot.docs[0].data().area;
     }
+
+    // Panel "Generar reporte de prueba" — disponible para todos los usuarios
+    show('admin-generar-reporte');
+    $('admin-generar-reporte').style.display = 'block';
+    poblarSelectoresReportePrueba();
 
     mesActual = periodo;
 
@@ -1399,8 +1400,6 @@ function poblarSelectoresReportePrueba() {
 }
 
 async function generarReportePrueba() {
-  if (!esAdmin()) { toast('❌ Solo el administrador puede usar esta herramienta', 'err'); return; }
-
   const mes = $('reporte-prueba-mes').value;
   const anio = $('reporte-prueba-anio').value;
   const elaboradoPor = $('reporte-prueba-elaborado-por').value.trim();
