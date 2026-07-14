@@ -1301,10 +1301,11 @@ async function seleccionarDiaColumna(dia) {
     return;
   }
 
-  const confirmar = await confirmarAccion(
-    `¿Marcar "Sin Novedad" (S/N) para todos los agentes en el día ${dia}? Esto sobrescribe lo que ya esté cargado ese día.`,
-    `Día ${dia}`
-  );
+  const mensaje = bloqueado
+    ? `⚠️ Este día está bloqueado para los usuarios — solo usted, como administrador, puede sobrescribirlo.\n\n¿Marcar "Sin Novedad" (S/N) para todos los agentes en el día ${dia}? Esto sobrescribe lo que ya esté cargado ese día.`
+    : `¿Marcar "Sin Novedad" (S/N) para todos los agentes en el día ${dia}? Esto sobrescribe lo que ya esté cargado ese día.`;
+
+  const confirmar = await confirmarAccion(mensaje, `Día ${dia}${bloqueado ? ' — BLOQUEADO' : ''}`);
   if (!confirmar) return;
   await llenarSinNovedadDia(dia);
 }
