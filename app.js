@@ -1946,29 +1946,33 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   };
   dibujarBanner();
 
-  // Dibuja un pequeño visto (✓) con trazos vectoriales — las fuentes estándar
-  // de jsPDF no tienen el glifo Unicode ✓, por eso no se usa como texto.
+  // Dibuja un pequeño visto (✓) con dos trazos — las fuentes estándar de
+  // jsPDF no traen el glifo Unicode ✓, por eso no se usa como texto.
   function dibujarVisto(cx, cy, tamano, color) {
-    doc.setDrawColor(...color);
-    doc.setLineWidth(tamano * 0.28);
-    doc.setLineCap('round');
-    doc.setLineJoin('round');
-    doc.lines(
-      [[tamano * 0.35, tamano * 0.35], [tamano * 0.75, -tamano * 0.75]],
-      cx - tamano * 0.55, cy + tamano * 0.05,
-      [1, 1], 'S', false
-    );
-    doc.setLineCap(0);
-    doc.setLineJoin(0);
+    doc.setDrawColor(color[0], color[1], color[2]);
+    doc.setLineWidth(Math.max(0.3, tamano * 0.22));
+    doc.line(cx - tamano * 0.5, cy, cx - tamano * 0.1, cy + tamano * 0.4);
+    doc.line(cx - tamano * 0.1, cy + tamano * 0.4, cx + tamano * 0.5, cy - tamano * 0.4);
   }
 
   const VERDE_VISTO = [21, 128, 61];
 
+  // Guardamos aparte qué celdas (fila,columna) son "S/N" para dibujar el
+  // visto en didDrawCell, sin depender de que autoTable conserve el valor
+  // crudo de la celda (cell.raw puede variar según la versión del plugin).
+  const celdasSN = new Set();
+
   const head = [['N°', 'Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
-  const body = ordenarAgentesPorCodigo(data.agentes).map((agente, idx) => {
-    const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
+  const body = ordenarAgentesPorCodigo(data.agentes).map((agente, filaIdx) => {
+    const fila = [filaIdx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= totalDias; d++) {
-      fila.push((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '');
+      const val = (agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '';
+      if (val === 'S/N') {
+        celdasSN.add(`${filaIdx}-${4 + (d - 1)}`);
+        fila.push('');
+      } else {
+        fila.push(val);
+      }
     }
     fila.push(agente.observaciones || '');
     return fila;
@@ -1987,14 +1991,14 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
       const idx = hookData.column.index;
       if (hookData.section === 'body' && idx >= 4 && idx < 4 + totalDias) {
         hookData.cell.styles.fillColor = AMARILLO;
-        if (hookData.cell.raw === 'S/N') hookData.cell.text = ['']; // el visto se dibuja aparte
       }
     },
     didDrawCell: (hookData) => {
-      const idx = hookData.column.index;
-      if (hookData.section === 'body' && idx >= 4 && idx < 4 + totalDias && hookData.cell.raw === 'S/N') {
+      if (hookData.section !== 'body') return;
+      const clave = `${hookData.row.index}-${hookData.column.index}`;
+      if (celdasSN.has(clave)) {
         const { x, y, width, height } = hookData.cell;
-        dibujarVisto(x + width / 2, y + height / 2, Math.min(width, height) * 0.8, VERDE_VISTO);
+        dibujarVisto(x + width / 2, y + height / 2, Math.min(width, height) * 0.85, VERDE_VISTO);
       }
     },
     didDrawPage: () => {
