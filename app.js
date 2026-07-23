@@ -733,7 +733,13 @@ function renderizarTablaNovedades(diaHoy) {
         td.style.cursor = 'pointer';
         
         const valor = agente.novedadesPorDia && agente.novedadesPorDia[String(dia)] ? agente.novedadesPorDia[String(dia)] : '';
-        td.textContent = valor || '—';
+        if (valor === 'S/N') {
+          td.textContent = '✓';
+          td.style.color = 'var(--green)';
+          td.style.fontWeight = '700';
+        } else {
+          td.textContent = valor || '—';
+        }
         
         // Bloquear días pasados
         const desbloqueadoPorAdmin = (novedadesActuales.diasDesbloqueados || []).includes(dia);
@@ -1621,13 +1627,14 @@ function renderizarTablaSoloLectura(tabla, data, periodo) {
     html += `<tr><td style="font-size:11px">${agente.codigo || ''}</td><td style="font-size:11px">${agente.grado || ''}</td><td style="font-size:11px;text-align:left">${agente.apellidosNombres || ''}</td>`;
     for (let d = 1; d <= 31; d++) {
       const valor = (agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '';
+      const valorMostrar = valor === 'S/N' ? '<span style="color:var(--green);font-weight:700;">✓</span>' : (valor || '—');
       const desbloqueado = diasDesbloqueados.includes(d);
       if (d > totalDias) {
         html += `<td style="font-size:11px;opacity:.25"></td>`;
       } else if (desbloqueado) {
-        html += `<td style="font-size:11px;cursor:pointer;background:var(--green-l);border:2px solid var(--green);" onclick="abrirModalEditarNovedadCierre(${idx},${d})" title="Día desbloqueado por el admin — clic para editar">${valor || '— (clic para editar)'}</td>`;
+        html += `<td style="font-size:11px;cursor:pointer;background:var(--green-l);border:2px solid var(--green);" onclick="abrirModalEditarNovedadCierre(${idx},${d})" title="Día desbloqueado por el admin — clic para editar">${valor ? valorMostrar : '— (clic para editar)'}</td>`;
       } else {
-        html += `<td style="font-size:11px;">${valor || '—'}</td>`;
+        html += `<td style="font-size:11px;">${valorMostrar}</td>`;
       }
     }
     html += `<td style="font-size:11px">${agente.observaciones || ''}</td></tr>`;
@@ -1789,7 +1796,8 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   ordenarAgentesPorCodigo(data.agentes).forEach((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= 31; d++) {
-      fila.push(d > totalDias ? '' : ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || ''));
+      const val = d > totalDias ? '' : ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '');
+      fila.push(val === 'S/N' ? '✓' : val);
     }
     fila.push(agente.observaciones || '');
     const row = ws.addRow(fila);
@@ -1818,7 +1826,7 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   filaNomTitulo.eachCell({ includeEmpty: true }, c => estiloNavy(c));
 
   CODIGOS_VALIDOS.forEach(c => {
-    const row = ws.addRow([c, CODIGOS_DESC[c]]);
+    const row = ws.addRow([c === 'S/N' ? '✓' : c, CODIGOS_DESC[c]]);
     row.eachCell({ includeEmpty: false }, cell => {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE_CLARO } };
     });
@@ -1941,7 +1949,10 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   const head = [['N°', 'Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
   const body = ordenarAgentesPorCodigo(data.agentes).map((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
-    for (let d = 1; d <= totalDias; d++) fila.push((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '');
+    for (let d = 1; d <= totalDias; d++) {
+      const val = (agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '';
+      fila.push(val === 'S/N' ? '✓' : val);
+    }
     fila.push(agente.observaciones || '');
     return fila;
   });
@@ -1987,7 +1998,7 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
     doc.setFillColor(...VERDE_CLARO);
     doc.rect(10, y, anchoPagina - 20, altoFilaNom, 'FD');
     doc.setFont(undefined, 'bold');
-    doc.text(c, 12, y + 3.2);
+    doc.text(c === 'S/N' ? '✓' : c, 12, y + 3.2);
     doc.setFont(undefined, 'normal');
     doc.text(`— ${CODIGOS_DESC[c]}`, 24, y + 3.2);
     y += altoFilaNom;
