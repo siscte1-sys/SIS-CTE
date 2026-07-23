@@ -1193,13 +1193,9 @@
     <div class="modal-body">
       <div class="form-field">
         <label class="form-label">Código de Novedad</label>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <button type="button" id="modal-novedad-sn" title="Sin Novedad" data-checked="0"
-            style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;flex-shrink:0;border-radius:8px;border:2px solid var(--border);background:var(--white);color:transparent;cursor:pointer;font-size:16px;font-weight:900;transition:.15s;">✓</button>
-          <select id="modal-novedad-codigo" class="form-select" onchange="actualizarObsSegunCodigo()" style="flex:1;">
-            <option value="">— Elegí una nomenclatura —</option>
-          </select>
-        </div>
+        <select id="modal-novedad-codigo" class="form-select" onchange="actualizarObsSegunCodigo()">
+          <option value="">— Elegí una nomenclatura —</option>
+        </select>
       </div>
       <div class="form-field">
         <label class="form-label">Observación</label>
