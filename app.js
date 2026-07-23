@@ -733,13 +733,7 @@ function renderizarTablaNovedades(diaHoy) {
         td.style.cursor = 'pointer';
         
         const valor = agente.novedadesPorDia && agente.novedadesPorDia[String(dia)] ? agente.novedadesPorDia[String(dia)] : '';
-        if (valor === 'S/N') {
-          td.textContent = '✓';
-          td.style.color = 'var(--green)';
-          td.style.fontWeight = '700';
-        } else {
-          td.textContent = valor || '—';
-        }
+        td.textContent = valor || '—';
         
         // Bloquear días pasados
         const desbloqueadoPorAdmin = (novedadesActuales.diasDesbloqueados || []).includes(dia);
@@ -1164,42 +1158,13 @@ let resumenGeneralCache = null;
 
 function poblarSelectCodigos(select) {
   if (select.dataset.poblado === '1') return;
-  CODIGOS_VALIDOS.filter(c => c !== 'S/N').forEach(c => {
+  CODIGOS_VALIDOS.forEach(c => {
     const opt = document.createElement('option');
     opt.value = c;
     opt.textContent = `${c} — ${CODIGOS_DESC[c]}`;
     select.appendChild(opt);
   });
   select.dataset.poblado = '1';
-}
-
-function asegurarCheckboxSN(select) {
-  const btnSN = $('modal-novedad-sn');
-  if (btnSN.dataset.listo === '1') return btnSN;
-
-  const aplicarEstado = (checked) => {
-    btnSN.dataset.checked = checked ? '1' : '0';
-    if (checked) {
-      btnSN.style.background = 'var(--green)';
-      btnSN.style.borderColor = 'var(--green)';
-      btnSN.style.color = '#fff';
-      select.style.display = 'none';
-      select.value = '';
-      $('modal-novedad-obs').value = CODIGOS_DESC['S/N'];
-    } else {
-      btnSN.style.background = 'var(--white)';
-      btnSN.style.borderColor = 'var(--border)';
-      btnSN.style.color = 'transparent';
-      select.style.display = '';
-      actualizarObsSegunCodigo();
-    }
-  };
-
-  btnSN.addEventListener('click', () => aplicarEstado(btnSN.dataset.checked !== '1'));
-  btnSN._aplicarEstado = aplicarEstado;
-  btnSN.dataset.listo = '1';
-
-  return btnSN;
 }
 
 function actualizarObsSegunCodigo() {
@@ -1219,20 +1184,15 @@ function abrirModalEditarNovedad(agente, dia, idx) {
   const obs = $('modal-novedad-obs');
   
   poblarSelectCodigos(codigo);
-  const btnSN = asegurarCheckboxSN(codigo);
-
+  
   sub.textContent = `Día ${dia} — ${agente.apellidosNombres}`;
-  const valorActual = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
-
-  btnSN._aplicarEstado(valorActual === 'S/N');
-  if (valorActual !== 'S/N') codigo.value = valorActual;
-
-  obs.value = agente.observaciones || (valorActual ? (CODIGOS_DESC[valorActual] || '') : '');
-
+  codigo.value = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
+  obs.value = agente.observaciones || (codigo.value ? (CODIGOS_DESC[codigo.value] || '') : '');
+  
   hide('modal-novedad-error');
-
+  
   modal.style.display = 'flex';
-  btnSN.dataset.checked === '1' ? btnSN.focus() : codigo.focus();
+  codigo.focus();
 }
 
 function cerrarModalNovedad() {
@@ -1256,11 +1216,9 @@ function actualizarDiaCompletado(dia) {
 
 async function guardarNovedad() {
   if (!modalAgenteEdicion) return;
-
-  const btnSN = $('modal-novedad-sn');
-  const esSN = btnSN && btnSN.dataset.checked === '1';
-  const codigo = esSN ? 'S/N' : $('modal-novedad-codigo').value.trim();
-
+  
+  const codigo = $('modal-novedad-codigo').value.trim();
+  
   if (!codigo) {
     mostrarErrorCodigo('Elegí una nomenclatura de la lista');
     return;
@@ -1627,14 +1585,13 @@ function renderizarTablaSoloLectura(tabla, data, periodo) {
     html += `<tr><td style="font-size:11px">${agente.codigo || ''}</td><td style="font-size:11px">${agente.grado || ''}</td><td style="font-size:11px;text-align:left">${agente.apellidosNombres || ''}</td>`;
     for (let d = 1; d <= 31; d++) {
       const valor = (agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '';
-      const valorMostrar = valor === 'S/N' ? '<span style="color:var(--green);font-weight:700;">✓</span>' : (valor || '—');
       const desbloqueado = diasDesbloqueados.includes(d);
       if (d > totalDias) {
         html += `<td style="font-size:11px;opacity:.25"></td>`;
       } else if (desbloqueado) {
-        html += `<td style="font-size:11px;cursor:pointer;background:var(--green-l);border:2px solid var(--green);" onclick="abrirModalEditarNovedadCierre(${idx},${d})" title="Día desbloqueado por el admin — clic para editar">${valor ? valorMostrar : '— (clic para editar)'}</td>`;
+        html += `<td style="font-size:11px;cursor:pointer;background:var(--green-l);border:2px solid var(--green);" onclick="abrirModalEditarNovedadCierre(${idx},${d})" title="Día desbloqueado por el admin — clic para editar">${valor || '— (clic para editar)'}</td>`;
       } else {
-        html += `<td style="font-size:11px;">${valorMostrar}</td>`;
+        html += `<td style="font-size:11px;">${valor || '—'}</td>`;
       }
     }
     html += `<td style="font-size:11px">${agente.observaciones || ''}</td></tr>`;
@@ -1660,19 +1617,14 @@ async function abrirModalEditarNovedadCierre(idx, dia) {
   const obs = $('modal-novedad-obs');
 
   poblarSelectCodigos(codigo);
-  const btnSN = asegurarCheckboxSN(codigo);
 
   sub.textContent = `Día ${dia} (desbloqueado) — ${agente.apellidosNombres}`;
-  const valorActual = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
-
-  btnSN._aplicarEstado(valorActual === 'S/N');
-  if (valorActual !== 'S/N') codigo.value = valorActual;
-
-  obs.value = agente.observaciones || (valorActual ? (CODIGOS_DESC[valorActual] || '') : '');
+  codigo.value = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
+  obs.value = agente.observaciones || (codigo.value ? (CODIGOS_DESC[codigo.value] || '') : '');
 
   hide('modal-novedad-error');
   modal.style.display = 'flex';
-  btnSN.dataset.checked === '1' ? btnSN.focus() : codigo.focus();
+  codigo.focus();
 }
 
 async function cerrarYExportarMes() {
@@ -1796,8 +1748,7 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   ordenarAgentesPorCodigo(data.agentes).forEach((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= 31; d++) {
-      const val = d > totalDias ? '' : ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '');
-      fila.push(val === 'S/N' ? '✓' : val);
+      fila.push(d > totalDias ? '' : ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || ''));
     }
     fila.push(agente.observaciones || '');
     const row = ws.addRow(fila);
@@ -1826,7 +1777,7 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   filaNomTitulo.eachCell({ includeEmpty: true }, c => estiloNavy(c));
 
   CODIGOS_VALIDOS.forEach(c => {
-    const row = ws.addRow([c === 'S/N' ? '✓' : c, CODIGOS_DESC[c]]);
+    const row = ws.addRow([c, CODIGOS_DESC[c]]);
     row.eachCell({ includeEmpty: false }, cell => {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE_CLARO } };
     });
@@ -1946,34 +1897,10 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   };
   dibujarBanner();
 
-  // Dibuja un pequeño visto (✓) con dos trazos — las fuentes estándar de
-  // jsPDF no traen el glifo Unicode ✓, por eso no se usa como texto.
-  function dibujarVisto(cx, cy, tamano, color) {
-    doc.setDrawColor(color[0], color[1], color[2]);
-    doc.setLineWidth(Math.max(0.3, tamano * 0.22));
-    doc.line(cx - tamano * 0.5, cy, cx - tamano * 0.1, cy + tamano * 0.4);
-    doc.line(cx - tamano * 0.1, cy + tamano * 0.4, cx + tamano * 0.5, cy - tamano * 0.4);
-  }
-
-  const VERDE_VISTO = [21, 128, 61];
-
-  // Guardamos aparte qué celdas (fila,columna) son "S/N" para dibujar el
-  // visto en didDrawCell, sin depender de que autoTable conserve el valor
-  // crudo de la celda (cell.raw puede variar según la versión del plugin).
-  const celdasSN = new Set();
-
   const head = [['N°', 'Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
-  const body = ordenarAgentesPorCodigo(data.agentes).map((agente, filaIdx) => {
-    const fila = [filaIdx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
-    for (let d = 1; d <= totalDias; d++) {
-      const val = (agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '';
-      if (val === 'S/N') {
-        celdasSN.add(`${filaIdx}-${4 + (d - 1)}`);
-        fila.push('');
-      } else {
-        fila.push(val);
-      }
-    }
+  const body = ordenarAgentesPorCodigo(data.agentes).map((agente, idx) => {
+    const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
+    for (let d = 1; d <= totalDias; d++) fila.push((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '');
     fila.push(agente.observaciones || '');
     return fila;
   });
@@ -1991,14 +1918,6 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
       const idx = hookData.column.index;
       if (hookData.section === 'body' && idx >= 4 && idx < 4 + totalDias) {
         hookData.cell.styles.fillColor = AMARILLO;
-      }
-    },
-    didDrawCell: (hookData) => {
-      if (hookData.section !== 'body') return;
-      const clave = `${hookData.row.index}-${hookData.column.index}`;
-      if (celdasSN.has(clave)) {
-        const { x, y, width, height } = hookData.cell;
-        dibujarVisto(x + width / 2, y + height / 2, Math.min(width, height) * 0.85, VERDE_VISTO);
       }
     },
     didDrawPage: () => {
@@ -2026,12 +1945,8 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   CODIGOS_VALIDOS.forEach(c => {
     doc.setFillColor(...VERDE_CLARO);
     doc.rect(10, y, anchoPagina - 20, altoFilaNom, 'FD');
-    if (c === 'S/N') {
-      dibujarVisto(13.2, y + altoFilaNom / 2, 3.4, VERDE_VISTO);
-    } else {
-      doc.setFont(undefined, 'bold');
-      doc.text(c, 12, y + 3.2);
-    }
+    doc.setFont(undefined, 'bold');
+    doc.text(c, 12, y + 3.2);
     doc.setFont(undefined, 'normal');
     doc.text(`— ${CODIGOS_DESC[c]}`, 24, y + 3.2);
     y += altoFilaNom;
