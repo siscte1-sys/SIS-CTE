@@ -1946,12 +1946,29 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   };
   dibujarBanner();
 
+  // Dibuja un pequeño visto (✓) con trazos vectoriales — las fuentes estándar
+  // de jsPDF no tienen el glifo Unicode ✓, por eso no se usa como texto.
+  function dibujarVisto(cx, cy, tamano, color) {
+    doc.setDrawColor(...color);
+    doc.setLineWidth(tamano * 0.28);
+    doc.setLineCap('round');
+    doc.setLineJoin('round');
+    doc.lines(
+      [[tamano * 0.35, tamano * 0.35], [tamano * 0.75, -tamano * 0.75]],
+      cx - tamano * 0.55, cy + tamano * 0.05,
+      [1, 1], 'S', false
+    );
+    doc.setLineCap(0);
+    doc.setLineJoin(0);
+  }
+
+  const VERDE_VISTO = [21, 128, 61];
+
   const head = [['N°', 'Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
   const body = ordenarAgentesPorCodigo(data.agentes).map((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= totalDias; d++) {
-      const val = (agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '';
-      fila.push(val === 'S/N' ? '✓' : val);
+      fila.push((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '');
     }
     fila.push(agente.observaciones || '');
     return fila;
@@ -1970,6 +1987,14 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
       const idx = hookData.column.index;
       if (hookData.section === 'body' && idx >= 4 && idx < 4 + totalDias) {
         hookData.cell.styles.fillColor = AMARILLO;
+        if (hookData.cell.raw === 'S/N') hookData.cell.text = ['']; // el visto se dibuja aparte
+      }
+    },
+    didDrawCell: (hookData) => {
+      const idx = hookData.column.index;
+      if (hookData.section === 'body' && idx >= 4 && idx < 4 + totalDias && hookData.cell.raw === 'S/N') {
+        const { x, y, width, height } = hookData.cell;
+        dibujarVisto(x + width / 2, y + height / 2, Math.min(width, height) * 0.8, VERDE_VISTO);
       }
     },
     didDrawPage: () => {
@@ -1997,8 +2022,12 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   CODIGOS_VALIDOS.forEach(c => {
     doc.setFillColor(...VERDE_CLARO);
     doc.rect(10, y, anchoPagina - 20, altoFilaNom, 'FD');
-    doc.setFont(undefined, 'bold');
-    doc.text(c === 'S/N' ? '✓' : c, 12, y + 3.2);
+    if (c === 'S/N') {
+      dibujarVisto(13.2, y + altoFilaNom / 2, 3.4, VERDE_VISTO);
+    } else {
+      doc.setFont(undefined, 'bold');
+      doc.text(c, 12, y + 3.2);
+    }
     doc.setFont(undefined, 'normal');
     doc.text(`— ${CODIGOS_DESC[c]}`, 24, y + 3.2);
     y += altoFilaNom;
