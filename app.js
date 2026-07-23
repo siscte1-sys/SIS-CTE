@@ -1158,13 +1158,42 @@ let resumenGeneralCache = null;
 
 function poblarSelectCodigos(select) {
   if (select.dataset.poblado === '1') return;
-  CODIGOS_VALIDOS.forEach(c => {
+  CODIGOS_VALIDOS.filter(c => c !== 'S/N').forEach(c => {
     const opt = document.createElement('option');
     opt.value = c;
     opt.textContent = `${c} — ${CODIGOS_DESC[c]}`;
     select.appendChild(opt);
   });
   select.dataset.poblado = '1';
+}
+
+function asegurarCheckboxSN(select) {
+  const btnSN = $('modal-novedad-sn');
+  if (btnSN.dataset.listo === '1') return btnSN;
+
+  const aplicarEstado = (checked) => {
+    btnSN.dataset.checked = checked ? '1' : '0';
+    if (checked) {
+      btnSN.style.background = 'var(--green)';
+      btnSN.style.borderColor = 'var(--green)';
+      btnSN.style.color = '#fff';
+      select.style.display = 'none';
+      select.value = '';
+      $('modal-novedad-obs').value = CODIGOS_DESC['S/N'];
+    } else {
+      btnSN.style.background = 'var(--white)';
+      btnSN.style.borderColor = 'var(--border)';
+      btnSN.style.color = 'transparent';
+      select.style.display = '';
+      actualizarObsSegunCodigo();
+    }
+  };
+
+  btnSN.addEventListener('click', () => aplicarEstado(btnSN.dataset.checked !== '1'));
+  btnSN._aplicarEstado = aplicarEstado;
+  btnSN.dataset.listo = '1';
+
+  return btnSN;
 }
 
 function actualizarObsSegunCodigo() {
@@ -1184,15 +1213,20 @@ function abrirModalEditarNovedad(agente, dia, idx) {
   const obs = $('modal-novedad-obs');
   
   poblarSelectCodigos(codigo);
-  
+  const btnSN = asegurarCheckboxSN(codigo);
+
   sub.textContent = `Día ${dia} — ${agente.apellidosNombres}`;
-  codigo.value = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
-  obs.value = agente.observaciones || (codigo.value ? (CODIGOS_DESC[codigo.value] || '') : '');
-  
+  const valorActual = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
+
+  btnSN._aplicarEstado(valorActual === 'S/N');
+  if (valorActual !== 'S/N') codigo.value = valorActual;
+
+  obs.value = agente.observaciones || (valorActual ? (CODIGOS_DESC[valorActual] || '') : '');
+
   hide('modal-novedad-error');
-  
+
   modal.style.display = 'flex';
-  codigo.focus();
+  btnSN.dataset.checked === '1' ? btnSN.focus() : codigo.focus();
 }
 
 function cerrarModalNovedad() {
@@ -1216,9 +1250,11 @@ function actualizarDiaCompletado(dia) {
 
 async function guardarNovedad() {
   if (!modalAgenteEdicion) return;
-  
-  const codigo = $('modal-novedad-codigo').value.trim();
-  
+
+  const btnSN = $('modal-novedad-sn');
+  const esSN = btnSN && btnSN.dataset.checked === '1';
+  const codigo = esSN ? 'S/N' : $('modal-novedad-codigo').value.trim();
+
   if (!codigo) {
     mostrarErrorCodigo('Elegí una nomenclatura de la lista');
     return;
@@ -1617,14 +1653,19 @@ async function abrirModalEditarNovedadCierre(idx, dia) {
   const obs = $('modal-novedad-obs');
 
   poblarSelectCodigos(codigo);
+  const btnSN = asegurarCheckboxSN(codigo);
 
   sub.textContent = `Día ${dia} (desbloqueado) — ${agente.apellidosNombres}`;
-  codigo.value = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
-  obs.value = agente.observaciones || (codigo.value ? (CODIGOS_DESC[codigo.value] || '') : '');
+  const valorActual = (agente.novedadesPorDia && agente.novedadesPorDia[String(dia)]) || '';
+
+  btnSN._aplicarEstado(valorActual === 'S/N');
+  if (valorActual !== 'S/N') codigo.value = valorActual;
+
+  obs.value = agente.observaciones || (valorActual ? (CODIGOS_DESC[valorActual] || '') : '');
 
   hide('modal-novedad-error');
   modal.style.display = 'flex';
-  codigo.focus();
+  btnSN.dataset.checked === '1' ? btnSN.focus() : codigo.focus();
 }
 
 async function cerrarYExportarMes() {
