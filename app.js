@@ -848,7 +848,7 @@ function filtrarTablaPorCodigo() {
   }
 }
 
-let solicitudDesbloqueoDiaActual = null;
+let solicitudDesbloqueoDiasActual = null; // array de días a solicitar
 
 async function solicitarDesbloqueo(dia) {
   try {
@@ -868,8 +868,41 @@ async function solicitarDesbloqueo(dia) {
       return;
     }
 
-    solicitudDesbloqueoDiaActual = dia;
+    solicitudDesbloqueoDiasActual = [dia];
     $('solicitud-desbloqueo-sub').textContent = `Día ${dia} — ${areaActual}`;
+    $('solicitud-desbloqueo-razon').value = '';
+    $('modal-solicitar-desbloqueo').style.display = 'flex';
+    $('solicitud-desbloqueo-razon').focus();
+
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
+async function solicitarDesbloqueoTodos() {
+  const dias = (diasPendientesActuales || []).slice().sort((a, b) => a - b);
+  if (!dias.length) return;
+
+  try {
+    // Evitar duplicar una solicitud múltiple pendiente para la misma área/mes/usuario
+    const solRef = window._fb.collection(db, 'solicitudes');
+    const q = window._fb.query(
+      solRef,
+      window._fb.where('correoUsuario', '==', usuario.email),
+      window._fb.where('area', '==', areaActual),
+      window._fb.where('mes', '==', mesActual),
+      window._fb.where('tipo', '==', 'desbloqueo_multiples_dias'),
+      window._fb.where('estado', '==', 'pendiente')
+    );
+    const existentes = await window._fb.getDocs(q);
+    if (!existentes.empty) {
+      toast('Ya tiene una solicitud de desbloqueo pendiente para varios días. Espere la respuesta del administrador.', 'ok');
+      return;
+    }
+
+    solicitudDesbloqueoDiasActual = dias;
+    $('solicitud-desbloqueo-sub').textContent = `Días ${dias.join(', ')} — ${areaActual}`;
     $('solicitud-desbloqueo-razon').value = '';
     $('modal-solicitar-desbloqueo').style.display = 'flex';
     $('solicitud-desbloqueo-razon').focus();
@@ -882,30 +915,43 @@ async function solicitarDesbloqueo(dia) {
 
 function cerrarModalSolicitudDesbloqueo() {
   $('modal-solicitar-desbloqueo').style.display = 'none';
-  solicitudDesbloqueoDiaActual = null;
+  solicitudDesbloqueoDiasActual = null;
 }
 
 async function confirmarSolicitudDesbloqueo() {
   const razon = $('solicitud-desbloqueo-razon').value.trim();
   if (!razon) { toast('Contale al administrador el motivo', 'err'); return; }
-  const dia = solicitudDesbloqueoDiaActual;
-  if (!dia) return;
+  const dias = solicitudDesbloqueoDiasActual;
+  if (!dias || !dias.length) return;
 
   try {
-    await window._fb.addDoc(window._fb.collection(db, 'solicitudes'), {
+    const datosSolicitud = {
       area: areaActual,
       correoUsuario: usuario.email,
-      tipo: 'desbloqueo_dia',
-      dia: dia,
       mes: mesActual,
       razon: razon,
       estado: 'pendiente',
       fechaSolicitud: new Date(),
       fechaRespuesta: null,
       respuestaAdmin: null
-    });
+    };
 
-    toast('✅ Solicitud enviada. El administrador la va a revisar.', 'ok');
+    if (dias.length === 1) {
+      datosSolicitud.tipo = 'desbloqueo_dia';
+      datosSolicitud.dia = dias[0];
+    } else {
+      datosSolicitud.tipo = 'desbloqueo_multiples_dias';
+      datosSolicitud.dias = dias;
+    }
+
+    await window._fb.addDoc(window._fb.collection(db, 'solicitudes'), datosSolicitud);
+
+    toast(
+      dias.length === 1
+        ? '✅ Solicitud enviada. El administrador la va a revisar.'
+        : `✅ Solicitud enviada para ${dias.length} días. El administrador la va a revisar.`,
+      'ok'
+    );
     cerrarModalSolicitudDesbloqueo();
   } catch(e) {
     console.error(e);
@@ -1081,6 +1127,8 @@ async function combinarDuplicadosArea() {
   }
 }
 
+let diasPendientesActuales = [];
+
 function verificarDiasPendientes() {
   const diaHoy = new Date().getDate();
   const diasSinCompletar = [];
@@ -1093,11 +1141,20 @@ function verificarDiasPendientes() {
     }
   }
   
+  diasPendientesActuales = diasSinCompletar;
+  const btnTodos = $('btn-solicitar-desbloqueo-todos');
+
   if (diasSinCompletar.length > 0) {
     show('info-dias-pendientes');
     $('info-pendientes-txt').textContent = `⚠️ Días sin completar: ${diasSinCompletar.join(', ')}`;
+    if (btnTodos) {
+      btnTodos.style.display = '';
+      const txtBtn = $('txt-btn-solicitar-desbloqueo-todos');
+      if (txtBtn) txtBtn.textContent = `Solicitar desbloqueo (${diasSinCompletar.length} días)`;
+    }
   } else {
     hide('info-dias-pendientes');
+    if (btnTodos) btnTodos.style.display = 'none';
   }
 }
 
@@ -4865,7 +4922,7 @@ async function cargarDesbloqueos() {
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div>
             <div style="font-weight:600;">${badge} ${data.correoUsuario}</div>
-            <div style="font-size:11px;color:var(--txt2);">${data.area} — ${data.tipo === 'desbloqueo_dia' ? 'Día ' + data.dia : 'Mes ' + data.mes}</div>
+            <div style="font-size:11px;color:var(--txt2);">${data.area} — ${data.tipo === 'desbloqueo_dia' ? 'Día ' + data.dia : (data.tipo === 'desbloqueo_multiples_dias' ? 'Días ' + (data.dias || []).join(', ') : 'Mes ' + data.mes)}</div>
             ${data.razon ? `<div style="font-size:11px;color:var(--txt3);margin-top:2px;">"${data.razon}"</div>` : ''}
           </div>
           ${data.estado === 'pendiente' && tienePermisoAccion('desbloqueos_aprobar') ? `
@@ -4900,20 +4957,35 @@ async function aprobarDesbloqueo(docId) {
       fechaRespuesta: new Date()
     });
 
-    // Habilitar la edición de ese día puntual en el documento de Novedades del área/mes correspondiente
-    if (sol.area && sol.dia && sol.mes) {
+    // Soporta solicitudes de un solo día (campo "dia") o de varios días (campo "dias")
+    const diasAAprobar = Array.isArray(sol.dias) ? sol.dias : (sol.dia ? [sol.dia] : []);
+
+    // Habilitar la edición de esos días en el documento de Novedades del área/mes correspondiente
+    if (sol.area && sol.mes && diasAAprobar.length) {
       const novedadesRef = window._fb.doc(db, 'novedades', sol.area, sol.mes, 'datos');
       const novedadesDoc = await window._fb.getDoc(novedadesRef);
       if (novedadesDoc.exists()) {
         const data = novedadesDoc.data();
         const diasDesbloqueados = data.diasDesbloqueados || [];
-        if (!diasDesbloqueados.includes(sol.dia)) diasDesbloqueados.push(sol.dia);
+        diasAAprobar.forEach(d => {
+          if (!diasDesbloqueados.includes(d)) diasDesbloqueados.push(d);
+        });
         await window._fb.updateDoc(novedadesRef, { diasDesbloqueados });
       }
-      await registrarEnAuditoria('aprobar_desbloqueo', sol.area, sol.correoUsuario, sol.dia, sol.mes, {}, `Día ${sol.dia} desbloqueado para ${sol.correoUsuario}`);
+      await registrarEnAuditoria(
+        'aprobar_desbloqueo', sol.area, sol.correoUsuario,
+        diasAAprobar.length === 1 ? diasAAprobar[0] : null, sol.mes,
+        { dias: diasAAprobar },
+        `Día(s) ${diasAAprobar.join(', ')} desbloqueado(s) para ${sol.correoUsuario}`
+      );
     }
 
-    toast('✅ Desbloqueo aprobado — el día ya se puede editar', 'ok');
+    toast(
+      diasAAprobar.length === 1
+        ? '✅ Desbloqueo aprobado — el día ya se puede editar'
+        : `✅ Desbloqueo aprobado — ${diasAAprobar.length} días ya se pueden editar`,
+      'ok'
+    );
     cargarDesbloqueos();
   } catch(e) {
     toast('Error: ' + e.message, 'err');
