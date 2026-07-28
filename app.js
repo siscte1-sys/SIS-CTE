@@ -1900,7 +1900,10 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   const head = [['N°', 'Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
   const body = ordenarAgentesPorCodigo(data.agentes).map((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
-    for (let d = 1; d <= totalDias; d++) fila.push((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '');
+    for (let d = 1; d <= totalDias; d++) {
+      const valorDia = (agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '';
+      fila.push(valorDia.trim() !== '' ? valorDia : '✓');
+    }
     fila.push(agente.observaciones || '');
     return fila;
   });
