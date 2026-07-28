@@ -1947,6 +1947,20 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
       if (hookData.section === 'body' && idx >= 4 && idx < 4 + totalDias) {
         hookData.cell.styles.fillColor = AMARILLO;
       }
+      // Achicar la letra de Apellidos y Nombres (columna 3) si el texto no cabe en una línea
+      if (hookData.section === 'body' && idx === 3) {
+        const texto = String(hookData.cell.raw || '');
+        const cellPadding = 1;
+        const anchoDisponible = anchoNombres - (cellPadding * 2);
+        let fs = 6;
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(fs);
+        while (fs > 3.5 && doc.getTextWidth(texto) > anchoDisponible) {
+          fs -= 0.5;
+          doc.setFontSize(fs);
+        }
+        hookData.cell.styles.fontSize = fs;
+      }
     },
     didDrawPage: () => {
       dibujarBanner();
