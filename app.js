@@ -51,9 +51,9 @@ const AREAS = [
 ];
 
 /* ── Códigos de Novedad (8 exactos) ─────────────────── */
-const CODIGOS_VALIDOS = ["S/N", "OA", "X", "CS", "B", "Li", "V", "PE"];
+const CODIGOS_VALIDOS = ["✓", "OA", "X", "CS", "B", "Li", "V", "PE"];
 const CODIGOS_DESC = {
-  "S/N": "SIN NOVEDAD (normal)",
+  "✓": "SIN NOVEDAD (normal)",
   "OA":  "OTRA ÁREA — Formulario Único de Traslado (FUT)",
   "X":   "AUSENCIA INJUSTIFICADA",
   "CS":  "COMISIÓN DE SERVICIO",
