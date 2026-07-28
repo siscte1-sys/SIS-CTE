@@ -51,9 +51,9 @@ const AREAS = [
 ];
 
 /* ── Códigos de Novedad (8 exactos) ─────────────────── */
-const CODIGOS_VALIDOS = ["✓", "OA", "X", "CS", "B", "Li", "V", "PE"];
+const CODIGOS_VALIDOS = ["S/N", "OA", "X", "CS", "B", "Li", "V", "PE"];
 const CODIGOS_DESC = {
-  "✓": "SIN NOVEDAD (normal)",
+  "S/N": "SIN NOVEDAD (normal)",
   "OA":  "OTRA ÁREA — Formulario Único de Traslado (FUT)",
   "X":   "AUSENCIA INJUSTIFICADA",
   "CS":  "COMISIÓN DE SERVICIO",
@@ -1901,8 +1901,9 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   const body = ordenarAgentesPorCodigo(data.agentes).map((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= totalDias; d++) {
-      const valorDia = (agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '';
-      fila.push(valorDia.trim() !== '' ? valorDia : '✓');
+      const valorDia = ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '').trim();
+      const sinNovedad = valorDia === '' || valorDia.toUpperCase() === 'S/N';
+      fila.push(sinNovedad ? '✓' : valorDia);
     }
     fila.push(agente.observaciones || '');
     return fila;
