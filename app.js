@@ -5412,6 +5412,7 @@ window.cerrarModalAcceso            = cerrarModalAcceso;
 window.abrirSelectorPersona         = abrirSelectorPersona;
 window.cerrarModalSolicitudDesbloqueo = cerrarModalSolicitudDesbloqueo;
 window.confirmarSolicitudDesbloqueo = confirmarSolicitudDesbloqueo;
+window.solicitarDesbloqueoTodos     = solicitarDesbloqueoTodos;
 window.cerrarSelectorPersona        = cerrarSelectorPersona;
 window.filtrarListaPersonal         = filtrarListaPersonal;
 window.elegirPersona                = elegirPersona;
