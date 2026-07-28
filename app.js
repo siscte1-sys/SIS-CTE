@@ -510,11 +510,6 @@ async function cargarNovedadesActuales() {
       areaActual = querySnapshot.docs[0].data().area;
     }
 
-    // Panel "Generar reporte de prueba" — disponible para todos los usuarios
-    show('admin-generar-reporte');
-    $('admin-generar-reporte').style.display = 'block';
-    poblarSelectoresReportePrueba();
-
     mesActual = periodo;
 
     // Actualizar hero
@@ -526,6 +521,36 @@ async function cargarNovedadesActuales() {
     const periodoAnterior = obtenerPeriodoAnterior(periodo);
     const refAnterior = window._fb.doc(db, 'novedades', areaActual, periodoAnterior, 'datos');
     const docAnterior = await window._fb.getDoc(refAnterior);
+
+    // Panel "Generar reporte":
+    // - Admin: acceso total, cualquier área/mes/año, en cualquier momento.
+    // - Usuario regular: solo se habilita al entrar al mes siguiente, y únicamente
+    //   para generar el reporte del mes recién culminado (sin poder elegir otro).
+    if (esAdmin()) {
+      show('admin-generar-reporte');
+      $('admin-generar-reporte').style.display = 'block';
+      $('reporte-prueba-titulo').textContent = '🧪 Generar reporte (de prueba — cualquier momento)';
+      $('reporte-prueba-desc').textContent = 'Genere el Excel/PDF de su área y mes que quiera para probar, sin esperar al cierre de mes. No afecta el estado del mes ni bloquea nada — lo puede hacer las veces que necesite.';
+      show('reporte-prueba-selectores');
+      $('reporte-prueba-selectores').style.display = 'grid';
+      $('reporte-prueba-btn-txt').textContent = '📄 Generar Excel + PDF';
+      poblarSelectoresReportePrueba();
+    } else if (docAnterior.exists() && (docAnterior.data().agentes || []).length > 0) {
+      show('admin-generar-reporte');
+      $('admin-generar-reporte').style.display = 'block';
+      $('reporte-prueba-titulo').textContent = '📄 Generar reporte';
+      $('reporte-prueba-desc').textContent = `Puede generar el Excel/PDF de ${obtenerNombreMes(periodoAnterior.split('-')[1])} ${periodoAnterior.split('-')[0]} de su área, el mes que acaba de culminar.`;
+      hide('reporte-prueba-selectores');
+      $('reporte-prueba-selectores').style.display = 'none';
+      $('reporte-prueba-btn-txt').textContent = '📄 Generar reporte';
+      poblarSelectoresReportePrueba();
+      // Fijar el período al mes recién culminado — el usuario no puede elegir otro
+      $('reporte-prueba-mes').value = periodoAnterior.split('-')[1];
+      $('reporte-prueba-anio').value = periodoAnterior.split('-')[0];
+    } else {
+      hide('admin-generar-reporte');
+      $('admin-generar-reporte').style.display = 'none';
+    }
 
     if (docAnterior.exists() && docAnterior.data().estado !== 'cerrado' && (docAnterior.data().agentes || []).length > 0) {
       mostrarCierreMes(areaActual, periodoAnterior, docAnterior.data());
