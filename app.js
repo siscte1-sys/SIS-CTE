@@ -1905,14 +1905,38 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
     return fila;
   });
 
+  // ── Anchos de columna fijos, calculados para que la tabla nunca exceda
+  //    el ancho útil de la página (márgenes de 10mm a cada lado) ──
+  const margenLateral = 10;
+  const anchoUtil = anchoPagina - (margenLateral * 2);
+  const anchoNo = 7;
+  const anchoCodigo = 14;
+  const anchoGrado = 16;
+  const anchoNombres = 38;
+  const anchoObservacion = 22;
+  const anchoFijosTotal = anchoNo + anchoCodigo + anchoGrado + anchoNombres + anchoObservacion;
+  const anchoDia = (anchoUtil - anchoFijosTotal) / totalDias;
+
+  const columnStyles = {
+    0: { cellWidth: anchoNo, halign: 'center' },
+    1: { cellWidth: anchoCodigo, halign: 'center' },
+    2: { cellWidth: anchoGrado, halign: 'center' },
+    3: { cellWidth: anchoNombres, halign: 'left' },
+  };
+  for (let i = 0; i < totalDias; i++) {
+    columnStyles[4 + i] = { cellWidth: anchoDia, halign: 'center' };
+  }
+  columnStyles[4 + totalDias] = { cellWidth: anchoObservacion, halign: 'left' };
+
   doc.autoTable({
     head, body,
     startY: 26,
-    margin: { top: 26 },
+    margin: { top: 26, left: margenLateral, right: margenLateral },
+    tableWidth: anchoUtil,
     theme: 'grid',
-    styles: { fontSize: 6, cellPadding: 1, lineColor: [150, 150, 150], lineWidth: 0.1 },
+    styles: { fontSize: 6, cellPadding: 1, lineColor: [150, 150, 150], lineWidth: 0.1, overflow: 'linebreak' },
     headStyles: { fillColor: NAVY, textColor: BLANCO },
-    columnStyles: { 0: { cellWidth: 7, halign: 'center' } },
+    columnStyles,
     didParseCell: (hookData) => {
       // Pintar de amarillo las columnas de días (índices 4 al 4+totalDias-1) en el cuerpo
       const idx = hookData.column.index;
