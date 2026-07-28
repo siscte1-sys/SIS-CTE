@@ -1903,7 +1903,7 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
     for (let d = 1; d <= totalDias; d++) {
       const valorDia = ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '').trim();
       const sinNovedad = valorDia === '' || valorDia.toUpperCase() === 'S/N';
-      fila.push(sinNovedad ? '✓' : valorDia);
+      fila.push(sinNovedad ? '' : valorDia);
     }
     fila.push(agente.observaciones || '');
     return fila;
