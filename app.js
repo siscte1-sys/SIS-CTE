@@ -1953,9 +1953,22 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
     }
   });
 
+  const altoPagina = doc.internal.pageSize.getHeight();
   let y = doc.lastAutoTable.finalY + 6;
   doc.setDrawColor(150, 150, 150);
   doc.setLineWidth(0.1);
+
+  // ── Verificar espacio disponible: si Nomenclatura + Certificación + firma
+  //    no caben en lo que queda de la página, saltar a una nueva página ──
+  const altoNomenclatura = 6 + (CODIGOS_VALIDOS.length * 4.6);
+  const altoCertificacionYFirma = 6 + 6 + 8 + 18;
+  const margenInferior = 12;
+  const altoNecesario = 6 /* espacio antes de nomenclatura */ + altoNomenclatura + 6 + altoCertificacionYFirma;
+  if (y + altoNecesario > altoPagina - margenInferior) {
+    doc.addPage();
+    dibujarBanner();
+    y = 30;
+  }
 
   // ── Nomenclatura ──
   doc.setFillColor(...NAVY);
@@ -2022,7 +2035,6 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   doc.rect(mitadPagina + 2, y, anchoCol, 18, 'FD');
 
   // ── Contador de páginas (pie de cada hoja) ──
-  const altoPagina = doc.internal.pageSize.getHeight();
   const totalPaginas = doc.internal.getNumberOfPages();
   for (let p = 1; p <= totalPaginas; p++) {
     doc.setPage(p);
