@@ -161,12 +161,10 @@
         </div>
       </div>
 
-      <!-- SECCIÓN: Generar reporte (admin: cualquier mes/momento — usuario: solo el mes recién culminado) -->
+      <!-- SECCIÓN: Generar reporte (admin: cualquier mes/momento — usuario: solo el mes recién culminado, salvo permiso especial) -->
       <div id="admin-generar-reporte" class="panel-white" style="display:none;padding:20px;margin-bottom:20px;border:2px solid var(--blue-m);">
-        <div class="sec-titulo" id="reporte-prueba-titulo">🧪 Generar reporte (de prueba — cualquier momento)</div>
-        <p style="font-size:12px;color:var(--txt2);margin-bottom:16px;" id="reporte-prueba-desc">
-          Genere el Excel/PDF de su área y mes que quiera para probar, sin esperar al cierre de mes. No afecta el estado del mes ni bloquea nada — lo puede hacer las veces que necesite.
-        </p>
+        <div class="sec-titulo" id="reporte-prueba-titulo">📄 Generar Reporte</div>
+        <p style="font-size:12px;color:var(--txt2);margin-bottom:16px;display:none;" id="reporte-prueba-desc"></p>
         <div id="reporte-prueba-selectores" style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;margin-bottom:16px;">
           <div class="form-field" style="margin-bottom:0;">
             <label class="form-label">Mes</label>
@@ -187,8 +185,8 @@
             <input type="text" id="reporte-prueba-responsable" class="filtro-input" readonly placeholder="Clic para elegir..." onclick="abrirSelectorPersona('reporte-prueba-responsable')" style="cursor:pointer;">
           </div>
         </div>
-        <button class="btn-acc btn-acc-blue" onclick="generarReportePrueba()">
-          <span id="reporte-prueba-btn-txt">📄 Generar Excel + PDF</span>
+        <button class="btn-acc btn-acc-blue" id="btn-generar-reporte-prueba" onclick="generarReportePrueba()">
+          <span id="reporte-prueba-btn-txt">📄 Generar Reporte</span>
         </button>
       </div>
 
