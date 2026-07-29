@@ -227,6 +227,9 @@ const PERMISOS_DISPONIBLES = [
   { tab: 'actividad', tabLabel: '📈 Actividad del Administrador', acciones: [
     { key: 'actividad_ver',             label: 'Ver actividad del administrador (auditoría resumida) y descargarla' },
   ]},
+  { tab: 'reporte_novedades', tabLabel: '📄 Novedades — Generar Reporte', acciones: [
+    { key: 'reporte_elegir_mes',        label: 'Elegir cualquier mes/año en "Generar Reporte" (como el administrador)' },
+  ]},
 ];
 
 let permisoUsuario = null; // { tipo: 'parcial'|'supervisor', acciones: [...] } o null
@@ -522,31 +525,49 @@ async function cargarNovedadesActuales() {
     const refAnterior = window._fb.doc(db, 'novedades', areaActual, periodoAnterior, 'datos');
     const docAnterior = await window._fb.getDoc(refAnterior);
 
-    // Panel "Generar reporte":
+    // Panel "Generar Reporte":
     // - Admin: acceso total, cualquier área/mes/año, en cualquier momento.
-    // - Usuario regular: solo se habilita al entrar al mes siguiente, y únicamente
-    //   para generar el reporte del mes recién culminado (sin poder elegir otro).
-    if (esAdmin()) {
+    // - Usuario con permiso "reporte_elegir_mes": igual que el admin (puede elegir mes/año).
+    // - Usuario regular: deshabilitado mientras el mes en curso no termine; se habilita
+    //   apenas se cierra el mes (al entrar al mes siguiente) y queda fijo a ese mes —
+    //   no puede elegir ningún otro.
+    $('reporte-prueba-titulo').textContent = '📄 Generar Reporte';
+    hide('reporte-prueba-desc');
+
+    if (esAdmin() || tienePermisoAccion('reporte_elegir_mes')) {
       show('admin-generar-reporte');
       $('admin-generar-reporte').style.display = 'block';
-      $('reporte-prueba-titulo').textContent = '🧪 Generar reporte (de prueba — cualquier momento)';
-      $('reporte-prueba-desc').textContent = 'Genere el Excel/PDF de su área y mes que quiera para probar, sin esperar al cierre de mes. No afecta el estado del mes ni bloquea nada — lo puede hacer las veces que necesite.';
       show('reporte-prueba-selectores');
       $('reporte-prueba-selectores').style.display = 'grid';
-      $('reporte-prueba-btn-txt').textContent = '📄 Generar Excel + PDF';
+      $('reporte-prueba-btn-txt').textContent = '📄 Generar Reporte';
+      $('btn-generar-reporte-prueba').disabled = false;
+      $('btn-generar-reporte-prueba').style.opacity = '';
+      $('btn-generar-reporte-prueba').style.cursor = '';
       poblarSelectoresReportePrueba();
-    } else if (docAnterior.exists() && (docAnterior.data().agentes || []).length > 0) {
+    } else if (docAnterior.exists() && docAnterior.data().estado === 'cerrado' && (docAnterior.data().agentes || []).length > 0) {
+      // El mes anterior ya quedó cerrado — habilitado, fijo a ese mes
       show('admin-generar-reporte');
       $('admin-generar-reporte').style.display = 'block';
-      $('reporte-prueba-titulo').textContent = '📄 Generar reporte';
-      $('reporte-prueba-desc').textContent = `Puede generar el Excel/PDF de ${obtenerNombreMes(periodoAnterior.split('-')[1])} ${periodoAnterior.split('-')[0]} de su área, el mes que acaba de culminar.`;
       hide('reporte-prueba-selectores');
       $('reporte-prueba-selectores').style.display = 'none';
-      $('reporte-prueba-btn-txt').textContent = '📄 Generar reporte';
+      $('reporte-prueba-btn-txt').textContent = `📄 Generar Reporte — ${obtenerNombreMes(periodoAnterior.split('-')[1])} ${periodoAnterior.split('-')[0]}`;
+      $('btn-generar-reporte-prueba').disabled = false;
+      $('btn-generar-reporte-prueba').style.opacity = '';
+      $('btn-generar-reporte-prueba').style.cursor = '';
       poblarSelectoresReportePrueba();
       // Fijar el período al mes recién culminado — el usuario no puede elegir otro
       $('reporte-prueba-mes').value = periodoAnterior.split('-')[1];
       $('reporte-prueba-anio').value = periodoAnterior.split('-')[0];
+    } else if (docAnterior.exists() && (docAnterior.data().agentes || []).length > 0) {
+      // El mes en curso todavía no termina — mostrar deshabilitado, sin funcionalidad
+      show('admin-generar-reporte');
+      $('admin-generar-reporte').style.display = 'block';
+      hide('reporte-prueba-selectores');
+      $('reporte-prueba-selectores').style.display = 'none';
+      $('reporte-prueba-btn-txt').textContent = `🔒 Se habilita el 1 de ${obtenerNombreMes(periodo.split('-')[1] === '12' ? '01' : String(Number(periodo.split('-')[1]) + 1).padStart(2,'0'))}`;
+      $('btn-generar-reporte-prueba').disabled = true;
+      $('btn-generar-reporte-prueba').style.opacity = '0.5';
+      $('btn-generar-reporte-prueba').style.cursor = 'not-allowed';
     } else {
       hide('admin-generar-reporte');
       $('admin-generar-reporte').style.display = 'none';
