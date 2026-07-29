@@ -558,8 +558,9 @@ async function cargarNovedadesActuales() {
       // Fijar el período al mes recién culminado — el usuario no puede elegir otro
       $('reporte-prueba-mes').value = periodoAnterior.split('-')[1];
       $('reporte-prueba-anio').value = periodoAnterior.split('-')[0];
-    } else if (docAnterior.exists() && (docAnterior.data().agentes || []).length > 0) {
-      // El mes en curso todavía no termina — mostrar deshabilitado, sin funcionalidad
+    } else {
+      // El mes en curso todavía no termina (o el área no tiene mes anterior aún) —
+      // mostrar siempre, pero deshabilitado
       show('admin-generar-reporte');
       $('admin-generar-reporte').style.display = 'block';
       hide('reporte-prueba-selectores');
@@ -568,9 +569,6 @@ async function cargarNovedadesActuales() {
       $('btn-generar-reporte-prueba').disabled = true;
       $('btn-generar-reporte-prueba').style.opacity = '0.5';
       $('btn-generar-reporte-prueba').style.cursor = 'not-allowed';
-    } else {
-      hide('admin-generar-reporte');
-      $('admin-generar-reporte').style.display = 'none';
     }
 
     if (docAnterior.exists() && docAnterior.data().estado !== 'cerrado' && (docAnterior.data().agentes || []).length > 0) {
