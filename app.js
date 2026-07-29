@@ -229,6 +229,7 @@ const PERMISOS_DISPONIBLES = [
   ]},
   { tab: 'reporte_novedades', tabLabel: '📄 Novedades — Generar Reporte', acciones: [
     { key: 'reporte_elegir_mes',        label: 'Elegir cualquier mes/año en "Generar Reporte" (como el administrador)' },
+    { key: 'reporte_habilitar_campos',  label: 'Habilitar "Elaborado por" / "Responsable" y el botón para generar reportes tardíos (aunque el mes aún no cierre automáticamente)' },
   ]},
 ];
 
@@ -569,6 +570,21 @@ async function cargarNovedadesActuales() {
       fijarEstadoCamposReporte(true);
       poblarSelectoresReportePrueba();
       // Fijar el período al mes recién culminado — el usuario no puede elegir otro
+      $('reporte-prueba-mes').value = periodoAnterior.split('-')[1];
+      $('reporte-prueba-anio').value = periodoAnterior.split('-')[0];
+    } else if (tienePermisoAccion('reporte_habilitar_campos') && docAnterior.exists() && (docAnterior.data().agentes || []).length > 0) {
+      // Permiso puntual del admin: generar reporte tardío del mes fijo, aunque
+      // el cierre automático (estado 'cerrado') todavía no se haya dado
+      show('admin-generar-reporte');
+      $('admin-generar-reporte').style.display = 'block';
+      hide('reporte-prueba-selectores');
+      $('reporte-prueba-selectores').style.display = 'none';
+      $('reporte-prueba-btn-txt').textContent = `📄 Generar Reporte (tardío) — ${obtenerNombreMes(periodoAnterior.split('-')[1])} ${periodoAnterior.split('-')[0]}`;
+      $('btn-generar-reporte-prueba').disabled = false;
+      $('btn-generar-reporte-prueba').style.opacity = '';
+      $('btn-generar-reporte-prueba').style.cursor = '';
+      fijarEstadoCamposReporte(true);
+      poblarSelectoresReportePrueba();
       $('reporte-prueba-mes').value = periodoAnterior.split('-')[1];
       $('reporte-prueba-anio').value = periodoAnterior.split('-')[0];
     } else {
