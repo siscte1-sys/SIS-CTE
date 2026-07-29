@@ -534,6 +534,17 @@ async function cargarNovedadesActuales() {
     $('reporte-prueba-titulo').textContent = '📄 Generar Reporte';
     hide('reporte-prueba-desc');
 
+    const fijarEstadoCamposReporte = (habilitado) => {
+      ['reporte-prueba-elaborado-por', 'reporte-prueba-responsable'].forEach(id => {
+        const el = $(id);
+        if (!el) return;
+        el.disabled = !habilitado;
+        el.style.opacity = habilitado ? '' : '0.5';
+        el.style.cursor = habilitado ? 'pointer' : 'not-allowed';
+        el.style.pointerEvents = habilitado ? '' : 'none';
+      });
+    };
+
     if (esAdmin() || tienePermisoAccion('reporte_elegir_mes')) {
       show('admin-generar-reporte');
       $('admin-generar-reporte').style.display = 'block';
@@ -543,6 +554,7 @@ async function cargarNovedadesActuales() {
       $('btn-generar-reporte-prueba').disabled = false;
       $('btn-generar-reporte-prueba').style.opacity = '';
       $('btn-generar-reporte-prueba').style.cursor = '';
+      fijarEstadoCamposReporte(true);
       poblarSelectoresReportePrueba();
     } else if (docAnterior.exists() && docAnterior.data().estado === 'cerrado' && (docAnterior.data().agentes || []).length > 0) {
       // El mes anterior ya quedó cerrado — habilitado, fijo a ese mes
@@ -554,13 +566,14 @@ async function cargarNovedadesActuales() {
       $('btn-generar-reporte-prueba').disabled = false;
       $('btn-generar-reporte-prueba').style.opacity = '';
       $('btn-generar-reporte-prueba').style.cursor = '';
+      fijarEstadoCamposReporte(true);
       poblarSelectoresReportePrueba();
       // Fijar el período al mes recién culminado — el usuario no puede elegir otro
       $('reporte-prueba-mes').value = periodoAnterior.split('-')[1];
       $('reporte-prueba-anio').value = periodoAnterior.split('-')[0];
     } else {
       // El mes en curso todavía no termina (o el área no tiene mes anterior aún) —
-      // mostrar siempre, pero deshabilitado
+      // mostrar siempre, pero deshabilitado (incluye "Elaborado por" y "Responsable")
       show('admin-generar-reporte');
       $('admin-generar-reporte').style.display = 'block';
       hide('reporte-prueba-selectores');
@@ -569,6 +582,7 @@ async function cargarNovedadesActuales() {
       $('btn-generar-reporte-prueba').disabled = true;
       $('btn-generar-reporte-prueba').style.opacity = '0.5';
       $('btn-generar-reporte-prueba').style.cursor = 'not-allowed';
+      fijarEstadoCamposReporte(false);
     }
 
     if (docAnterior.exists() && docAnterior.data().estado !== 'cerrado' && (docAnterior.data().agentes || []).length > 0) {
