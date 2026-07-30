@@ -2839,6 +2839,28 @@ async function obtenerOCrearCarpetaEnPadre(token, nombre, idPadre) {
   return carpeta.id;
 }
 
+async function obtenerOCrearCarpetaRaiz(token, nombre) {
+  const q = encodeURIComponent(
+    `mimeType='application/vnd.google-apps.folder' and name='${nombre}' and 'root' in parents and trashed=false`
+  );
+  const sr = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`,
+    { headers: { 'Authorization': 'Bearer ' + token } }
+  );
+  if (!sr.ok) throw new Error('Error buscando carpeta: HTTP ' + sr.status);
+  const sd = await sr.json();
+  if (sd.files?.length > 0) return sd.files[0].id;
+
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: nombre, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  if (!cr.ok) { const e = await cr.json(); throw new Error(e.error?.message || cr.status); }
+  const carpeta = await cr.json();
+  return carpeta.id;
+}
+
 async function subirJSONaDrive(token, idCarpeta, nombreArchivo, objeto) {
   const blob = new Blob([JSON.stringify(objeto, null, 2)], { type: 'application/json' });
   const metadata = { name: nombreArchivo, mimeType: 'application/json', parents: [idCarpeta] };
@@ -2858,7 +2880,7 @@ async function subirJSONaDrive(token, idCarpeta, nombreArchivo, objeto) {
 /* ══════════════════════════════════
    BACKUP MENSUAL — Novedades, Personal, Accesos, Auditoría, Envíos
 ══════════════════════════════════ */
-const GDRIVE_NOMBRE_CARPETA_BACKUPS = 'Backups SISCTE';
+const GDRIVE_NOMBRE_CARPETA_BACKUPS = 'Respaldos';
 
 async function existeBackup(periodo) {
   try {
@@ -2893,10 +2915,10 @@ async function generarBackupMensualManual() {
   await generarBackupMensual(periodo, true);
 }
 
-async function generarBackupMensual(periodo, manual = false) {
+async function generarBackupMensual(periodo, manual = false, forzar = false) {
   try {
-    if (await existeBackup(periodo)) {
-      if (manual) toast(`Ya existe un backup de ${periodo}`, 'ok');
+    if (!forzar && await existeBackup(periodo)) {
+      if (manual) toast(`Ya existe un backup de ${periodo} — marque "Forzar" si quiere volver a generarlo`, 'ok');
       $('banner-backup-pendiente') && (($('banner-backup-pendiente').style.display = 'none'));
       return;
     }
@@ -2904,7 +2926,7 @@ async function generarBackupMensual(periodo, manual = false) {
     if (manual) toast(`Generando backup de ${periodo}, un momento...`, 'ok');
 
     const token = await obtenerTokenDrive();
-    const idCarpetaBackups = await obtenerOCrearCarpetaEnPadre(token, GDRIVE_NOMBRE_CARPETA_BACKUPS, GDRIVE_CARPETA_GENERAL);
+    const idCarpetaBackups = await obtenerOCrearCarpetaRaiz(token, GDRIVE_NOMBRE_CARPETA_BACKUPS);
     const idCarpetaMes     = await obtenerOCrearCarpetaEnPadre(token, periodo, idCarpetaBackups);
 
     // 1. Novedades del período — todas las áreas
@@ -3001,11 +3023,12 @@ async function generarBackupManualDesdeAdmin() {
   const anio = $('backup-manual-anio').value;
   if (!mes || !anio) { toast('Elija mes y año', 'err'); return; }
   const periodo = `${anio}-${mes}`;
+  const forzar = $('backup-manual-forzar')?.checked || false;
 
   const estadoEl = $('backup-manual-estado');
   estadoEl.textContent = `Generando backup de ${periodo}, un momento...`;
 
-  await generarBackupMensual(periodo, true);
+  await generarBackupMensual(periodo, true, forzar);
 
   estadoEl.textContent = '';
 }
