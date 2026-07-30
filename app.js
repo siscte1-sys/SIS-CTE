@@ -458,31 +458,64 @@ async function obtenerAreasNovedades() {
 }
 
 async function poblarSelectorAreaAdmin() {
-  const cont = $('admin-selector-area-novedades');
-  const sel = $('select-area-admin-novedades');
-  if (!cont || !sel) return;
+  const cont  = $('admin-selector-area-novedades');
+  const input = $('input-area-admin-novedades');
+  const lista = $('lista-area-admin-novedades');
+  if (!cont || !input || !lista) return;
   show('admin-selector-area-novedades');
   cont.style.display = 'block';
 
   const areasReales = await obtenerAreasNovedades();
 
-  if (sel.dataset.poblado !== '1') {
-    sel.innerHTML = '';
-    areasReales.forEach(a => {
-      const opt = document.createElement('option');
-      opt.value = a; opt.textContent = a;
-      sel.appendChild(opt);
+  if (!areaActual || !areasReales.includes(areaActual)) areaActual = areasReales[0];
+
+  const seleccionarArea = (area) => {
+    areaActual = area;
+    input.value = area;
+    lista.style.display = 'none';
+    cargarNovedadesActuales();
+  };
+
+  const renderLista = (filtro) => {
+    const norm = (filtro || '').trim().toLowerCase();
+    const coincidencias = norm
+      ? areasReales.filter(a => a.toLowerCase().includes(norm))
+      : areasReales;
+
+    lista.innerHTML = '';
+    if (!coincidencias.length) {
+      const vacio = document.createElement('div');
+      vacio.style.cssText = 'padding:10px 12px;font-size:13px;color:var(--txt2);';
+      vacio.textContent = 'Ningún área coincide con la búsqueda';
+      lista.appendChild(vacio);
+    } else {
+      coincidencias.forEach(a => {
+        const item = document.createElement('div');
+        item.textContent = a;
+        item.style.cssText = 'padding:9px 12px;font-size:13px;cursor:pointer;';
+        item.addEventListener('mouseover', () => item.style.background = 'var(--blue-l)');
+        item.addEventListener('mouseout',  () => item.style.background = '');
+        item.addEventListener('mousedown', (e) => { e.preventDefault(); seleccionarArea(a); });
+        lista.appendChild(item);
+      });
+    }
+    lista.style.display = 'block';
+  };
+
+  if (input.dataset.poblado !== '1') {
+    input.dataset.poblado = '1';
+    input.addEventListener('focus', () => renderLista(input.value));
+    input.addEventListener('input', () => renderLista(input.value));
+    input.addEventListener('blur', () => {
+      // Si escribió algo que no coincide con ningún área real, restaurar el área actual
+      setTimeout(() => {
+        if (input.value !== areaActual) input.value = areaActual;
+        lista.style.display = 'none';
+      }, 150);
     });
-    sel.dataset.poblado = '1';
-    if (!areaActual || !areasReales.includes(areaActual)) areaActual = areasReales[0];
-    sel.value = areaActual;
-    sel.addEventListener('change', () => {
-      areaActual = sel.value;
-      cargarNovedadesActuales();
-    });
-  } else {
-    sel.value = areaActual;
   }
+
+  input.value = areaActual;
 }
 
 async function cargarNovedadesActuales() {
@@ -1108,15 +1141,22 @@ async function aplicarCodigoRapido(idx, dia, codigo) {
 
   try {
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
+
+    // Si el día estaba desbloqueado por una solicitud aprobada, al completarlo se vuelve a bloquear
+    const diasDesbloqueados = (novedadesActuales.diasDesbloqueados || []).filter(d => d !== dia);
+    const seRebloqueo = diasDesbloqueados.length !== (novedadesActuales.diasDesbloqueados || []).length;
+    novedadesActuales.diasDesbloqueados = diasDesbloqueados;
+
     await window._fb.updateDoc(novedadesRef, {
       agentes: novedadesActuales.agentes,
       diasNoCompletados: novedadesActuales.diasNoCompletados,
+      diasDesbloqueados,
       ultimaModificacion: new Date()
     });
     await registrarEnAuditoria('modificar_novedad', areaActual, usuario.email, dia, mesActual, { codigo }, `Acción rápida: ${agente.apellidosNombres} - Día ${dia} - ${codigo}`);
     renderizarTablaNovedades(new Date().getDate());
     verificarDiasPendientes();
-    toast(`✅ Marcado como "${codigo}"`, 'ok');
+    toast(seRebloqueo ? `✅ Marcado como "${codigo}" — el día se volvió a bloquear` : `✅ Marcado como "${codigo}"`, 'ok');
   } catch(e) {
     console.error(e);
     toast('❌ Error: ' + e.message, 'err');
@@ -1404,9 +1444,16 @@ async function guardarNovedad() {
 
     actualizarDiaCompletado(modalDiaEdicion);
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
+
+    // Si el día estaba desbloqueado por una solicitud aprobada, al completarlo se vuelve a bloquear
+    const diasDesbloqueados = (novedadesActuales.diasDesbloqueados || []).filter(d => d !== modalDiaEdicion);
+    const seRebloqueo = diasDesbloqueados.length !== (novedadesActuales.diasDesbloqueados || []).length;
+    novedadesActuales.diasDesbloqueados = diasDesbloqueados;
+
     await window._fb.updateDoc(novedadesRef, {
       agentes: novedadesActuales.agentes,
       diasNoCompletados: novedadesActuales.diasNoCompletados,
+      diasDesbloqueados,
       ultimaModificacion: new Date()
     });
     
@@ -1425,7 +1472,7 @@ async function guardarNovedad() {
     renderizarTablaNovedades(new Date().getDate());
     verificarDiasPendientes();
     
-    toast('✅ Novedad guardada', 'ok');
+    toast(seRebloqueo ? '✅ Novedad guardada — el día se volvió a bloquear' : '✅ Novedad guardada', 'ok');
     cerrarModalNovedad();
     
   } catch(e) {
@@ -1460,11 +1507,17 @@ async function llenarSinNovedadDia(dia) {
     }
     actualizarDiaCompletado(dia);
 
+    // Si el día estaba desbloqueado por una solicitud aprobada, al completarlo se vuelve a bloquear
+    const diasDesbloqueados = (novedadesActuales.diasDesbloqueados || []).filter(d => d !== dia);
+    const seRebloqueo = diasDesbloqueados.length !== (novedadesActuales.diasDesbloqueados || []).length;
+    novedadesActuales.diasDesbloqueados = diasDesbloqueados;
+
     // Guardar en Firestore
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
     await window._fb.updateDoc(novedadesRef, {
       agentes: novedadesActuales.agentes,
       diasNoCompletados: novedadesActuales.diasNoCompletados,
+      diasDesbloqueados,
       ultimaModificacion: new Date()
     });
 
@@ -1480,7 +1533,9 @@ async function llenarSinNovedadDia(dia) {
     );
 
     renderizarTablaNovedades(new Date().getDate());
-    toast(`✅ Se llenó "Sin Novedad" para todos los agentes del día ${dia}`, 'ok');
+    toast(seRebloqueo
+      ? `✅ Se llenó "Sin Novedad" para todos los agentes del día ${dia} — el día se volvió a bloquear`
+      : `✅ Se llenó "Sin Novedad" para todos los agentes del día ${dia}`, 'ok');
 
   } catch(e) {
     console.error('Error:', e);
