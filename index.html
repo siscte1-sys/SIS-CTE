@@ -709,6 +709,10 @@
                 📦 Generar backup
               </button>
             </div>
+            <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--txt2);cursor:pointer;">
+              <input type="checkbox" id="backup-manual-forzar">
+              Forzar de nuevo aunque ya exista un backup marcado para ese mes
+            </label>
             <div id="backup-manual-estado" style="margin-top:12px;font-size:12px;color:var(--txt2);"></div>
           </div>
         </div>
@@ -717,7 +721,7 @@
           <div style="padding:20px;">
             <div class="sec-titulo">📥 Restaurar Backup</div>
             <p style="color:var(--txt2);margin-bottom:8px;font-size:12px;">
-              Suba los archivos <code>.json</code> que descargó de la carpeta "Backups SISCTE" en Drive — puede seleccionar los 5 juntos (Novedades, Personal, Accesos, Auditoría, Envíos) o solo los que tenga.
+              Suba los archivos <code>.json</code> que descargó de la carpeta "Respaldos" en Drive — puede seleccionar los 5 juntos (Novedades, Personal, Accesos, Auditoría, Envíos) o solo los que tenga.
             </p>
             <p style="color:var(--red);margin-bottom:16px;font-size:12px;">
               ⚠️ Esto escribe datos directamente en el sistema. Antes de aplicar nada, le va a mostrar una previsualización con lo que trae cada archivo.
