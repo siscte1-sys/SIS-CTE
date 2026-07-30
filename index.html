@@ -117,7 +117,11 @@
       <p class="page-hero-sub">Registre las novedades diarias de su área. <strong id="hero-area"></strong> · Mes: <strong id="hero-mes"></strong></p>
       <div id="admin-selector-area-novedades" style="display:none;margin-top:12px;">
         <label class="form-label" style="color:#fff;opacity:.85;">Área a gestionar (admin)</label>
-        <select id="select-area-admin-novedades" class="form-select" style="max-width:320px;"></select>
+        <div style="position:relative;max-width:320px;">
+          <input type="text" id="input-area-admin-novedades" class="form-select" autocomplete="off"
+                 placeholder="Escriba para buscar un área..." style="width:100%;">
+          <div id="lista-area-admin-novedades" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shl);max-height:240px;overflow-y:auto;z-index:50;"></div>
+        </div>
       </div>
     </div>
 
