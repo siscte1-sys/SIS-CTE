@@ -201,7 +201,6 @@ const PERMISOS_DISPONIBLES = [
   ]},
   { tab: 'importar', tabLabel: '📥 Importar BD', acciones: [
     { key: 'importar_bd',               label: 'Importar base de datos (Excel/CSV)' },
-    { key: 'importar_eliminar_area_mes',label: 'Eliminar Novedades de un área/mes puntual' },
     { key: 'importar_borrar_todo',      label: 'Borrar TODA la base de Novedades' },
     { key: 'importar_ver_personal',     label: 'Ver Base de Personal' },
     { key: 'importar_editar_personal',  label: 'Agregar / editar / eliminar personal' },
@@ -639,8 +638,8 @@ async function cargarNovedadesActuales() {
       return;
     }
     ocultarPantallaCierreMes();
+    verificarBackupPendiente(periodoAnterior);
 
-    // Cargar novedades del mes actual
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, periodo, 'datos');
     const novedadesDoc = await window._fb.getDoc(novedadesRef);
 
@@ -2404,7 +2403,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'auditoria')   cargarAuditoria();
       if (tabName === 'desbloqueos') { cargarDesbloqueos(); poblarSelectoresDesbloqueoDirecto(); }
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
-      if (tabName === 'importar') { poblarSelectoresLimpieza(); cargarDirectorioPersonal(); }
+      if (tabName === 'importar') { cargarDirectorioPersonal(); }
       if (tabName === 'permisos') { poblarListaPermisos(); actualizarVisibilidadTabsPermiso(); }
       aplicarPermisosBotones();
     });
@@ -2813,6 +2812,158 @@ async function subirAGoogleDrive(archivo, nombreFinal, onProgress) {
     xhr.onerror = () => reject(new Error('Error de red'));
     xhr.send(form);
   });
+}
+
+/* ══════════════════════════════════
+   GOOGLE DRIVE — HELPERS GENÉRICOS (usados por Backups)
+══════════════════════════════════ */
+async function obtenerOCrearCarpetaEnPadre(token, nombre, idPadre) {
+  const q = encodeURIComponent(
+    `mimeType='application/vnd.google-apps.folder' and name='${nombre}' and '${idPadre}' in parents and trashed=false`
+  );
+  const sr = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`,
+    { headers: { 'Authorization': 'Bearer ' + token } }
+  );
+  if (!sr.ok) throw new Error('Error buscando carpeta: HTTP ' + sr.status);
+  const sd = await sr.json();
+  if (sd.files?.length > 0) return sd.files[0].id;
+
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: nombre, mimeType: 'application/vnd.google-apps.folder', parents: [idPadre] })
+  });
+  if (!cr.ok) { const e = await cr.json(); throw new Error(e.error?.message || cr.status); }
+  const carpeta = await cr.json();
+  return carpeta.id;
+}
+
+async function subirJSONaDrive(token, idCarpeta, nombreArchivo, objeto) {
+  const blob = new Blob([JSON.stringify(objeto, null, 2)], { type: 'application/json' });
+  const metadata = { name: nombreArchivo, mimeType: 'application/json', parents: [idCarpeta] };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', blob);
+
+  const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token },
+    body: form
+  });
+  if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || resp.status); }
+  return resp.json();
+}
+
+/* ══════════════════════════════════
+   BACKUP MENSUAL — Novedades, Personal, Accesos, Auditoría, Envíos
+══════════════════════════════════ */
+const GDRIVE_NOMBRE_CARPETA_BACKUPS = 'Backups SISCTE';
+
+async function existeBackup(periodo) {
+  try {
+    const ref = window._fb.doc(db, 'backups', periodo);
+    const snap = await window._fb.getDoc(ref);
+    return snap.exists() && snap.data().estado === 'completo';
+  } catch(e) {
+    console.warn('No se pudo verificar backup existente:', e);
+    return true; // ante la duda, no molestar con el aviso
+  }
+}
+
+async function verificarBackupPendiente(periodoAnterior) {
+  if (!esAdmin()) return;
+  try {
+    const yaExiste = await existeBackup(periodoAnterior);
+    const banner = $('banner-backup-pendiente');
+    if (!banner) return;
+    if (yaExiste) { banner.style.display = 'none'; return; }
+    $('banner-backup-pendiente-txt').textContent =
+      `📦 Todavía no hay backup en Drive de ${obtenerNombreMes(periodoAnterior.split('-')[1])} ${periodoAnterior.split('-')[0]}.`;
+    banner.dataset.periodo = periodoAnterior;
+    banner.style.display = 'flex';
+  } catch(e) {
+    console.warn('No se pudo verificar el backup pendiente:', e);
+  }
+}
+
+async function generarBackupMensualManual() {
+  const periodo = $('banner-backup-pendiente')?.dataset.periodo;
+  if (!periodo) return;
+  await generarBackupMensual(periodo, true);
+}
+
+async function generarBackupMensual(periodo, manual = false) {
+  try {
+    if (await existeBackup(periodo)) {
+      if (manual) toast(`Ya existe un backup de ${periodo}`, 'ok');
+      $('banner-backup-pendiente') && (($('banner-backup-pendiente').style.display = 'none'));
+      return;
+    }
+
+    if (manual) toast(`Generando backup de ${periodo}, un momento...`, 'ok');
+
+    const token = await obtenerTokenDrive();
+    const idCarpetaBackups = await obtenerOCrearCarpetaEnPadre(token, GDRIVE_NOMBRE_CARPETA_BACKUPS, GDRIVE_CARPETA_GENERAL);
+    const idCarpetaMes     = await obtenerOCrearCarpetaEnPadre(token, periodo, idCarpetaBackups);
+
+    // 1. Novedades del período — todas las áreas
+    const areas = await obtenerAreasNovedades();
+    const novedadesDump = {};
+    for (const area of areas) {
+      const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+      const snap = await window._fb.getDoc(ref);
+      if (snap.exists()) novedadesDump[area] = snap.data();
+    }
+    await subirJSONaDrive(token, idCarpetaMes, `novedades_${periodo}.json`, novedadesDump);
+
+    // 2. Personal (snapshot completo — no tiene dimensión de mes)
+    const personalSnap = await window._fb.getDocs(window._fb.collection(db, 'personal'));
+    await subirJSONaDrive(token, idCarpetaMes, `personal_${periodo}.json`,
+      personalSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+    // 3. Accesos (snapshot completo — no tiene dimensión de mes)
+    const accesosSnap = await window._fb.getDocs(window._fb.collection(db, 'accesos'));
+    await subirJSONaDrive(token, idCarpetaMes, `accesos_${periodo}.json`,
+      accesosSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+    // 4. Auditoría del mes
+    const auditoriaSnap = await window._fb.getDocs(window._fb.collection(db, 'auditoria'));
+    const auditoriaMes = auditoriaSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(a => a.timestamp?.toDate && a.timestamp.toDate().toISOString().slice(0, 7) === periodo);
+    await subirJSONaDrive(token, idCarpetaMes, `auditoria_${periodo}.json`, auditoriaMes);
+
+    // 5. Envíos (entregas) del mes
+    const entregasSnap = await window._fb.getDocs(window._fb.collection(db, 'entregas'));
+    const entregasMes = entregasSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(e => String(e.timestamp || '').startsWith(periodo));
+    await subirJSONaDrive(token, idCarpetaMes, `entregas_${periodo}.json`, entregasMes);
+
+    await window._fb.setDoc(window._fb.doc(db, 'backups', periodo), {
+      periodo,
+      estado: 'completo',
+      generadoPor: usuario.email,
+      fecha: new Date(),
+      carpetaId: idCarpetaMes,
+      cantidadAreas: Object.keys(novedadesDump).length,
+      cantidadEntregas: entregasMes.length,
+      cantidadAuditoria: auditoriaMes.length
+    });
+
+    await registrarEnAuditoria('backup_mensual', null, usuario.email, null, periodo, {},
+      `Backup mensual generado en Drive: ${periodo}`);
+
+    const banner = $('banner-backup-pendiente');
+    if (banner) banner.style.display = 'none';
+
+    toast(`✅ Backup de ${periodo} guardado en Drive (carpeta "${GDRIVE_NOMBRE_CARPETA_BACKUPS}/${periodo}")`, 'ok');
+
+  } catch(e) {
+    console.error('Error generando backup mensual:', e);
+    if (manual) toast('❌ Error generando backup: ' + e.message, 'err');
+  }
 }
 
 /* ══════════════════════════════════
@@ -4246,38 +4397,6 @@ async function exportarReporteActividadExcel() {
   toast('✅ Reporte descargado', 'ok');
 }
 
-async function poblarSelectoresLimpieza() {
-  const selArea = $('limpiar-area');
-  const selMes = $('limpiar-mes');
-  const selAnio = $('limpiar-anio');
-  if (!selArea || !selMes || !selAnio) return;
-
-  const areasReales = await obtenerAreasNovedades();
-  selArea.innerHTML = areasReales.map(a => `<option value="${a}">${a}</option>`).join('');
-
-  if (selMes.options.length === 0) {
-    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    meses.forEach((m, i) => {
-      const opt = document.createElement('option');
-      opt.value = String(i + 1).padStart(2, '0');
-      opt.textContent = m;
-      selMes.appendChild(opt);
-    });
-  }
-  if (selAnio.options.length === 0) {
-    const anioActual = new Date().getFullYear();
-    for (let a = anioActual - 1; a <= anioActual + 1; a++) {
-      const opt = document.createElement('option');
-      opt.value = String(a);
-      opt.textContent = String(a);
-      selAnio.appendChild(opt);
-    }
-  }
-  const hoy = obtenerFechaParts();
-  selMes.value = hoy.mes;
-  selAnio.value = String(new Date().getFullYear());
-}
-
 /* ═════════════════════════════════════════
    PANEL ADMIN — Base de Personal (visor paginado/editable)
 ═════════════════════════════════════════ */
@@ -4576,53 +4695,6 @@ async function eliminarRegistroPersonal(id) {
   }
 }
 
-async function eliminarNovedadesAreaMes() {
-  const area = $('limpiar-area').value;
-  const mes = $('limpiar-mes').value;
-  const anio = $('limpiar-anio').value;
-  if (!area || !mes || !anio) { toast('Elija área, mes y año', 'err'); return; }
-  const periodo = `${anio}-${mes}`;
-
-  const confirmado = await confirmarConTexto(
-    `Esto va a BORRAR PERMANENTEMENTE todas las novedades de:\n\n` +
-    `Área: ${area}\nMes: ${periodo}\n\n` +
-    `Esta acción no se puede deshacer. Escriba BORRAR para confirmar:`,
-    'BORRAR',
-    'Eliminar Novedades de un área/mes'
-  );
-  if (!confirmado) {
-    toast('Cancelado — no se borró nada', 'ok');
-    return;
-  }
-
-  try {
-    const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
-    const snap = await window._fb.getDoc(ref);
-    if (!snap.exists()) {
-      toast('No había datos guardados para esa área/mes', 'ok');
-      return;
-    }
-    const cantidadAgentes = (snap.data().agentes || []).length;
-
-    await window._fb.deleteDoc(ref);
-
-    await registrarEnAuditoria(
-      'eliminar_novedades_area_mes', area, usuario.email, null, periodo,
-      { cantidadAgentes },
-      `Eliminación manual: ${area} — ${periodo} (${cantidadAgentes} agentes)`
-    );
-
-    toast(`✅ Se eliminaron los datos de ${area} — ${periodo}`, 'ok');
-
-    // Si era el área/mes que estaba viendo en pantalla, recargar
-    if (areaActual === area && mesActual === periodo) cargarNovedadesActuales();
-
-  } catch(e) {
-    console.error(e);
-    toast('❌ Error: ' + e.message, 'err');
-  }
-}
-
 async function borrarTodaLaBaseNovedades() {
   if (!esAdmin()) {
     toast('❌ Solo el administrador puede hacer esto', 'err');
@@ -4848,6 +4920,133 @@ async function eliminarAcceso(docId) {
   } catch(e) {
     toast('Error: ' + e.message, 'err');
   }
+}
+
+/* ── Importación masiva de Accesos (Excel/CSV) ── */
+let filasImportarAccesos = [];
+
+async function importarAccesosDesdeArchivo(event) {
+  const file = event.target.files[0];
+  event.target.value = ''; // permite volver a elegir el mismo archivo después
+  if (!file) return;
+
+  if (!window.XLSX) {
+    toast('❌ La librería de Excel no cargó, recargue la página e intente de nuevo', 'err');
+    return;
+  }
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: 'array' });
+    const primeraHoja = wb.Sheets[wb.SheetNames[0]];
+    const filas = XLSX.utils.sheet_to_json(primeraHoja, { defval: '' });
+
+    if (!filas.length) {
+      toast('El archivo no tiene filas de datos', 'err');
+      return;
+    }
+
+    const areasReales = await obtenerAreasNovedades();
+    const areasNorm = new Map(areasReales.map(a => [a.toLowerCase().trim(), a]));
+
+    // Detectar automáticamente qué columna es correo y cuál es área
+    const columnas = Object.keys(filas[0]);
+    const colCorreo = columnas.find(c => /correo|email|e-mail|mail/i.test(c));
+    const colArea   = columnas.find(c => /área|area/i.test(c));
+
+    if (!colCorreo || !colArea) {
+      toast('❌ No se encontró una columna de correo y/o de área en el archivo. Verifique los encabezados.', 'err');
+      return;
+    }
+
+    filasImportarAccesos = filas.map(fila => {
+      const correo = String(fila[colCorreo] || '').toLowerCase().trim();
+      const areaTexto = String(fila[colArea] || '').trim();
+      const areaReal = areasNorm.get(areaTexto.toLowerCase());
+
+      let valido = true, motivo = '';
+      if (!correo || !correo.includes('@')) { valido = false; motivo = 'Correo inválido o vacío'; }
+      else if (!areaTexto) { valido = false; motivo = 'Área vacía'; }
+      else if (!areaReal) { valido = false; motivo = `Área "${areaTexto}" no existe en el sistema`; }
+
+      return { correo, area: areaReal || areaTexto, valido, motivo };
+    });
+
+    mostrarPrevisualizacionImportarAccesos();
+
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error leyendo el archivo: ' + e.message, 'err');
+  }
+}
+
+function mostrarPrevisualizacionImportarAccesos() {
+  const validos = filasImportarAccesos.filter(f => f.valido).length;
+  const invalidos = filasImportarAccesos.length - validos;
+
+  $('modal-importar-accesos-sub').textContent =
+    `${filasImportarAccesos.length} filas leídas — ${validos} válidas${invalidos ? `, ${invalidos} con error (no se importarán)` : ''}`;
+
+  const cont = $('modal-importar-accesos-lista');
+  cont.innerHTML = filasImportarAccesos.map(f => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;">
+      <span style="width:16px;flex-shrink:0;">${f.valido ? '✅' : '❌'}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+        <strong>${f.correo || '(sin correo)'}</strong> — ${f.area || '(sin área)'}
+      </span>
+      ${!f.valido ? `<span style="color:var(--red);font-size:11px;flex-shrink:0;">${f.motivo}</span>` : ''}
+    </div>
+  `).join('');
+
+  const btn = $('btn-confirmar-importar-accesos');
+  btn.disabled = validos === 0;
+  btn.textContent = validos ? `Confirmar importación (${validos})` : 'Nada que importar';
+
+  $('modal-importar-accesos').style.display = 'flex';
+}
+
+function cerrarModalImportarAccesos() {
+  $('modal-importar-accesos').style.display = 'none';
+  filasImportarAccesos = [];
+}
+
+async function confirmarImportarAccesos() {
+  const validos = filasImportarAccesos.filter(f => f.valido);
+  if (!validos.length) return;
+
+  const btn = $('btn-confirmar-importar-accesos');
+  btn.disabled = true;
+  btn.textContent = 'Importando...';
+
+  let ok = 0, error = 0;
+  for (const fila of validos) {
+    try {
+      const correoNorm = fila.correo.toLowerCase().trim();
+      const accesoRef = window._fb.doc(db, 'accesos', correoNorm);
+      const existente = await window._fb.getDoc(accesoRef);
+      await window._fb.setDoc(accesoRef, {
+        correo: correoNorm,
+        area: fila.area,
+        estado: true,
+        fechaCreacion: existente.exists() ? existente.data().fechaCreacion : new Date(),
+        ultimaEdicion: new Date()
+      });
+      ok++;
+    } catch(e) {
+      console.error('Error importando acceso', fila.correo, e);
+      error++;
+    }
+  }
+
+  await registrarEnAuditoria(
+    'importar_accesos', null, usuario.email, null, null,
+    { cantidad: ok },
+    `Importación masiva de accesos: ${ok} creados/actualizados${error ? `, ${error} con error` : ''}`
+  );
+
+  cerrarModalImportarAccesos();
+  cargarAccesos();
+  toast(error ? `✅ Se importaron ${ok} accesos — ${error} fallaron` : `✅ Se importaron ${ok} accesos`, 'ok');
 }
 
 /* ═════════════════════════════════════════
@@ -5528,7 +5727,6 @@ window.cerrarErrorCodigo            = cerrarErrorCodigo;
 
 /* Panel Admin — Novedades */
 window.importarBaseDatos            = importarBaseDatos;
-window.eliminarNovedadesAreaMes     = eliminarNovedadesAreaMes;
 window.actualizarVisibilidadTabsPermiso = actualizarVisibilidadTabsPermiso;
 window.guardarPermiso               = guardarPermiso;
 window.marcarGrupoPermiso           = marcarGrupoPermiso;
@@ -5564,9 +5762,13 @@ window.seleccionarTodosLosFiltradosPersonal = seleccionarTodosLosFiltradosPerson
 window.limpiarSeleccionPersonal     = limpiarSeleccionPersonal;
 window.aplicarCambioAreaLote        = aplicarCambioAreaLote;
 window.confirmarGuardarAcceso       = confirmarGuardarAcceso;
+window.generarBackupMensualManual   = generarBackupMensualManual;
 window.guardarAcceso                = guardarAcceso;
 window.eliminarAcceso               = eliminarAcceso;
 window.editarAcceso                 = editarAcceso;
+window.importarAccesosDesdeArchivo  = importarAccesosDesdeArchivo;
+window.cerrarModalImportarAccesos   = cerrarModalImportarAccesos;
+window.confirmarImportarAccesos     = confirmarImportarAccesos;
 window.filtrarAuditoria             = filtrarAuditoria;
 window.limpiarAuditoria             = limpiarAuditoria;
 window.aprobarDesbloqueo            = aprobarDesbloqueo;
