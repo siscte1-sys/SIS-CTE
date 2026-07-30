@@ -690,6 +690,45 @@
           </div>
         </div>
 
+        <div class="panel-white" style="border:2px solid var(--blue-m);margin-top:16px;">
+          <div style="padding:20px;">
+            <div class="sec-titulo">📦 Backup a Drive (Novedades + Personal + Accesos + Auditoría + Envíos)</div>
+            <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
+              Genera el backup de un mes específico ahora mismo, sin esperar al aviso automático. Si ya existe un backup completo de ese mes, no lo duplica — solo avisa.
+            </p>
+            <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;max-width:520px;">
+              <div class="form-field" style="margin-bottom:0;">
+                <label class="form-label">Mes</label>
+                <select id="backup-manual-mes" class="filtro-select"></select>
+              </div>
+              <div class="form-field" style="margin-bottom:0;">
+                <label class="form-label">Año</label>
+                <select id="backup-manual-anio" class="filtro-select"></select>
+              </div>
+              <button class="btn-acc btn-acc-blue" onclick="generarBackupManualDesdeAdmin()" style="height:38px;">
+                📦 Generar backup
+              </button>
+            </div>
+            <div id="backup-manual-estado" style="margin-top:12px;font-size:12px;color:var(--txt2);"></div>
+          </div>
+        </div>
+
+        <div class="panel-white" style="border:2px solid var(--blue-m);margin-top:16px;">
+          <div style="padding:20px;">
+            <div class="sec-titulo">📥 Restaurar Backup</div>
+            <p style="color:var(--txt2);margin-bottom:8px;font-size:12px;">
+              Suba los archivos <code>.json</code> que descargó de la carpeta "Backups SISCTE" en Drive — puede seleccionar los 5 juntos (Novedades, Personal, Accesos, Auditoría, Envíos) o solo los que tenga.
+            </p>
+            <p style="color:var(--red);margin-bottom:16px;font-size:12px;">
+              ⚠️ Esto escribe datos directamente en el sistema. Antes de aplicar nada, le va a mostrar una previsualización con lo que trae cada archivo.
+            </p>
+            <button class="btn-acc btn-acc-blue" onclick="$('restaurar-backup-file').click()">
+              📂 Seleccionar archivos del backup
+            </button>
+            <input type="file" id="restaurar-backup-file" accept=".json" multiple style="display:none;" onchange="analizarArchivosBackup(event)">
+          </div>
+        </div>
+
         <div class="panel-white" style="border:2px solid var(--red);margin-top:16px;" data-permiso="importar_borrar_todo">
           <div style="padding:20px;">
             <div class="sec-titulo" style="color:var(--red);">🗑️ Borrar TODA la base de datos de Novedades</div>
@@ -1192,6 +1231,28 @@
       <div class="modal-footer">
         <button class="btn-modal-cancel" onclick="cerrarModalImportarAccesos()">Cancelar</button>
         <button class="btn-modal-primary" id="btn-confirmar-importar-accesos" onclick="confirmarImportarAccesos()">Confirmar importación</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-restaurar-backup" class="modal-overlay" style="display:none">
+  <div class="modal-card" style="width:640px;">
+    <div class="modal-header">
+      <div class="modal-ico">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9v4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2"/><polyline points="17 14 12 9 7 14"/><line x1="12" y1="9" x2="12" y2="21"/></svg>
+      </div>
+      <div>
+        <div class="modal-titulo">Restaurar Backup</div>
+        <div class="modal-sub" id="modal-restaurar-backup-sub">Revise antes de confirmar</div>
+      </div>
+      <button class="modal-cerrar" onclick="cerrarModalRestaurarBackup()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-restaurar-backup-body" style="max-height:360px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:16px;"></div>
+      <div class="modal-footer">
+        <button class="btn-modal-cancel" onclick="cerrarModalRestaurarBackup()">Cancelar</button>
+        <button class="btn-modal-danger" id="btn-confirmar-restaurar-backup" onclick="confirmarRestaurarBackup()">Confirmar restauración</button>
       </div>
     </div>
   </div>
