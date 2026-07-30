@@ -165,6 +165,14 @@
         </div>
       </div>
 
+      <!-- BANNER: Backup mensual pendiente (solo admin, solo si falta) -->
+      <div id="banner-backup-pendiente" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 20px;margin-bottom:20px;background:#fffbeb;border:1px solid #f59e0b;border-radius:12px;">
+        <span id="banner-backup-pendiente-txt" style="flex:1;min-width:200px;font-size:13px;color:#78350f;font-weight:600;"></span>
+        <button class="btn-acc btn-acc-blue" onclick="generarBackupMensualManual()">
+          📦 Generar backup en Drive
+        </button>
+      </div>
+
       <!-- SECCIÓN: Generar reporte (admin: cualquier mes/momento — usuario: solo el mes recién culminado, salvo permiso especial) -->
       <div id="admin-generar-reporte" class="panel-white" style="display:none;padding:20px;margin-bottom:20px;border:2px solid var(--blue-m);">
         <div class="sec-titulo" id="reporte-prueba-titulo">📄 Generar Reporte</div>
@@ -682,32 +690,6 @@
           </div>
         </div>
 
-        <div class="panel-white" style="border:2px solid var(--red);" data-permiso="importar_eliminar_area_mes">
-          <div style="padding:20px;">
-            <div class="sec-titulo" style="color:var(--red);">⚠️ Corregir / Eliminar datos de un área y mes específico</div>
-            <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
-              Usá esto si una importación se duplicó o se cargó mal. Borra <strong>solo</strong> los datos de Novedades del área y mes que elijas — no afecta otras áreas ni otros meses.
-            </p>
-            <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:12px;align-items:end;">
-              <div class="form-field" style="margin-bottom:0;">
-                <label class="form-label">Área</label>
-                <select id="limpiar-area" class="form-select"></select>
-              </div>
-              <div class="form-field" style="margin-bottom:0;">
-                <label class="form-label">Mes</label>
-                <select id="limpiar-mes" class="filtro-select"></select>
-              </div>
-              <div class="form-field" style="margin-bottom:0;">
-                <label class="form-label">Año</label>
-                <select id="limpiar-anio" class="filtro-select"></select>
-              </div>
-              <button class="btn-acc btn-acc-red" onclick="eliminarNovedadesAreaMes()" style="height:38px;" data-permiso="importar_eliminar_area_mes">
-                🗑️ Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-
         <div class="panel-white" style="border:2px solid var(--red);margin-top:16px;" data-permiso="importar_borrar_todo">
           <div style="padding:20px;">
             <div class="sec-titulo" style="color:var(--red);">🗑️ Borrar TODA la base de datos de Novedades</div>
@@ -793,9 +775,18 @@
         <div class="panel-white">
           <div style="padding:20px;">
             <div class="sec-titulo">Gestionar Accesos (Correo → Área)</div>
-            <button class="btn-acc btn-acc-green" onclick="mostrarFormAcceso()" style="margin-bottom:16px;" data-permiso="accesos_gestionar">
-              ➕ Nuevo Acceso
-            </button>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+              <button class="btn-acc btn-acc-green" onclick="mostrarFormAcceso()" data-permiso="accesos_gestionar">
+                ➕ Nuevo Acceso
+              </button>
+              <button class="btn-acc btn-acc-blue" onclick="$('import-accesos-file').click()" data-permiso="accesos_gestionar">
+                📥 Importar Excel/CSV
+              </button>
+              <input type="file" id="import-accesos-file" accept=".csv,.xlsx,.xls" style="display:none;" onchange="importarAccesosDesdeArchivo(event)">
+            </div>
+            <p style="font-size:12px;color:var(--txt2);margin:-8px 0 16px;">
+              El archivo debe tener una columna de <strong>correo</strong> (o email) y una de <strong>área</strong> — cualquier otra columna se ignora.
+            </p>
             <div id="accesos-lista" style="display:flex;flex-direction:column;gap:8px;">
               <!-- Accesos se cargan aquí -->
             </div>
@@ -1179,6 +1170,28 @@
       <div class="modal-footer">
         <button class="btn-modal-cancel" onclick="cerrarModalAcceso()">Cancelar</button>
         <button class="btn-modal-primary" onclick="confirmarGuardarAcceso()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-importar-accesos" class="modal-overlay" style="display:none">
+  <div class="modal-card" style="width:640px;">
+    <div class="modal-header">
+      <div class="modal-ico">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </div>
+      <div>
+        <div class="modal-titulo">Importar Accesos</div>
+        <div class="modal-sub" id="modal-importar-accesos-sub">Revise antes de confirmar</div>
+      </div>
+      <button class="modal-cerrar" onclick="cerrarModalImportarAccesos()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-importar-accesos-lista" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:16px;"></div>
+      <div class="modal-footer">
+        <button class="btn-modal-cancel" onclick="cerrarModalImportarAccesos()">Cancelar</button>
+        <button class="btn-modal-primary" id="btn-confirmar-importar-accesos" onclick="confirmarImportarAccesos()">Confirmar importación</button>
       </div>
     </div>
   </div>
