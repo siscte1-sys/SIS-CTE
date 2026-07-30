@@ -2403,7 +2403,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'auditoria')   cargarAuditoria();
       if (tabName === 'desbloqueos') { cargarDesbloqueos(); poblarSelectoresDesbloqueoDirecto(); }
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
-      if (tabName === 'importar') { cargarDirectorioPersonal(); }
+      if (tabName === 'importar') { cargarDirectorioPersonal(); poblarSelectoresBackupManual(); }
       if (tabName === 'permisos') { poblarListaPermisos(); actualizarVisibilidadTabsPermiso(); }
       aplicarPermisosBotones();
     });
@@ -2963,6 +2963,238 @@ async function generarBackupMensual(periodo, manual = false) {
   } catch(e) {
     console.error('Error generando backup mensual:', e);
     if (manual) toast('❌ Error generando backup: ' + e.message, 'err');
+  }
+}
+
+function poblarSelectoresBackupManual() {
+  const selMes = $('backup-manual-mes');
+  const selAnio = $('backup-manual-anio');
+  if (!selMes || !selAnio) return;
+
+  if (selMes.options.length === 0) {
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    meses.forEach((m, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i + 1).padStart(2, '0');
+      opt.textContent = m;
+      selMes.appendChild(opt);
+    });
+  }
+  if (selAnio.options.length === 0) {
+    const anioActual = new Date().getFullYear();
+    for (let a = anioActual - 1; a <= anioActual + 1; a++) {
+      const opt = document.createElement('option');
+      opt.value = String(a);
+      opt.textContent = String(a);
+      selAnio.appendChild(opt);
+    }
+  }
+
+  // Por defecto, apunta al mes anterior (el más común de respaldar)
+  const anterior = obtenerPeriodoAnterior(obtenerFechaParts().periodo).split('-');
+  selAnio.value = anterior[0];
+  selMes.value  = anterior[1];
+}
+
+async function generarBackupManualDesdeAdmin() {
+  const mes  = $('backup-manual-mes').value;
+  const anio = $('backup-manual-anio').value;
+  if (!mes || !anio) { toast('Elija mes y año', 'err'); return; }
+  const periodo = `${anio}-${mes}`;
+
+  const estadoEl = $('backup-manual-estado');
+  estadoEl.textContent = `Generando backup de ${periodo}, un momento...`;
+
+  await generarBackupMensual(periodo, true);
+
+  estadoEl.textContent = '';
+}
+
+/* ══════════════════════════════════
+   RESTAURAR BACKUP (desde los .json descargados de Drive)
+══════════════════════════════════ */
+let backupRestoreData = { periodo: null, novedades: null, personal: null, accesos: null, auditoria: null, entregas: null };
+let backupRestoreConflictos = [];
+let backupRestoreAreasAOmitir = new Set();
+
+function normalizarFechasParaRestaurar(valor) {
+  if (valor === null || valor === undefined) return valor;
+  if (Array.isArray(valor)) return valor.map(normalizarFechasParaRestaurar);
+  if (typeof valor === 'object') {
+    // Detecta un Timestamp de Firestore serializado a JSON: { seconds, nanoseconds, ... }
+    if (typeof valor.seconds === 'number' && typeof valor.nanoseconds === 'number') {
+      return new Date(valor.seconds * 1000);
+    }
+    const out = {};
+    for (const k in valor) out[k] = normalizarFechasParaRestaurar(valor[k]);
+    return out;
+  }
+  return valor;
+}
+
+async function analizarArchivosBackup(event) {
+  const files = Array.from(event.target.files || []);
+  event.target.value = '';
+  if (!files.length) return;
+
+  const datos = { periodo: null, novedades: null, personal: null, accesos: null, auditoria: null, entregas: null };
+
+  for (const file of files) {
+    let json;
+    try {
+      json = JSON.parse(await file.text());
+    } catch(e) {
+      toast(`❌ "${file.name}" no es un JSON válido`, 'err');
+      return;
+    }
+    const m = file.name.match(/(\d{4}-\d{2})/);
+    if (m && !datos.periodo) datos.periodo = m[1];
+
+    if (/^novedades_/i.test(file.name))      datos.novedades = json;
+    else if (/^personal_/i.test(file.name))  datos.personal  = json;
+    else if (/^accesos_/i.test(file.name))   datos.accesos   = json;
+    else if (/^auditoria_/i.test(file.name)) datos.auditoria = json;
+    else if (/^entregas_/i.test(file.name))  datos.entregas  = json;
+    else toast(`⚠️ No reconocí "${file.name}" (nombre esperado: novedades_/personal_/accesos_/auditoria_/entregas_AAAA-MM.json) — se ignora`, 'err');
+  }
+
+  if (!datos.novedades && !datos.personal && !datos.accesos && !datos.auditoria && !datos.entregas) {
+    toast('Ningún archivo reconocido. Use los .json que descargó de la carpeta de Backups en Drive.', 'err');
+    return;
+  }
+  if (!datos.periodo) {
+    toast('No se pudo determinar el mes (AAAA-MM) a partir del nombre de los archivos', 'err');
+    return;
+  }
+
+  backupRestoreData = datos;
+
+  // Detectar áreas de Novedades que ya tienen datos actuales para ese período
+  backupRestoreConflictos = [];
+  if (datos.novedades) {
+    for (const area of Object.keys(datos.novedades)) {
+      try {
+        const ref = window._fb.doc(db, 'novedades', area, datos.periodo, 'datos');
+        const snap = await window._fb.getDoc(ref);
+        if (snap.exists() && (snap.data().agentes || []).length > 0) backupRestoreConflictos.push(area);
+      } catch(e) { console.warn('No se pudo verificar', area, e); }
+    }
+  }
+  // Por defecto, ninguna de las áreas en conflicto se sobrescribe (hay que marcarla a propósito)
+  backupRestoreAreasAOmitir = new Set(backupRestoreConflictos);
+
+  mostrarPrevisualizacionRestaurarBackup();
+}
+
+function mostrarPrevisualizacionRestaurarBackup() {
+  const d = backupRestoreData;
+  const areasNovedades = d.novedades ? Object.keys(d.novedades) : [];
+
+  $('modal-restaurar-backup-sub').textContent = `Período detectado: ${obtenerNombreMes(d.periodo.split('-')[1])} ${d.periodo.split('-')[0]}`;
+
+  let html = `<div style="padding:14px 16px;font-size:13px;line-height:1.9;">
+    <div>📋 Novedades: <strong>${areasNovedades.length ? areasNovedades.length + ' área(s)' : 'no incluido'}</strong></div>
+    <div>👤 Personal: <strong>${d.personal ? d.personal.length + ' registros' : 'no incluido'}</strong></div>
+    <div>🔑 Accesos: <strong>${d.accesos ? d.accesos.length + ' registros' : 'no incluido'}</strong></div>
+    <div>📝 Auditoría: <strong>${d.auditoria ? d.auditoria.length + ' registros' : 'no incluido'}</strong></div>
+    <div>📤 Envíos: <strong>${d.entregas ? d.entregas.length + ' registros' : 'no incluido'}</strong></div>
+  </div>`;
+
+  if (backupRestoreConflictos.length) {
+    html += `<div style="padding:10px 16px;background:#fffbeb;border-top:1px solid #f59e0b;border-bottom:1px solid #f59e0b;font-size:12px;color:#78350f;">
+      ⚠️ Estas áreas ya tienen datos actuales en ${d.periodo}. Marque las que quiere <strong>sobrescribir</strong> con lo que trae el backup — las que no marque quedan tal como están hoy:
+    </div>`;
+    html += `<div style="padding:8px 16px;">` + backupRestoreConflictos.map(a => `
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;cursor:pointer;">
+        <input type="checkbox" onchange="toggleAreaSobrescribirBackup('${a.replace(/'/g,"\\'")}', this.checked)">
+        Sobrescribir <strong>${a}</strong>
+      </label>
+    `).join('') + `</div>`;
+  }
+
+  $('modal-restaurar-backup-body').innerHTML = html;
+  $('btn-confirmar-restaurar-backup').disabled = false;
+  $('btn-confirmar-restaurar-backup').textContent = 'Confirmar restauración';
+  $('modal-restaurar-backup').style.display = 'flex';
+}
+
+function toggleAreaSobrescribirBackup(area, marcado) {
+  if (marcado) backupRestoreAreasAOmitir.delete(area);
+  else backupRestoreAreasAOmitir.add(area);
+}
+
+function cerrarModalRestaurarBackup() {
+  $('modal-restaurar-backup').style.display = 'none';
+  backupRestoreData = { periodo: null, novedades: null, personal: null, accesos: null, auditoria: null, entregas: null };
+  backupRestoreConflictos = [];
+  backupRestoreAreasAOmitir = new Set();
+}
+
+async function confirmarRestaurarBackup() {
+  const d = backupRestoreData;
+  if (!d.periodo) return;
+
+  const btn = $('btn-confirmar-restaurar-backup');
+  btn.disabled = true;
+  btn.textContent = 'Restaurando...';
+
+  const resumen = { novedades: 0, omitidas: 0, personal: 0, accesos: 0, auditoria: 0, entregas: 0 };
+
+  try {
+    if (d.novedades) {
+      for (const [area, datosArea] of Object.entries(d.novedades)) {
+        if (backupRestoreAreasAOmitir.has(area)) { resumen.omitidas++; continue; }
+        const ref = window._fb.doc(db, 'novedades', area, d.periodo, 'datos');
+        await window._fb.setDoc(ref, normalizarFechasParaRestaurar(datosArea));
+        resumen.novedades++;
+      }
+    }
+    if (d.personal) {
+      for (const p of d.personal) {
+        const { id, ...resto } = p;
+        if (!id) continue;
+        await window._fb.setDoc(window._fb.doc(db, 'personal', id), normalizarFechasParaRestaurar(resto));
+        resumen.personal++;
+      }
+    }
+    if (d.accesos) {
+      for (const a of d.accesos) {
+        const { id, ...resto } = a;
+        if (!id) continue;
+        await window._fb.setDoc(window._fb.doc(db, 'accesos', id), normalizarFechasParaRestaurar(resto));
+        resumen.accesos++;
+      }
+    }
+    if (d.auditoria) {
+      for (const a of d.auditoria) {
+        const { id, ...resto } = a;
+        if (!id) continue;
+        await window._fb.setDoc(window._fb.doc(db, 'auditoria', id), normalizarFechasParaRestaurar(resto));
+        resumen.auditoria++;
+      }
+    }
+    if (d.entregas) {
+      for (const e of d.entregas) {
+        const { id, ...resto } = e;
+        if (!id) continue;
+        await window._fb.setDoc(window._fb.doc(db, 'entregas', id), normalizarFechasParaRestaurar(resto));
+        resumen.entregas++;
+      }
+    }
+
+    await registrarEnAuditoria('restaurar_backup', null, usuario.email, null, d.periodo, resumen,
+      `Backup restaurado (${d.periodo}) — Novedades: ${resumen.novedades} área(s) (${resumen.omitidas} omitidas), Personal: ${resumen.personal}, Accesos: ${resumen.accesos}, Auditoría: ${resumen.auditoria}, Envíos: ${resumen.entregas}`);
+
+    cerrarModalRestaurarBackup();
+    toast(`✅ Backup restaurado — Novedades: ${resumen.novedades}${resumen.omitidas ? ` (${resumen.omitidas} omitidas)` : ''}, Personal: ${resumen.personal}, Accesos: ${resumen.accesos}, Auditoría: ${resumen.auditoria}, Envíos: ${resumen.entregas}`, 'ok');
+
+    if (mesActual === d.periodo) cargarNovedadesActuales();
+
+  } catch(e) {
+    console.error('Error restaurando backup:', e);
+    toast('❌ Error restaurando: ' + e.message, 'err');
+    btn.disabled = false;
+    btn.textContent = 'Confirmar restauración';
   }
 }
 
@@ -5763,6 +5995,11 @@ window.limpiarSeleccionPersonal     = limpiarSeleccionPersonal;
 window.aplicarCambioAreaLote        = aplicarCambioAreaLote;
 window.confirmarGuardarAcceso       = confirmarGuardarAcceso;
 window.generarBackupMensualManual   = generarBackupMensualManual;
+window.generarBackupManualDesdeAdmin = generarBackupManualDesdeAdmin;
+window.analizarArchivosBackup        = analizarArchivosBackup;
+window.toggleAreaSobrescribirBackup  = toggleAreaSobrescribirBackup;
+window.cerrarModalRestaurarBackup    = cerrarModalRestaurarBackup;
+window.confirmarRestaurarBackup      = confirmarRestaurarBackup;
 window.guardarAcceso                = guardarAcceso;
 window.eliminarAcceso               = eliminarAcceso;
 window.editarAcceso                 = editarAcceso;
