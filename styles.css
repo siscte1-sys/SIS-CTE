@@ -105,9 +105,10 @@ body.dark-mode nav{background:linear-gradient(135deg,#08101f 0%,#0f1a35 60%,#131
 body.dark-mode .login-panel-left{background:linear-gradient(145deg,#060d1a 0%,#0d1935 60%,#101f40 100%);border-right-color:#e8b84b;}
 .login-panel-left::before{content:'';position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:rgba(201,162,39,.08);border-radius:50%;}
 .login-panel-left::after{content:'';position:absolute;bottom:-40px;left:-40px;width:160px;height:160px;background:rgba(201,162,39,.06);border-radius:50%;}
-.lpl-logo{width:48px;height:48px;background:rgba(201,162,39,.2);border:1px solid rgba(201,162,39,.4);border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:32px;backdrop-filter:blur(4px);}
-.lpl-title{font-size:28px;font-weight:900;color:#fff;letter-spacing:-0.5px;line-height:1.1;margin-bottom:10px;}
-.lpl-sub{font-size:12px;color:rgba(255,255,255,.7);line-height:1.6;}
+.lpl-logo-row{display:flex;align-items:center;gap:14px;margin-bottom:32px;}
+.lpl-logo{width:48px;height:48px;flex-shrink:0;background:rgba(201,162,39,.2);border:1px solid rgba(201,162,39,.4);border-radius:14px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.lpl-title{font-size:28px;font-weight:900;color:#fff;letter-spacing:-0.5px;line-height:1.1;}
+.lpl-sub{font-size:12px;color:rgba(255,255,255,.7);line-height:1.6;margin-top:2px;}
 .lpl-dots{display:flex;gap:6px;margin-top:auto;padding-top:40px;}
 .lpl-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.3);}
 .lpl-dot.active{background:#c9a227;width:18px;border-radius:3px;}
