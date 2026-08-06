@@ -521,6 +521,24 @@ function crearComboboxArea({ inputId, listaId, onSeleccionar }) {
   let opciones = [];
   let valorActual = '';
 
+  // La lista se posiciona "fixed" respecto al viewport (calculada desde
+  // getBoundingClientRect del input) en vez de "absolute" respecto a su
+  // contenedor — así no queda recortada dentro de modales con overflow-y:auto
+  // (ej. "Editar Acceso"), que cortaban el menú y hacían parecer que no buscaba.
+  const posicionarLista = () => {
+    const r = input.getBoundingClientRect();
+    lista.style.position = 'fixed';
+    lista.style.top = `${r.bottom + 4}px`;
+    lista.style.left = `${r.left}px`;
+    lista.style.width = `${r.width}px`;
+  };
+
+  const cerrarLista = () => {
+    lista.style.display = 'none';
+    window.removeEventListener('scroll', cerrarLista, true);
+    window.removeEventListener('resize', cerrarLista);
+  };
+
   const renderLista = (filtro) => {
     const norm = (filtro || '').trim().toLowerCase();
     const coincidencias = norm ? opciones.filter(a => a.toLowerCase().includes(norm)) : opciones;
@@ -541,13 +559,18 @@ function crearComboboxArea({ inputId, listaId, onSeleccionar }) {
           e.preventDefault();
           input.value = a;
           valorActual = a;
-          lista.style.display = 'none';
+          cerrarLista();
           onSeleccionar(a);
         });
         lista.appendChild(item);
       });
     }
+    posicionarLista();
     lista.style.display = 'block';
+    // Si el usuario hace scroll (por ejemplo dentro de un modal) mientras la
+    // lista está abierta, se cierra en vez de quedar desalineada
+    window.addEventListener('scroll', cerrarLista, true);
+    window.addEventListener('resize', cerrarLista);
   };
 
   if (input.dataset.comboboxInit !== '1') {
@@ -561,7 +584,7 @@ function crearComboboxArea({ inputId, listaId, onSeleccionar }) {
       setTimeout(() => {
         // Si quedó escrito algo que no es un área válida, restaurar el valor previo
         if (!opciones.includes(input.value)) input.value = valorActual;
-        lista.style.display = 'none';
+        cerrarLista();
       }, 150);
     });
   }
