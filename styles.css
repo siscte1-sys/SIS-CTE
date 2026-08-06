@@ -96,7 +96,7 @@ body.dark-mode nav{background:linear-gradient(135deg,#08101f 0%,#0f1a35 60%,#131
 .login-hero{display:none;}
 .login-titulo{display:none;}
 .login-sub{display:none;}
-.login-card{background:var(--white);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shl);padding:0;width:100%;max-width:860px;animation:up .35s ease;display:flex;overflow:hidden;min-height:520px;transition:background .25s,border-color .25s;}
+.login-card{background:var(--white);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shl);padding:0;width:100%;max-width:760px;animation:up .35s ease;display:flex;overflow:hidden;min-height:400px;transition:background .25s,border-color .25s;}
 .login-card h2{font-size:20px;font-weight:800;margin-bottom:6px;color:var(--txt);}
 .login-card-desc{font-size:12px;color:var(--txt2);margin-bottom:20px;line-height:1.6;}
 
