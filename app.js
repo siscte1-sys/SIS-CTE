@@ -5261,14 +5261,19 @@ async function cargarAccesos() {
 }
 
 let modalAccesoDocIdEdicion = null; // null = creando nuevo, string = editando existente
+let comboboxAreaAcceso = null;
 
-async function poblarSelectAreaAcceso() {
-  const sel = $('modal-acceso-area');
-  if (sel.dataset.poblado !== '1') {
-    const areasReales = await obtenerAreasNovedades();
-    sel.innerHTML = areasReales.map(a => `<option value="${a}">${a}</option>`).join('');
-    sel.dataset.poblado = '1';
+async function poblarSelectAreaAcceso(areaSeleccionada) {
+  const areasReales = await obtenerAreasNovedades();
+  if (!comboboxAreaAcceso) {
+    comboboxAreaAcceso = crearComboboxArea({
+      inputId: 'modal-acceso-area-buscar',
+      listaId: 'modal-acceso-area-lista',
+      onSeleccionar: (area) => { $('modal-acceso-area').value = area; }
+    });
   }
+  comboboxAreaAcceso.actualizar(areasReales, areaSeleccionada || '');
+  $('modal-acceso-area').value = areaSeleccionada || '';
 }
 
 async function mostrarFormAcceso() {
@@ -5285,12 +5290,11 @@ async function mostrarFormAcceso() {
 
 async function editarAcceso(docId, correoActual, areaAsignada) {
   modalAccesoDocIdEdicion = docId;
-  await poblarSelectAreaAcceso();
+  await poblarSelectAreaAcceso(areaAsignada);
   $('modal-acceso-titulo').textContent = 'Editar Acceso';
   $('modal-acceso-sub').textContent = 'Cambie el área asignada a este correo';
   $('modal-acceso-correo').value = correoActual || docId;
   $('modal-acceso-correo').disabled = true; // el correo es el ID del documento, no se cambia acá
-  if (areaAsignada) $('modal-acceso-area').value = areaAsignada;
   hide('modal-acceso-error');
   $('modal-acceso').style.display = 'flex';
 }
@@ -5639,6 +5643,88 @@ async function agregarAreaPanel() {
     toast('❌ Error guardando: ' + e.message, 'err');
   }
 }
+
+// Importa áreas en lote desde un Excel/CSV — detecta la columna por encabezado
+// (ÁREA / AREA / AREA ACTUAL) o toma la única columna si el archivo no trae encabezado
+async function importarAreasPanel() {
+  const fileInput = $('areas-import-file');
+  const file = fileInput?.files?.[0];
+  if (!file) { toast('⚠️ Seleccione un archivo CSV o Excel', 'warn'); return; }
+
+  try {
+    toast('⏳ Procesando archivo...', 'ok');
+    const esExcel = /\.xlsx?$/i.test(file.name);
+    let filas = [];
+
+    if (esExcel) {
+      if (!window.XLSX) {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+          s.onload = res; s.onerror = rej; document.head.appendChild(s);
+        });
+      }
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const primeraHoja = wb.Sheets[wb.SheetNames[0]];
+      filas = XLSX.utils.sheet_to_json(primeraHoja, { header: 1, defval: '' })
+        .map(fila => fila.map(celda => String(celda ?? '').trim()));
+    } else {
+      const text = await file.text();
+      filas = text.split('\n').filter(l => l.trim())
+        .map(linea => linea.split(',').map(p => p.replace(/^"|"$/g, '').trim()));
+    }
+
+    filas = filas.filter(fila => fila.some(c => c !== ''));
+    if (!filas.length) { toast('❌ El archivo está vacío', 'err'); return; }
+
+    // Detectar la columna de área por encabezado; si no hay encabezado reconocible
+    // y el archivo tiene una sola columna, se usa esa
+    const encabezado = filas[0].map(h => String(h || '').toUpperCase().trim());
+    const nombresPosibles = ['ÁREA', 'AREA', 'AREA ACTUAL', 'ÁREA ACTUAL'];
+    let iArea = encabezado.findIndex(h => nombresPosibles.includes(h));
+
+    let filasDatos;
+    if (iArea !== -1) {
+      filasDatos = filas.slice(1); // saltar encabezado
+    } else if (filas[0].length === 1) {
+      iArea = 0;
+      filasDatos = filas; // sin encabezado, columna única: todas las filas son datos
+    } else {
+      toast('❌ No encontré una columna "ÁREA" en el archivo. Use un encabezado "ÁREA" o suba un archivo de una sola columna.', 'err');
+      return;
+    }
+
+    const areasDelArchivo = [...new Set(
+      filasDatos.map(f => String(f[iArea] || '').trim()).filter(Boolean)
+    )];
+
+    if (!areasDelArchivo.length) {
+      toast('❌ No se encontraron nombres de área en el archivo', 'err');
+      return;
+    }
+
+    const existentesLower = new Set(areasPanelCache.map(a => a.toLowerCase()));
+    const nuevas = areasDelArchivo.filter(a => !existentesLower.has(a.toLowerCase()));
+    const yaExistian = areasDelArchivo.length - nuevas.length;
+
+    if (!nuevas.length) {
+      toast(`ℹ️ Las ${areasDelArchivo.length} áreas del archivo ya estaban en el catálogo`, 'ok');
+      return;
+    }
+
+    const nuevaLista = await guardarCatalogoAreas([...areasPanelCache, ...nuevas]);
+    areasPanelCache = nuevaLista;
+    if (fileInput) fileInput.value = '';
+    renderizarListaAreasPanel();
+    await registrarEnAuditoria('area_importar', null, usuario.email, null, null,
+      { agregadas: nuevas.length, yaExistian }, `Importación de áreas: ${nuevas.length} nuevas agregadas, ${yaExistian} ya existían`);
+    toast(`✅ ${nuevas.length} área${nuevas.length !== 1 ? 's' : ''} agregada${nuevas.length !== 1 ? 's' : ''}${yaExistian ? ` (${yaExistian} ya existían y se omitieron)` : ''}`, 'ok');
+  } catch(e) {
+    toast('❌ Error importando: ' + e.message, 'err');
+  }
+}
+
 
 function iniciarRenombreAreaPanel(area) {
   areaPanelEditando = area;
@@ -6365,6 +6451,7 @@ window.mostrarDetalleCodigo         = mostrarDetalleCodigo;
 window.irInicioNav                  = irInicioNav;
 window.actualizarVistaActual        = actualizarVistaActual;
 window.agregarAreaPanel             = agregarAreaPanel;
+window.importarAreasPanel           = importarAreasPanel;
 window.iniciarRenombreAreaPanel     = iniciarRenombreAreaPanel;
 window.cancelarRenombreAreaPanel    = cancelarRenombreAreaPanel;
 window.guardarRenombreAreaPanel     = guardarRenombreAreaPanel;
