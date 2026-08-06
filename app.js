@@ -755,6 +755,48 @@ function ordenarAgentesPorCodigo(agentes) {
   return [...(agentes || [])].sort((x, y) => compararPorCodigo(x.codigo, y.codigo));
 }
 
+/* ═════════════════════════════════════════
+   Ordenar agentes por GRADO (jerarquía) y,
+   dentro de cada grado, por código ascendente
+═════════════════════════════════════════ */
+const ORDEN_GRADOS = [
+  'PREFECTO COMANDANTE',
+  'PREFECTO JEFE',
+  'PREFECTO',
+  'SUB PREFECTO',
+  'INSPECTOR',
+  'SUBINSPECTOR DE TRANSITO 1',
+  'SUBINSPECTOR DE TRANSITO 2',
+  'AGENTE DE TRANSITO 1',
+  'AGENTE DE TRANSITO 2',
+  'AGENTE DE TRANSITO 3',
+  'AGENTE DE TRANSITO 4'
+];
+
+function normalizarGrado(grado) {
+  return String(grado || '')
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // quita tildes para comparar sin diferencias
+}
+
+function indiceDeGrado(grado) {
+  const norm = normalizarGrado(grado);
+  const idx = ORDEN_GRADOS.findIndex(g => normalizarGrado(g) === norm);
+  return idx === -1 ? ORDEN_GRADOS.length : idx; // grados no listados van al final
+}
+
+function compararPorGrado(gradoA, gradoB, codigoA, codigoB) {
+  const diff = indiceDeGrado(gradoA) - indiceDeGrado(gradoB);
+  if (diff !== 0) return diff;
+  return compararPorCodigo(codigoA, codigoB);
+}
+
+function ordenarAgentesPorGrado(agentes) {
+  return [...(agentes || [])].sort((x, y) => compararPorGrado(x.grado, y.grado, x.codigo, y.codigo));
+}
+
 function renderizarTablaNovedades(diaHoy) {
   const tabla = $('tabla-novedades');
   const thead = tabla.querySelector('thead tr');
@@ -816,11 +858,11 @@ function renderizarTablaNovedades(diaHoy) {
   // Limpiar cuerpo
   tbody.innerHTML = '';
   
-  // Renderizar filas de agentes — ordenadas por código, de menor a mayor
+  // Renderizar filas de agentes — ordenadas por grado (jerarquía) y, dentro del mismo grado, por código
   if (novedadesActuales.agentes && novedadesActuales.agentes.length > 0) {
     const agentesOrdenados = novedadesActuales.agentes
       .map((agente, origIdx) => ({ agente, origIdx }))
-      .sort((a, b) => compararPorCodigo(a.agente.codigo, b.agente.codigo));
+      .sort((a, b) => compararPorGrado(a.agente.grado, b.agente.grado, a.agente.codigo, b.agente.codigo));
 
     agentesOrdenados.forEach(({ agente, origIdx }, posicion) => {
       const idx = origIdx; // idx real dentro de novedadesActuales.agentes (para editar/guardar)
@@ -1787,7 +1829,7 @@ function renderizarTablaSoloLectura(tabla, data, periodo) {
 
   (data.agentes || [])
     .map((agente, origIdx) => ({ agente, origIdx }))
-    .sort((a, b) => compararPorCodigo(a.agente.codigo, b.agente.codigo))
+    .sort((a, b) => compararPorGrado(a.agente.grado, b.agente.grado, a.agente.codigo, b.agente.codigo))
     .forEach(({ agente, origIdx }) => {
     const idx = origIdx; // índice real en data.agentes (para editar el agente correcto)
     html += `<tr><td style="font-size:11px">${agente.codigo || ''}</td><td style="font-size:11px">${agente.grado || ''}</td><td style="font-size:11px;text-align:left">${agente.apellidosNombres || ''}</td>`;
@@ -1958,7 +2000,7 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   ws.headerFooter.evenFooter = '&CPágina &P de &N';
 
   // ── Filas de agentes — días en amarillo (zona de datos, como la plantilla) ──
-  ordenarAgentesPorCodigo(data.agentes).forEach((agente, idx) => {
+  ordenarAgentesPorGrado(data.agentes).forEach((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= 31; d++) {
       fila.push(d > totalDias ? '' : ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || ''));
@@ -2116,7 +2158,7 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   dibujarBanner();
 
   const head = [['N°', 'Código', 'Grado', 'Apellidos y Nombres', ...Array.from({length: totalDias}, (_, i) => String(i + 1)), 'Observación']];
-  const body = ordenarAgentesPorCodigo(data.agentes).map((agente, idx) => {
+  const body = ordenarAgentesPorGrado(data.agentes).map((agente, idx) => {
     const fila = [idx + 1, agente.codigo || '', agente.grado || '', agente.apellidosNombres || ''];
     for (let d = 1; d <= totalDias; d++) {
       const valorDia = ((agente.novedadesPorDia && agente.novedadesPorDia[String(d)]) || '').trim();
