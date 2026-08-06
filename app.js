@@ -42,12 +42,7 @@ const ADMIN_EMAILS = [
 ];
 
 const AREAS = [
-  "SUB ZONA GUAYAS","ZONA 8",
-  "CEBAF AREA COMPUTO NACIONAL",
-  "PROV_PICHINCHA","PROV_MANABI","PROV_SANTO DOMINGO",
-  "PROV_LOS RIOS","PROV_BOLIVAR","PROV_SANTA ELENA",
-  "PROV_AZUAY","PROV_EL ORO",
-  "UREM","OIAT","EDU_VIAL","CRV","ECU-911"
+"ACTIVO FIJO","ARENILLAS CRV","ARENILLAS EDUCACION VIAL","ARENILLAS OIAT","ARENILLAS UNIDAD JUDICIAL","ARENILLAS UNIDAD LEGAL","AZUAY DAI","AZUAY GOBERNACION","AZUAY JEFE OIAT","BABA TERMINAL TERRESTRE","BABAHOYO CRV","BABAHOYO ECU-911","BABAHOYO OIAT","BABAHOYO UNIDAD JUDICIAL","BUENA FE CRV","BUENA FE EDUCACION VIAL","BUENA FE OIAT","BUENA FE UREM","CALUMA EDUCACION VIAL","CALUMA OIAT","CAMILO PONCE ENRIQUEZ OIAT","CHONE OIAT","CO2M","COMANDANCIA","COMANDANTE TRANSITO SUB ZONA AZUAY","CONJUNTO Y BANDA","CONTROL REGISTRO DE TRANSPORTE E INFORMALIDAD","COORDINACION GENERAL TTTSV","CUENCA CRV","CUENCA ECU-911","CUENCA EDUCACION VIAL","CUENCA OIAT","CULTURA Y DEPORTE","DAULE CRV","DAULE TERMINAL TERRESTRE","DIRECCION ASESORIA JURIDICA","DIRECCION DE CONTROL OPERATIVO","DIRECCION DE FORMACION Y DESARROLLO CTE - ACT","DIRECCION EJECUTIVA","DIRECCION FINANCIERA","DIRECCION NACIONAL OIAT","DIRECCION PROVINCIAL ANT GUAYAS","DIRECCION PROVINCIAL CTE GUAYAS","DIRECCION TALENTO HUMANO","DIRECCION ZONAL 2 MIT","DIRECCION ZONAL 8","DIRECTOR CONTROL OPERATIVO TTTSV","DISTRITO QUEVEDO OIAT","DISTRITO QUEVEDO UNIDAD JUDICIAL","DURAN EDUCACION VIAL","DURAN OIAT","DURAN TERMINAL TERRESTRE","DURAN UNIDAD JUDICIAL","EL EMPALME CRV","EL EMPALME UNIDAD JUDICIAL","EL GUABO EDUCACION VIAL","EL GUABO OIAT","EL GUABO UNIDAD JUDICIAL","EL GUABO UREM","EL ORO DAI","EL ORO GOBERNACION","EL TRIUNFO CRV","EL TRIUNFO UNIDAD JUDICIAL","ESCOLTA PRESIDENCIAL","ESCOLTA PRESIDENCIAL GOBERNACION","ESFOCE / ANGEL SONNENHOLZNER","ESFOCE / MAURO ORDOÑEZ","FUT","GIRON OIAT","GUALACEO CRV","GUALACEO OIAT","GUARDIA COMANDANCIA","GUARDIA COMANDANCIA ARMERIA","GUARDIA ED. CENTRAL","GUARDIA ESFOCE / MAURO ORDOÑEZ","GUARDIA PARQUE VIAL","GUARDIA PREVENCION DURAN","GUAYAQUIL CRV NORTE","GUAYAQUIL CRV SUR","GUAYAQUIL DAI","GUAYAQUIL EDUCACION VIAL","GUAYAQUIL OIAT CADENA DE CUSTODIO","GUAYAQUIL OIAT CENTRO","GUAYAQUIL OIAT ESTE","GUAYAQUIL OIAT FISCALIA MONTECRISTI","GUAYAQUIL OIAT FLORIDA NORTE","GUAYAQUIL OIAT MEDICINA LEGAL","GUAYAQUIL OIAT SUR","GUAYAQUIL TERMINAL TERRESTRE","GUAYAQUIL UREM","GUAYAS OIAT","HUAQUILLAS CEBAF","INGRESO DE CITACIONES","INSPECTORIA GENERAL","JEFE NACIONAL CRV","JIPIJAPA OIAT","JIPIJAPA UREM","LA AURORA OIAT","LA AURORA UNIDAD JUDICIAL","LA CONCORDIA OIAT","LA CONCORDIA UNIDAD JUDICIAL","LA LIBERTAD CRV","LAS NAVES EDUCACION VIAL","LAS NAVES OIAT","LENTAG CRV","LENTAG EDUCACION VIAL","LENTAG OIAT","LOS RIOS DAI","LOS RIOS GOBERNACION","MACARA CEBAF","MACHACHI CRV","MACHALA CRV","MACHALA ECU-911","MANABI DAI","MANABI DIRECCION PROVINCIAL","MANGLARALTO CRV","MANGLARALTO OIAT","MANTA OIAT","MANTENIMIENTO AUTOMOTRIZ","MILAGRO CRV","MILAGRO GUARDIA INSTALACIONES","MILAGRO TERMINAL TERRESTRE","MILAGRO UNIDAD JUDICIAL","MOLLETURO CRV","MOLLETURO OIAT","MOLLETURO UREM","MONTALVO EDUCACION VIAL","MONTALVO UNIDAD JUDICIAL","NACIONAL CEBAF","NARANJAL CRV","NARANJAL UNIDAD JUDICIAL","NARANJITO UNIDAD JUDICIAL","NUEVA LOJA CEBAF","OPERACIONES","PALMAR UREM","PARQUE AUTOMOTOR","PASCUALES TERMINAL TERRESTRE","PEDRO CARBO UNIDAD JUDICIAL","PICHINCHA OIAT MIT","PICHINCHA UNIDAD JUDICIAL","PIÑAS OIAT","PIÑAS UNIDAD JUDICIAL","PLAYAS UNIDAD JUDICIAL","PORTOVIEJO CRV","PORTOVIEJO ECU-911","PORTOVIEJO EDUCACION VIAL","PORTOVIEJO OIAT","PORTOVIEJO UNIDAD JUDICIAL","PORTOVIEJO UREM","PREVENCION DURAN INGRESO DE PARTES CITACIONES ESTADISTICAS","PROGRESO UREM","RIO 7 UREM","SALA SITUACIONAL","SALINAS - LA LIBERTAD OIAT","SALINAS CRV","SALITRE UNIDAD JUDICIAL","SAMBORONDON DAI ECU-911","SAMBORONDON ECU-911","SAMBORONDON UNIDAD JUDICIAL","SAN CARLOS UREM","SAN JUAN UREM","SANTA ELENA CRV","SANTA ELENA DAI","SANTA ELENA DIRECCION PROVINCIAL","SANTA ELENA ECU-911","SANTA ELENA EDUCACION VIAL","SANTA ELENA GOBERNACION","SANTA ELENA JEFE OIAT","SANTA ELENA OIAT","SANTA ELENA TERMINAL TERRESTRE","SANTA ELENA UNIDAD COMUNICACIONES OPERACIONALES","SANTA ELENA UNIDAD JUDICIAL","SANTA ELENA UREM","SANTA LUCIA UNIDAD JUDICIAL","SANTA ROSA UREM","SANTO DOMINGO","SANTO DOMINGO CRV","SANTO DOMINGO ECU-911","SANTO DOMINGO EDUCACION VIAL","SANTO DOMINGO OIAT","SANTO DOMINGO UNIDAD JUDICIAL","SANTO DOMINGO UREM","SARACAY UREM","SECRETARIA GENERAL","SIMON BOLIVAR UNIDAD JUDICIAL","SUB DIRECCION EJECUTIVA","SUB ZONA EL ORO","SUB ZONA GUAYAS","SUB ZONA MANABI","SUB ZONA SANTA ELENA","TANDAPI OIAT","TRES POSTES UREM","TULCAN CEBAF","UCT ARENILLAS","UCT BABAHOYO","UCT BABAHOYO UNIDAD LEGAL","UCT BALAO","UCT BALZAR","UCT BALZAR CRV","UCT BALZAR EDUCACION VIAL","UCT BALZAR OIAT","UCT BUCAY","UCT BUCAY UREM","UCT BUENA FE","UCT CALUMA","UCT CAMILO PONCE ENRIQUEZ","UCT CHARAPOTO","UCT CHONE","UCT COLIMES","UCT COLIMES CRV","UCT CUENCA","UCT CUENCA INGRESO DE PARTES CITACIONES ESTADISTICAS","UCT CUENCA UNIDAD JUDICIAL","UCT CUENCA UNIDAD LEGAL","UCT DAULE","UCT DAULE EDUCACION VIAL","UCT DAULE GUARDIA","UCT DAULE OIAT","UCT DAULE UNIDAD JUDICIAL","UCT DAULE UNIDAD LEGAL","UCT DAULE UREM","UCT DOS BOCAS","UCT DURAN","UCT EL EMPALME","UCT EL EMPALME EDUCACION VIAL","UCT EL EMPALME OIAT","UCT EL GUABO","UCT EL PAN","UCT EL ROSARIO","UCT EL TRIUNFO","UCT EL TRIUNFO EDUCACION VIAL","UCT EL TRIUNFO OIAT","UCT GIRON","UCT GUALACEO","UCT ISIDRO AYORA","UCT JIPIJAPA","UCT JUAN BAUTISTA AGUIRRE","UCT JUJAN","UCT JUNQUILLAL","UCT LA CONCORDIA","UCT LA LIBERTAD","UCT LA VICTORIA","UCT LAS NAVES","UCT LAUREL","UCT LENTAG","UCT LIMONAL","UCT LOMAS DE SARGENTILLO","UCT MANGLARALTO","UCT MARCELINO MARIDUEÑA","UCT MATILDE ESTHER","UCT MILAGRO","UCT MILAGRO DAI","UCT MILAGRO EDUCACION VIAL","UCT MILAGRO GUARDIA PREVENCION","UCT MILAGRO OIAT","UCT MILAGRO OIAT CADENA DE CUSTODIO","UCT MOLLETURO","UCT MONTALVO","UCT NARANJAL","UCT NARANJAL GUARDIA","UCT NARANJAL OIAT","UCT NARANJITO","UCT NARANJITO CRV","UCT NARANJITO OIAT","UCT NOBOL","UCT PALESTINA","UCT PALMAR","UCT PASCUALES","UCT PEDRO CARBO","UCT PEDRO CARBO CRV","UCT PEDRO CARBO EDUCACION VIAL","UCT PEDRO CARBO OIAT","UCT PIEDRERO","UCT PIÑAS","UCT PLAYAS","UCT PLAYAS EDUCACION VIAL","UCT PLAYAS OIAT","UCT PLAYAS UNIDAD LEGAL","UCT PORTOVIEJO","UCT PORTOVIEJO GUARDIA","UCT PORTOVIEJO UNIDAD LEGAL","UCT POSORJA","UCT PROGRESO","UCT PROGRESO CRV","UCT PROGRESO OIAT","UCT PUERTO CAYO","UCT PUNTILLA","UCT SALINAS","UCT SALINAS GUARDIA","UCT SALITRE","UCT SAMBORONDON","UCT SAMBORONDON OIAT","UCT SAN CARLOS DE BALAO","UCT SAN PABLO","UCT SANTA ELENA","UCT SANTA ELENA GUARDIA","UCT SANTA ELENA UNIDAD LEGAL","UCT SANTA LUCIA","UCT SANTO DOMINGO","UCT SANTO DOMINGO UNIDAD LEGAL","UCT SIMON BOLIVAR","UCT SIMON BOLIVAR CRV","UCT SUSUDEL","UCT TANDAPI","UCT TARIFA","UCT VENTANAS","UCT VINCES","UCT VINCES UNIDAD JUDICIAL","UCT VIRGEN DE FATIMA","UCT VIRGEN DE FATIMA OIAT","UCT YAGUACHI","UCT YAGUACHI EDUCACION VIAL","UCT YAGUACHI GUARDIA","UCT YAGUACHI OIAT","UCT ZAPOTAL","UCT ZAPOTAL SANTA ELENA","UNIDAD BIENESTAR SOCIAL","UNIDAD COMUNICACIONES OPERACIONALES","UNIDAD DE COMUNICACION SOCIAL","UNIDAD DE PERSONAL Y MOVILIDAD CTE","UNIDAD DE PROMOCION E IMAGEN OPERATIVA","UNIDAD JUDICIAL ALBAN BORJA","UNIDAD JUDICIAL FLORIDA NORTE","UNIDAD JUDICIAL INGRESO DE PARTES CITACIONES ESTADISTICAS","UNIDAD JUDICIAL VALDIVIA SUR","UNIDAD LEGAL CTE","UNIDAD LOGISTICA PARQUE AUTOMOTOR","UNIDAD PLANIFICACION ESTRATEGICA","UNIDAD PLANIFICACION OPERATIVA NACIONAL","UNIDAD PLANIFICACION VIAL NACIONAL","UNIDAD PLANIFICACION VIAL OPERATIVA AZUAY","UNIDAD PLANIFICACION VIAL OPERATIVA EL ORO","UNIDAD PLANIFICACION VIAL OPERATIVA MANABI","UNIDAD PLANIFICACION VIAL OPERATIVA SANTA ELENA","UNIDAD PLANIFICACION VIAL OPERATIVA SANTO DOMINGO","UNIDAD PLANIFICACION VIAL OPERATIVA SUB ZONA GUAYAS","UNIDAD PLANIFICACION VIAL OPERATIVA ZONA 8","UNIDAD SEÑALETICA","VALIDADOR RADAR","VENTANAS EDUCACION VIAL","VENTANAS OIAT","VENTANAS TERMINAL TERRESTRE","VINCES CRV","VINCES OIAT","VINCES TERMINAL TERRESTRE","VIRGEN DE FATIMA UREM","YAGUACHI UNIDAD JUDICIAL","ZAPOTAL EDUCACION VIAL","ZAPOTAL UREM",
 ];
 
 /* ── Códigos de Novedad (8 exactos) ─────────────────── */
@@ -349,6 +344,7 @@ function actualizarVistaActual() {
       else if (tabActiva === 'resumen')     cargarResumenGeneral();
       else if (tabActiva === 'importar')    cargarDirectorioPersonal();
       else if (tabActiva === 'permisos')    poblarListaPermisos();
+      else if (tabActiva === 'areas')       cargarAreasPanel();
       break;
     }
     default:
@@ -497,34 +493,34 @@ async function obtenerAreasNovedades() {
   } catch(e) {
     console.warn('No se pudo obtener la lista real de áreas, usando AREAS por defecto:', e);
   }
-  return AREAS; // respaldo si todavía no se importó nada
+  return AREAS; // respaldo si todavía no se importó/guardó ningún catálogo en Firestore
 }
 
-async function poblarSelectorAreaAdmin() {
-  const cont  = $('admin-selector-area-novedades');
-  const input = $('input-area-admin-novedades');
-  const lista = $('lista-area-admin-novedades');
-  if (!cont || !input || !lista) return;
-  show('admin-selector-area-novedades');
-  cont.style.display = 'block';
+// Guarda el catálogo de áreas (ordenado y sin duplicados) — fuente única
+// que alimenta tanto el selector de Envíos como el de Novedades
+async function guardarCatalogoAreas(lista) {
+  const limpio = [...new Set(lista.map(a => String(a).trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'es'));
+  const ref = window._fb.doc(db, 'sistema', 'areas_novedades');
+  await window._fb.setDoc(ref, { lista: limpio, ultimaModificacion: new Date() });
+  return limpio;
+}
 
-  const areasReales = await obtenerAreasNovedades();
+/* ═════════════════════════════════════════
+   COMBOBOX DE ÁREA (buscador reutilizable) — input de texto + lista
+   desplegable filtrable, usado en Envíos y en el selector admin de Novedades
+═════════════════════════════════════════ */
+function crearComboboxArea({ inputId, listaId, onSeleccionar }) {
+  const input = $(inputId);
+  const lista = $(listaId);
+  if (!input || !lista) return null;
 
-  if (!areaActual || !areasReales.includes(areaActual)) areaActual = areasReales[0];
-
-  const seleccionarArea = (area) => {
-    areaActual = area;
-    input.value = area;
-    lista.style.display = 'none';
-    cargarNovedadesActuales();
-  };
+  let opciones = [];
+  let valorActual = '';
 
   const renderLista = (filtro) => {
     const norm = (filtro || '').trim().toLowerCase();
-    const coincidencias = norm
-      ? areasReales.filter(a => a.toLowerCase().includes(norm))
-      : areasReales;
-
+    const coincidencias = norm ? opciones.filter(a => a.toLowerCase().includes(norm)) : opciones;
     lista.innerHTML = '';
     if (!coincidencias.length) {
       const vacio = document.createElement('div');
@@ -538,27 +534,69 @@ async function poblarSelectorAreaAdmin() {
         item.style.cssText = 'padding:9px 12px;font-size:13px;cursor:pointer;';
         item.addEventListener('mouseover', () => item.style.background = 'var(--blue-l)');
         item.addEventListener('mouseout',  () => item.style.background = '');
-        item.addEventListener('mousedown', (e) => { e.preventDefault(); seleccionarArea(a); });
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          input.value = a;
+          valorActual = a;
+          lista.style.display = 'none';
+          onSeleccionar(a);
+        });
         lista.appendChild(item);
       });
     }
     lista.style.display = 'block';
   };
 
-  if (input.dataset.poblado !== '1') {
-    input.dataset.poblado = '1';
-    input.addEventListener('focus', () => renderLista(input.value));
+  if (input.dataset.comboboxInit !== '1') {
+    input.dataset.comboboxInit = '1';
+    input.addEventListener('focus', () => {
+      input.value = ''; // borra el valor por defecto al hacer clic, para buscar de cero
+      renderLista('');
+    });
     input.addEventListener('input', () => renderLista(input.value));
     input.addEventListener('blur', () => {
-      // Si escribió algo que no coincide con ningún área real, restaurar el área actual
       setTimeout(() => {
-        if (input.value !== areaActual) input.value = areaActual;
+        // Si quedó escrito algo que no es un área válida, restaurar el valor previo
+        if (!opciones.includes(input.value)) input.value = valorActual;
         lista.style.display = 'none';
       }, 150);
     });
   }
 
-  input.value = areaActual;
+  return {
+    actualizar(nuevasOpciones, seleccionInicial) {
+      opciones = nuevasOpciones;
+      valorActual = seleccionInicial || '';
+      input.value = valorActual;
+    }
+  };
+}
+
+let comboboxAreaNovedadesAdmin = null;
+
+async function poblarSelectorAreaAdmin() {
+  const cont  = $('admin-selector-area-novedades');
+  const input = $('input-area-admin-novedades');
+  const lista = $('lista-area-admin-novedades');
+  if (!cont || !input || !lista) return;
+  show('admin-selector-area-novedades');
+  cont.style.display = 'block';
+
+  const areasReales = await obtenerAreasNovedades();
+
+  if (!areaActual || !areasReales.includes(areaActual)) areaActual = areasReales[0];
+
+  if (!comboboxAreaNovedadesAdmin) {
+    comboboxAreaNovedadesAdmin = crearComboboxArea({
+      inputId: 'input-area-admin-novedades',
+      listaId: 'lista-area-admin-novedades',
+      onSeleccionar: (area) => {
+        areaActual = area;
+        cargarNovedadesActuales();
+      }
+    });
+  }
+  comboboxAreaNovedadesAdmin.actualizar(areasReales, areaActual);
 }
 
 async function cargarNovedadesActuales() {
@@ -1830,7 +1868,7 @@ function aplicarVisibilidadTabsAdmin() {
 
   document.querySelectorAll('.admin-tab').forEach(tab => {
     const tabName = tab.dataset.tab;
-    if (tabName === 'permisos') {
+    if (tabName === 'permisos' || tabName === 'areas') {
       tab.style.display = esAdmin() ? 'inline-flex' : 'none';
       return;
     }
@@ -2360,10 +2398,25 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
 /* ══════════════════════════════════
    AREAS
 ══════════════════════════════════ */
-function poblarAreas(selectId, placeholder='— Seleccione su área —') {
+async function poblarAreas(selectId, placeholder='— Seleccione su área —') {
   const sel = $(selectId); if (!sel) return;
+  const areas = await obtenerAreasNovedades();
   sel.innerHTML = `<option value="">${placeholder}</option>`;
-  AREAS.forEach(a => { const o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o); });
+  areas.forEach(a => { const o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o); });
+}
+
+let comboboxAreaEnvios = null;
+
+async function poblarAreaEnvios() {
+  const areas = await obtenerAreasNovedades();
+  if (!comboboxAreaEnvios) {
+    comboboxAreaEnvios = crearComboboxArea({
+      inputId: 'area-select-buscar',
+      listaId: 'area-select-lista',
+      onSeleccionar: (area) => { $('area-select').value = area; }
+    });
+  }
+  comboboxAreaEnvios.actualizar(areas, $('area-select')?.value || '');
 }
 
 /* ══════════════════════════════════
@@ -2418,6 +2471,8 @@ function irEnvios() {
   const ap=$('acta-preview');  if(ap) ap.style.display='none';
   $('progress-wrap').style.display = 'none';
   $('area-select').value = '';
+  const asb=$('area-select-buscar'); if (asb) asb.value = '';
+  poblarAreaEnvios();
   const det=$('detalle-envio'); if(det) det.value='';
   const bar=$('progress-bar'); if(bar) bar.style.width='0%';
   const ptxt=$('progress-txt'); if(ptxt) ptxt.textContent='0%';
@@ -2474,7 +2529,7 @@ async function cargarMisEnvios() {
 ══════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   initFirebase().catch(e => console.error(e));
-  poblarAreas('area-select');
+  poblarAreaEnvios();
   poblarAreas('filtro-area', 'Todas las áreas');
   poblarFiltroMes();
   await new Promise(r => setTimeout(r, 100));
@@ -2497,8 +2552,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.admin-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       const tabName = tab.dataset.tab;
-      if (tabName !== 'permisos' && !tabPermitido(tabName)) return; // defensa extra, el botón ya está oculto
-      if (tabName === 'permisos' && !esAdmin()) return;
+      if (tabName !== 'permisos' && tabName !== 'areas' && !tabPermitido(tabName)) return; // defensa extra, el botón ya está oculto
+      if ((tabName === 'permisos' || tabName === 'areas') && !esAdmin()) return;
       document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.admin-tab-content').forEach(c => c.style.display = 'none');
       tab.classList.add('active');
@@ -2511,6 +2566,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
       if (tabName === 'importar') { cargarDirectorioPersonal(); poblarSelectoresBackupManual(); }
       if (tabName === 'permisos') { poblarListaPermisos(); actualizarVisibilidadTabsPermiso(); }
+      if (tabName === 'areas') cargarAreasPanel();
       aplicarPermisosBotones();
     });
   });
@@ -5516,6 +5572,134 @@ async function limpiarAuditoria() {
 }
 
 /* ═════════════════════════════════════════
+   PANEL ADMIN — Áreas (catálogo compartido por Envíos y Novedades)
+═════════════════════════════════════════ */
+
+let areasPanelCache = [];
+let areaPanelEditando = null; // nombre del área que se está renombrando ahora mismo
+
+async function cargarAreasPanel() {
+  areasPanelCache = await obtenerAreasNovedades();
+  areaPanelEditando = null;
+  renderizarListaAreasPanel();
+}
+
+function renderizarListaAreasPanel() {
+  const cont = $('areas-panel-lista');
+  const totalTxt = $('areas-panel-total');
+  if (!cont) return;
+
+  const filtro = ($('areas-panel-buscar')?.value || '').trim().toLowerCase();
+  const filtradas = filtro
+    ? areasPanelCache.filter(a => a.toLowerCase().includes(filtro))
+    : areasPanelCache;
+
+  if (totalTxt) totalTxt.textContent = `${filtradas.length} de ${areasPanelCache.length} área${areasPanelCache.length !== 1 ? 's' : ''}`;
+
+  if (!filtradas.length) {
+    cont.innerHTML = `<div style="padding:16px;text-align:center;font-size:13px;color:var(--txt2);">Ningún área coincide con la búsqueda</div>`;
+    return;
+  }
+
+  cont.innerHTML = filtradas.map(area => {
+    const enEdicion = areaPanelEditando === area;
+    if (enEdicion) {
+      return `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);">
+          <input type="text" id="areas-panel-input-editar" class="form-select" value="${area.replace(/"/g, '&quot;')}" style="flex:1;font-size:13px;padding:6px 10px;">
+          <button class="btn-acc btn-acc-blue" style="padding:5px 10px;font-size:11px;" onclick="guardarRenombreAreaPanel('${area.replace(/'/g, "\\'")}')">💾 Guardar</button>
+          <button class="btn-acc btn-acc-ghost" style="padding:5px 10px;font-size:11px;" onclick="cancelarRenombreAreaPanel()">Cancelar</button>
+        </div>`;
+    }
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);">
+        <span style="flex:1;font-size:13px;">${area}</span>
+        <button class="btn-acc btn-acc-orange" style="padding:5px 10px;font-size:11px;" onclick="iniciarRenombreAreaPanel('${area.replace(/'/g, "\\'")}')">✏️ Renombrar</button>
+        <button class="btn-acc btn-acc-red" style="padding:5px 10px;font-size:11px;" onclick="eliminarAreaPanel('${area.replace(/'/g, "\\'")}')">🗑️ Eliminar</button>
+      </div>`;
+  }).join('');
+}
+
+async function agregarAreaPanel() {
+  const input = $('nueva-area-input');
+  const nombre = (input?.value || '').trim();
+  if (!nombre) { toast('Escriba el nombre del área', 'err'); return; }
+  if (areasPanelCache.some(a => a.toLowerCase() === nombre.toLowerCase())) {
+    toast('❌ Ese área ya existe en la lista', 'err');
+    return;
+  }
+  try {
+    const nuevaLista = await guardarCatalogoAreas([...areasPanelCache, nombre]);
+    areasPanelCache = nuevaLista;
+    input.value = '';
+    renderizarListaAreasPanel();
+    await registrarEnAuditoria('area_agregar', nombre, usuario.email, null, null, {}, `Área agregada al catálogo: "${nombre}"`);
+    toast(`✅ Área "${nombre}" agregada`, 'ok');
+  } catch(e) {
+    toast('❌ Error guardando: ' + e.message, 'err');
+  }
+}
+
+function iniciarRenombreAreaPanel(area) {
+  areaPanelEditando = area;
+  renderizarListaAreasPanel();
+  setTimeout(() => $('areas-panel-input-editar')?.focus(), 30);
+}
+
+function cancelarRenombreAreaPanel() {
+  areaPanelEditando = null;
+  renderizarListaAreasPanel();
+}
+
+async function guardarRenombreAreaPanel(nombreViejo) {
+  const nuevoNombre = ($('areas-panel-input-editar')?.value || '').trim();
+  if (!nuevoNombre) { toast('El nombre no puede quedar vacío', 'err'); return; }
+  if (nuevoNombre === nombreViejo) { cancelarRenombreAreaPanel(); return; }
+  if (areasPanelCache.some(a => a.toLowerCase() === nuevoNombre.toLowerCase())) {
+    toast('❌ Ya existe un área con ese nombre', 'err');
+    return;
+  }
+
+  const confirmado = await confirmarAccion(
+    `Se renombrará "${nombreViejo}" a "${nuevoNombre}" en el catálogo. ` +
+    `Los registros de Novedades y Envíos ya guardados con el nombre anterior NO se actualizan automáticamente. ¿Continuar?`,
+    'Renombrar área'
+  );
+  if (!confirmado) return;
+
+  try {
+    const listaActualizada = areasPanelCache.map(a => a === nombreViejo ? nuevoNombre : a);
+    const nuevaLista = await guardarCatalogoAreas(listaActualizada);
+    areasPanelCache = nuevaLista;
+    areaPanelEditando = null;
+    renderizarListaAreasPanel();
+    await registrarEnAuditoria('area_renombrar', nuevoNombre, usuario.email, null, null, { antes: nombreViejo, despues: nuevoNombre }, `Área renombrada: "${nombreViejo}" → "${nuevoNombre}"`);
+    toast(`✅ Área renombrada a "${nuevoNombre}"`, 'ok');
+  } catch(e) {
+    toast('❌ Error guardando: ' + e.message, 'err');
+  }
+}
+
+async function eliminarAreaPanel(area) {
+  const confirmado = await confirmarAccion(
+    `¿Eliminar "${area}" del catálogo de áreas? Ya no aparecerá como opción en Envíos ni en Novedades, ` +
+    `pero los registros ya guardados con esta área no se borran.`,
+    'Eliminar área'
+  );
+  if (!confirmado) return;
+
+  try {
+    const nuevaLista = await guardarCatalogoAreas(areasPanelCache.filter(a => a !== area));
+    areasPanelCache = nuevaLista;
+    renderizarListaAreasPanel();
+    await registrarEnAuditoria('area_eliminar', area, usuario.email, null, null, {}, `Área eliminada del catálogo: "${area}"`);
+    toast(`✅ Área "${area}" eliminada`, 'ok');
+  } catch(e) {
+    toast('❌ Error guardando: ' + e.message, 'err');
+  }
+}
+
+/* ═════════════════════════════════════════
    PANEL ADMIN — Desbloqueos
 ═════════════════════════════════════════ */
 
@@ -6174,6 +6358,18 @@ window.confirmarRechazarDesbloqueo  = confirmarRechazarDesbloqueo;
 window.cargarResumenGeneral         = cargarResumenGeneral;
 window.exportarResumenGeneralExcel  = exportarResumenGeneralExcel;
 window.mostrarDetalleCodigo         = mostrarDetalleCodigo;
+
+// Exportaciones agregadas en cambios recientes (navbar, panel de Áreas) —
+// app.js se carga como <script type="module">, así que cualquier función
+// usada en un onclick="..." del HTML debe colgarse explícitamente de window
+window.irInicioNav                  = irInicioNav;
+window.actualizarVistaActual        = actualizarVistaActual;
+window.agregarAreaPanel             = agregarAreaPanel;
+window.iniciarRenombreAreaPanel     = iniciarRenombreAreaPanel;
+window.cancelarRenombreAreaPanel    = cancelarRenombreAreaPanel;
+window.guardarRenombreAreaPanel     = guardarRenombreAreaPanel;
+window.eliminarAreaPanel            = eliminarAreaPanel;
+window.renderizarListaAreasPanel    = renderizarListaAreasPanel;
 
 /* ══════════════════════════════════
    MODO OSCURO / CLARO
