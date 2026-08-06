@@ -305,6 +305,8 @@ const show    = id => { const e=$(id); if(!e) return; e.style.display = ['nav-se
 const hide    = id => { const e=$(id); if(e) e.style.display='none'; };
 const hideAll = () => ['vista-login','vista-novedades','vista-envios','vista-exito','vista-admin','vista-reportes'].forEach(hide);
 
+let vistaActual = null;
+
 function ir(v) {
   hideAll();
   const el = $(v); if (!el) return;
@@ -314,9 +316,46 @@ function ir(v) {
   if (v==='vista-novedades') $('nb-novedades')?.classList.add('active');
   if (v==='vista-admin') $('nb-admin')?.classList.add('active');
   if (v==='vista-reportes') $('nb-reportes')?.classList.add('active');
+  vistaActual = v;
 }
 
 function irNovedades() { ir('vista-novedades'); cargarNovedadesActuales(); }
+
+// Clic en el logo/nombre "SISCTE v6.0": solo navega si hay sesión iniciada
+function irInicioNav() {
+  if (!usuario) return;
+  irNovedades();
+}
+
+// Botón "Actualizar" del navbar: refresca solo los datos de la vista visible,
+// sin recargar toda la página (así no se pierde el scroll ni el estado de filtros)
+function actualizarVistaActual() {
+  switch (vistaActual) {
+    case 'vista-novedades':
+      cargarNovedadesActuales();
+      break;
+    case 'vista-envios':
+      cargarMisEnvios();
+      break;
+    case 'vista-reportes':
+      cargarReportesActividad();
+      break;
+    case 'vista-admin': {
+      const tabActiva = document.querySelector('.admin-tab.active')?.dataset.tab;
+      if (tabActiva === 'envios')      cargarAdmin();
+      else if (tabActiva === 'accesos')     cargarAccesos();
+      else if (tabActiva === 'auditoria')   cargarAuditoria();
+      else if (tabActiva === 'desbloqueos') { cargarDesbloqueos(); poblarSelectoresDesbloqueoDirecto(); }
+      else if (tabActiva === 'resumen')     cargarResumenGeneral();
+      else if (tabActiva === 'importar')    cargarDirectorioPersonal();
+      else if (tabActiva === 'permisos')    poblarListaPermisos();
+      break;
+    }
+    default:
+      location.reload();
+  }
+  toast('🔄 Actualizado', 'ok');
+}
 function irReportes() {
   ir('vista-reportes');
   cargarReportesActividad();
