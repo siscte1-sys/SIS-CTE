@@ -2214,9 +2214,9 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
   const anchoUtil = anchoPagina - (margenLateral * 2);
   const anchoNo = 7;
   const anchoCodigo = 14;
-  const anchoGrado = 16;
-  const anchoNombres = 38;
-  const anchoObservacion = 22;
+  const anchoGrado = 22;
+  const anchoNombres = 34;
+  const anchoObservacion = 20;
   const anchoFijosTotal = anchoNo + anchoCodigo + anchoGrado + anchoNombres + anchoObservacion;
   const anchoDia = (anchoUtil - anchoFijosTotal) / totalDias;
 
