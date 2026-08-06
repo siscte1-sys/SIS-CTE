@@ -3065,6 +3065,32 @@ async function subirJSONaDrive(token, idCarpeta, nombreArchivo, objeto) {
   return resp.json();
 }
 
+async function subirBlobADrive(token, idCarpeta, nombreArchivo, blob, mimeType) {
+  const metadata = { name: nombreArchivo, mimeType, parents: [idCarpeta] };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', blob);
+
+  const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token },
+    body: form
+  });
+  if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || resp.status); }
+  return resp.json();
+}
+
+async function cargarJSZip() {
+  if (!window.JSZip) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+      s.onload = res; s.onerror = rej; document.head.appendChild(s);
+    });
+  }
+  return window.JSZip;
+}
+
 /* ══════════════════════════════════
    BACKUP MENSUAL — Novedades, Personal, Accesos, Auditoría, Envíos
 ══════════════════════════════════ */
@@ -3116,6 +3142,8 @@ async function generarBackupMensual(periodo, manual = false, forzar = false) {
     const token = await obtenerTokenDrive();
     const idCarpetaBackups = await obtenerOCrearCarpetaRaiz(token, GDRIVE_NOMBRE_CARPETA_BACKUPS);
     const idCarpetaMes     = await obtenerOCrearCarpetaEnPadre(token, periodo, idCarpetaBackups);
+    const JSZipLib = await cargarJSZip();
+    const zip = new JSZipLib();
 
     // 1. Novedades del período — todas las áreas
     const areas = await obtenerAreasNovedades();
@@ -3125,31 +3153,34 @@ async function generarBackupMensual(periodo, manual = false, forzar = false) {
       const snap = await window._fb.getDoc(ref);
       if (snap.exists()) novedadesDump[area] = snap.data();
     }
-    await subirJSONaDrive(token, idCarpetaMes, `novedades_${periodo}.json`, novedadesDump);
+    zip.file(`novedades_${periodo}.json`, JSON.stringify(novedadesDump, null, 2));
 
     // 2. Personal (snapshot completo — no tiene dimensión de mes)
     const personalSnap = await window._fb.getDocs(window._fb.collection(db, 'personal'));
-    await subirJSONaDrive(token, idCarpetaMes, `personal_${periodo}.json`,
-      personalSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const personalDump = personalSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    zip.file(`personal_${periodo}.json`, JSON.stringify(personalDump, null, 2));
 
     // 3. Accesos (snapshot completo — no tiene dimensión de mes)
     const accesosSnap = await window._fb.getDocs(window._fb.collection(db, 'accesos'));
-    await subirJSONaDrive(token, idCarpetaMes, `accesos_${periodo}.json`,
-      accesosSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const accesosDump = accesosSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    zip.file(`accesos_${periodo}.json`, JSON.stringify(accesosDump, null, 2));
 
     // 4. Auditoría del mes
     const auditoriaSnap = await window._fb.getDocs(window._fb.collection(db, 'auditoria'));
     const auditoriaMes = auditoriaSnap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(a => a.timestamp?.toDate && a.timestamp.toDate().toISOString().slice(0, 7) === periodo);
-    await subirJSONaDrive(token, idCarpetaMes, `auditoria_${periodo}.json`, auditoriaMes);
+    zip.file(`auditoria_${periodo}.json`, JSON.stringify(auditoriaMes, null, 2));
 
     // 5. Envíos (entregas) del mes
     const entregasSnap = await window._fb.getDocs(window._fb.collection(db, 'entregas'));
     const entregasMes = entregasSnap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(e => String(e.timestamp || '').startsWith(periodo));
-    await subirJSONaDrive(token, idCarpetaMes, `entregas_${periodo}.json`, entregasMes);
+    zip.file(`entregas_${periodo}.json`, JSON.stringify(entregasMes, null, 2));
+
+    const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    await subirBlobADrive(token, idCarpetaMes, `backup_${periodo}.zip`, zipBlob, 'application/zip');
 
     await window._fb.setDoc(window._fb.doc(db, 'backups', periodo), {
       periodo,
@@ -3250,27 +3281,60 @@ async function analizarArchivosBackup(event) {
 
   const datos = { periodo: null, novedades: null, personal: null, accesos: null, auditoria: null, entregas: null };
 
-  for (const file of files) {
-    let json;
-    try {
-      json = JSON.parse(await file.text());
-    } catch(e) {
-      toast(`❌ "${file.name}" no es un JSON válido`, 'err');
-      return;
-    }
-    const m = file.name.match(/(\d{4}-\d{2})/);
+  const asignar = (nombreArchivo, json) => {
+    const m = nombreArchivo.match(/(\d{4}-\d{2})/);
     if (m && !datos.periodo) datos.periodo = m[1];
 
-    if (/^novedades_/i.test(file.name))      datos.novedades = json;
-    else if (/^personal_/i.test(file.name))  datos.personal  = json;
-    else if (/^accesos_/i.test(file.name))   datos.accesos   = json;
-    else if (/^auditoria_/i.test(file.name)) datos.auditoria = json;
-    else if (/^entregas_/i.test(file.name))  datos.entregas  = json;
-    else toast(`⚠️ No reconocí "${file.name}" (nombre esperado: novedades_/personal_/accesos_/auditoria_/entregas_AAAA-MM.json) — se ignora`, 'err');
+    if (/^novedades_/i.test(nombreArchivo))      datos.novedades = json;
+    else if (/^personal_/i.test(nombreArchivo))  datos.personal  = json;
+    else if (/^accesos_/i.test(nombreArchivo))   datos.accesos   = json;
+    else if (/^auditoria_/i.test(nombreArchivo)) datos.auditoria = json;
+    else if (/^entregas_/i.test(nombreArchivo))  datos.entregas  = json;
+    else toast(`⚠️ No reconocí "${nombreArchivo}" (nombre esperado: novedades_/personal_/accesos_/auditoria_/entregas_AAAA-MM.json) — se ignora`, 'err');
+  };
+
+  for (const file of files) {
+    if (/\.zip$/i.test(file.name)) {
+      // Backup nuevo formato: un .zip con los .json adentro
+      let entradas;
+      try {
+        const JSZipLib = await cargarJSZip();
+        const zip = await JSZipLib.loadAsync(file);
+        entradas = Object.values(zip.files).filter(f => !f.dir && /\.json$/i.test(f.name));
+      } catch(e) {
+        toast(`❌ No se pudo abrir "${file.name}": ${e.message}`, 'err');
+        return;
+      }
+      if (!entradas.length) {
+        toast(`❌ "${file.name}" no contiene archivos .json adentro`, 'err');
+        return;
+      }
+      for (const entrada of entradas) {
+        let json;
+        try {
+          json = JSON.parse(await entrada.async('text'));
+        } catch(e) {
+          toast(`❌ "${entrada.name}" dentro del .zip no es un JSON válido`, 'err');
+          return;
+        }
+        // El nombre puede venir con ruta interna (ej. carpeta/novedades_...json) — usar solo el nombre de archivo
+        asignar(entrada.name.split('/').pop(), json);
+      }
+    } else {
+      // Backup formato viejo: .json sueltos
+      let json;
+      try {
+        json = JSON.parse(await file.text());
+      } catch(e) {
+        toast(`❌ "${file.name}" no es un JSON válido`, 'err');
+        return;
+      }
+      asignar(file.name, json);
+    }
   }
 
   if (!datos.novedades && !datos.personal && !datos.accesos && !datos.auditoria && !datos.entregas) {
-    toast('Ningún archivo reconocido. Use los .json que descargó de la carpeta de Backups en Drive.', 'err');
+    toast('Ningún archivo reconocido. Use el .zip (o los .json sueltos) que descargó de la carpeta de Backups en Drive.', 'err');
     return;
   }
   if (!datos.periodo) {
