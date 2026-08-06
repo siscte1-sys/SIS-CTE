@@ -2191,6 +2191,15 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
     });
   });
 
+  // ── Nota de pie de página discreta (no institucional, solo trazabilidad técnica) ──
+  const filaFooterNum = filaFirmaNum + 2;
+  ws.mergeCells(filaFooterNum, 1, filaFooterNum, numCols);
+  const filaFooter = ws.getCell(filaFooterNum, 1);
+  const fechaGenExcel = new Date().toLocaleString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  filaFooter.value = `Documento generado automáticamente mediante el Sistema SISCTE v6.0 — Unidad de Personal y Movilidad CTE · Generado: ${fechaGenExcel}`;
+  filaFooter.font = { size: 8, italic: true, color: { argb: 'FF888888' } };
+  filaFooter.alignment = { horizontal: 'center' };
+
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
@@ -2257,6 +2266,16 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
     try {
       doc.addImage(LOGO_SISCTE_PNG_BASE64, 'PNG', 12, 8.6, 9, 13.6);
     } catch (e) { /* si el navegador no soporta el formato, se omite sin romper el PDF */ }
+
+    // ── Nota de pie de página discreta: identifica el sistema que generó
+    //    el documento sin competir con el encabezado institucional ──
+    const altoPaginaFooter = doc.internal.pageSize.getHeight();
+    const fechaGen = new Date().toLocaleString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Documento generado automáticamente mediante el Sistema SISCTE v6.0 — Unidad de Personal y Movilidad CTE · Generado: ${fechaGen}`, anchoPagina / 2, altoPaginaFooter - 5, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
   };
   dibujarBanner();
 
@@ -4914,16 +4933,16 @@ async function exportarReporteActividadExcel() {
     c.border = { top: bordeDelgado, left: bordeDelgado, bottom: bordeDelgado, right: bordeDelgado };
   }));
 
+  // ── Nota de pie de página discreta (no institucional, solo trazabilidad técnica) ──
+  const filaFooterActNum = ws.lastRow.number + 2;
+  ws.mergeCells(filaFooterActNum, 1, filaFooterActNum, 5);
+  const filaFooterAct = ws.getCell(filaFooterActNum, 1);
+  const fechaGenAct = new Date().toLocaleString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  filaFooterAct.value = `Documento generado automáticamente mediante el Sistema SISCTE v6.0 — Unidad de Personal y Movilidad CTE · Generado: ${fechaGenAct}`;
+  filaFooterAct.font = { size: 8, italic: true, color: { argb: 'FF888888' } };
+  filaFooterAct.alignment = { horizontal: 'center' };
+
   const buffer = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buffer], { type: 'application/octet-stream' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `reporte_actividad_${new Date().toISOString().slice(0,10)}.xlsx`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 
   toast('✅ Reporte descargado', 'ok');
 }
@@ -6372,6 +6391,15 @@ async function exportarResumenGeneralExcel() {
   } else {
     ws.addRow(['Sin ausencias injustificadas este mes']);
   }
+
+  // ── Nota de pie de página discreta (no institucional, solo trazabilidad técnica) ──
+  const filaFooterResNum = ws.rowCount + 2;
+  ws.mergeCells(filaFooterResNum, 1, filaFooterResNum, headers.length);
+  const filaFooterRes = ws.getCell(filaFooterResNum, 1);
+  const fechaGenRes = new Date().toLocaleString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  filaFooterRes.value = `Documento generado automáticamente mediante el Sistema SISCTE v6.0 — Unidad de Personal y Movilidad CTE · Generado: ${fechaGenRes}`;
+  filaFooterRes.font = { size: 8, italic: true, color: { argb: 'FF888888' } };
+  filaFooterRes.alignment = { horizontal: 'center' };
 
   // ── Descargar ──
   const buffer = await wb.xlsx.writeBuffer();
