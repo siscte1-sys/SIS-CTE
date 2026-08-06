@@ -702,7 +702,7 @@
           <div style="padding:20px;">
             <div class="sec-titulo">📦 Backup a Drive (Novedades + Personal + Accesos + Auditoría + Envíos)</div>
             <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
-              Genera el backup de un mes específico ahora mismo, sin esperar al aviso automático. Si ya existe un backup completo de ese mes, no lo duplica — solo avisa.
+              Genera el backup de un mes específico ahora mismo, sin esperar al aviso automático — se sube a Drive como un solo archivo <code>.zip</code>. Si ya existe un backup completo de ese mes, no lo duplica — solo avisa.
             </p>
             <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;max-width:520px;">
               <div class="form-field" style="margin-bottom:0;">
@@ -729,15 +729,15 @@
           <div style="padding:20px;">
             <div class="sec-titulo">📥 Restaurar Backup</div>
             <p style="color:var(--txt2);margin-bottom:8px;font-size:12px;">
-              Suba los archivos <code>.json</code> que descargó de la carpeta "Respaldos" en Drive — puede seleccionar los 5 juntos (Novedades, Personal, Accesos, Auditoría, Envíos) o solo los que tenga.
+              Suba el archivo <code>.zip</code> que descargó de la carpeta "Respaldos" en Drive (trae adentro Novedades, Personal, Accesos, Auditoría y Envíos). También acepta <code>.json</code> sueltos, por si tiene backups viejos generados antes de este cambio.
             </p>
             <p style="color:var(--red);margin-bottom:16px;font-size:12px;">
               ⚠️ Esto escribe datos directamente en el sistema. Antes de aplicar nada, le va a mostrar una previsualización con lo que trae cada archivo.
             </p>
             <button class="btn-acc btn-acc-blue" onclick="$('restaurar-backup-file').click()">
-              📂 Seleccionar archivos del backup
+              📂 Seleccionar archivo del backup
             </button>
-            <input type="file" id="restaurar-backup-file" accept=".json" multiple style="display:none;" onchange="analizarArchivosBackup(event)">
+            <input type="file" id="restaurar-backup-file" accept=".zip,.json" multiple style="display:none;" onchange="analizarArchivosBackup(event)">
           </div>
         </div>
 
