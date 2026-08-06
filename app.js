@@ -223,6 +223,9 @@ const PERMISOS_DISPONIBLES = [
     { key: 'resumen_ver',               label: 'Ver resumen general' },
     { key: 'resumen_exportar',          label: 'Exportar resumen a Excel' },
   ]},
+  { tab: 'areas', tabLabel: '🗺️ Áreas', acciones: [
+    { key: 'areas_gestionar',           label: 'Agregar / renombrar / eliminar / importar áreas' },
+  ]},
   { tab: 'actividad', tabLabel: '📈 Actividad del Administrador', acciones: [
     { key: 'actividad_ver',             label: 'Ver actividad del administrador (auditoría resumida) y descargarla' },
   ]},
@@ -1868,7 +1871,7 @@ function aplicarVisibilidadTabsAdmin() {
 
   document.querySelectorAll('.admin-tab').forEach(tab => {
     const tabName = tab.dataset.tab;
-    if (tabName === 'permisos' || tabName === 'areas') {
+    if (tabName === 'permisos') {
       tab.style.display = esAdmin() ? 'inline-flex' : 'none';
       return;
     }
@@ -2552,8 +2555,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.admin-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       const tabName = tab.dataset.tab;
-      if (tabName !== 'permisos' && tabName !== 'areas' && !tabPermitido(tabName)) return; // defensa extra, el botón ya está oculto
-      if ((tabName === 'permisos' || tabName === 'areas') && !esAdmin()) return;
+      if (tabName !== 'permisos' && !tabPermitido(tabName)) return; // defensa extra, el botón ya está oculto
+      if (tabName === 'permisos' && !esAdmin()) return;
       document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.admin-tab-content').forEach(c => c.style.display = 'none');
       tab.classList.add('active');
@@ -5618,10 +5621,11 @@ function renderizarListaAreasPanel() {
     return `
       <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);">
         <span style="flex:1;font-size:13px;">${area}</span>
-        <button class="btn-acc btn-acc-orange" style="padding:5px 10px;font-size:11px;" onclick="iniciarRenombreAreaPanel('${area.replace(/'/g, "\\'")}')">✏️ Renombrar</button>
-        <button class="btn-acc btn-acc-red" style="padding:5px 10px;font-size:11px;" onclick="eliminarAreaPanel('${area.replace(/'/g, "\\'")}')">🗑️ Eliminar</button>
+        <button class="btn-acc btn-acc-orange" style="padding:5px 10px;font-size:11px;" data-permiso="areas_gestionar" onclick="iniciarRenombreAreaPanel('${area.replace(/'/g, "\\'")}')">✏️ Renombrar</button>
+        <button class="btn-acc btn-acc-red" style="padding:5px 10px;font-size:11px;" data-permiso="areas_gestionar" onclick="eliminarAreaPanel('${area.replace(/'/g, "\\'")}')">🗑️ Eliminar</button>
       </div>`;
   }).join('');
+  aplicarPermisosBotones();
 }
 
 async function agregarAreaPanel() {
