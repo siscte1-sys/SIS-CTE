@@ -1013,10 +1013,10 @@
           </p>
           <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
             <input type="text" id="nueva-area-input" class="form-select" placeholder="Nombre de la nueva área..." style="flex:1;min-width:220px;">
-            <button class="btn-acc btn-acc-blue" onclick="agregarAreaPanel()">➕ Agregar área</button>
+            <button class="btn-acc btn-acc-blue" data-permiso="areas_gestionar" onclick="agregarAreaPanel()">➕ Agregar área</button>
           </div>
 
-          <div style="border-top:1px solid var(--border);margin:4px 0 16px;padding-top:16px;">
+          <div style="border-top:1px solid var(--border);margin:4px 0 16px;padding-top:16px;" data-permiso="areas_gestionar">
             <label class="form-label">Importar áreas desde Excel/CSV</label>
             <p style="color:var(--txt2);font-size:11px;margin:-4px 0 8px;">
               El archivo debe tener una columna con el nombre de área (encabezado "ÁREA", "AREA" o "AREA ACTUAL"; si el archivo tiene una sola columna, se toma esa). Las áreas repetidas se ignoran automáticamente.
