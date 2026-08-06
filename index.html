@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Portal SISCTE v6.0 — Novedades + Envíos</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon_32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="favicon_16.png">
-<link rel="apple-touch-icon" href="SISCTE_logo_icono_256.png">
+<link rel="icon" type="image/png" sizes="32x32" href="img/favicon_32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="img/favicon_16.png">
+<link rel="apple-touch-icon" href="img/SISCTE_logo_icono_256.png">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="styles_novedades_v6.css">
 </head>
@@ -332,9 +332,11 @@
 
         <div class="form-field">
           <label class="form-label">Área <span class="req">*</span></label>
-          <select id="area-select" class="form-select">
-            <option value="">Seleccioná un área</option>
-          </select>
+          <div style="position:relative;">
+            <input type="text" id="area-select-buscar" class="form-select" autocomplete="off" placeholder="Escriba para buscar un área...">
+            <input type="hidden" id="area-select" value="">
+            <div id="area-select-lista" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shl);max-height:240px;overflow-y:auto;z-index:50;"></div>
+          </div>
         </div>
 
         <div class="form-field">
@@ -586,6 +588,7 @@
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="auditoria">📋 Auditoría</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="desbloqueos">🔓 Desbloqueos</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="resumen">📊 Resumen General</button>
+          <button class="btn-acc btn-acc-blue admin-tab" data-tab="areas" id="tab-btn-areas" style="display:none;">🗺️ Áreas</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="permisos" id="tab-btn-permisos" style="display:none;">🔑 Permisos</button>
         </div>
       </div>
@@ -1001,6 +1004,23 @@
         </div>
       </div>
 
+      <!-- TAB: Áreas (solo superadmin) -->
+      <div id="admin-tab-areas" class="admin-tab-content" style="display:none">
+        <div class="panel-white" style="padding:20px;">
+          <div class="sec-titulo">🗺️ Catálogo de Áreas</div>
+          <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
+            Esta lista alimenta el buscador de área en Envíos y en Novedades. Agregar, renombrar o eliminar aquí se refleja en ambos módulos. Renombrar o eliminar no modifica los registros ya guardados con el nombre anterior.
+          </p>
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            <input type="text" id="nueva-area-input" class="form-select" placeholder="Nombre de la nueva área..." style="flex:1;min-width:220px;">
+            <button class="btn-acc btn-acc-blue" onclick="agregarAreaPanel()">➕ Agregar área</button>
+          </div>
+          <input type="text" id="areas-panel-buscar" class="form-select" placeholder="Buscar en la lista..." style="margin-bottom:12px;" oninput="renderizarListaAreasPanel()">
+          <div id="areas-panel-total" style="font-size:12px;color:var(--txt2);margin-bottom:8px;"></div>
+          <div id="areas-panel-lista" style="max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;"></div>
+        </div>
+      </div>
+
       <!-- TAB 6: Permisos (solo superadmin) -->
       <div id="admin-tab-permisos" class="admin-tab-content" style="display:none">
         <div class="panel-white" style="margin-bottom:16px;">
@@ -1159,7 +1179,7 @@
     </div>
     <div class="modal-body">
       <div class="form-field">
-        <label class="form-label">Contale al administrador por qué necesitás editarlo</label>
+        <label class="form-label">Indicar al administrador el motivo</label>
         <textarea id="solicitud-desbloqueo-razon" class="form-textarea" placeholder="Ej: Se me olvidó cargar la novedad ese día..." rows="3"></textarea>
       </div>
       <div class="modal-footer">
