@@ -1560,25 +1560,42 @@
 </script>
 
 <script type="module" src="app.js"></script>
-<div id="debug-viewport" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-family:monospace;font-size:11px;padding:6px 8px;z-index:99999;line-height:1.5;white-space:pre-wrap;"></div>
+<div id="debug-viewport" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-family:monospace;font-size:10px;padding:6px 8px;z-index:99999;line-height:1.4;white-space:pre-wrap;max-height:45vh;overflow-y:auto;"></div>
 <script>
   function actualizarDebugViewport() {
     const d = document.documentElement;
     const vv = window.visualViewport;
-    const texto =
-      `innerWidth: ${window.innerWidth} | innerHeight: ${window.innerHeight}\n` +
-      `scrollWidth (doc): ${d.scrollWidth} | scrollHeight (doc): ${d.scrollHeight}\n` +
-      `clientWidth (doc): ${d.clientWidth}\n` +
-      `devicePixelRatio: ${window.devicePixelRatio}\n` +
-      `visualViewport: ${vv ? vv.width.toFixed(0)+' x '+vv.height.toFixed(0)+' (scale '+vv.scale+')' : 'no disponible'}\n` +
-      `scrollX actual: ${window.scrollX}`;
-    const el = document.getElementById('debug-viewport');
-    if (el) el.textContent = texto;
+    let texto =
+      `innerWidth: ${window.innerWidth} | scrollWidth: ${d.scrollWidth} | clientWidth: ${d.clientWidth}\n` +
+      `visualViewport: ${vv ? vv.width.toFixed(0) : '?'} | scrollX: ${window.scrollX}\n` +
+      `--- ELEMENTOS QUE SE DESBORDAN ---\n`;
+
+    const limite = d.clientWidth;
+    const culpables = [];
+    document.querySelectorAll('body *').forEach(el => {
+      if (el.id === 'debug-viewport') return;
+      const w = el.scrollWidth;
+      if (w > limite + 5) {
+        const rect = el.getBoundingClientRect();
+        culpables.push({ el, w, right: Math.round(rect.right) });
+      }
+    });
+    // Ordenar por ancho descendente y quedarnos con los 8 peores
+    culpables.sort((a, b) => b.w - a.w);
+    culpables.slice(0, 8).forEach(c => {
+      const id = c.el.id ? '#' + c.el.id : '';
+      const cls = c.el.className && typeof c.el.className === 'string' ? '.' + c.el.className.split(' ').join('.') : '';
+      texto += `${c.el.tagName}${id}${cls.slice(0, 40)} → scrollWidth: ${c.w}px (borde derecho: ${c.right}px)\n`;
+    });
+    if (!culpables.length) texto += '(ninguno por encima del límite)\n';
+
+    const elDebug = document.getElementById('debug-viewport');
+    if (elDebug) elDebug.textContent = texto;
   }
   window.addEventListener('load', actualizarDebugViewport);
   window.addEventListener('resize', actualizarDebugViewport);
-  window.addEventListener('scroll', actualizarDebugViewport);
-  setTimeout(actualizarDebugViewport, 800);
+  setTimeout(actualizarDebugViewport, 1000);
+  setTimeout(actualizarDebugViewport, 2500);
 </script>
 </body>
 </html>
