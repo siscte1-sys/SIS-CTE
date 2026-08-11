@@ -5234,6 +5234,103 @@ function cerrarModalPersonal() {
   modalPersonalIdEdicion = null;
 }
 
+/* ═════════════════════════════════════════
+   CAMBIO DE ÁREA → NOVEDADES DEL MES EN CURSO
+
+   El área de la Base de Personal (fija o temporal) era solo
+   informativa: se guardaba en la colección `personal` pero no movía al
+   agente dentro de novedades/{área}/{período}, así que en Novedades
+   seguía figurando donde estaba al importar el LIS. Estas funciones lo
+   mueven de verdad, conservando los días ya cargados.
+
+   Reglas acordadas:
+   · Mientras dure un reemplazo temporal, el agente aparece ÚNICAMENTE
+     en el área temporal.
+   · Al quitar el reemplazo, vuelve solo a su área fija.
+   · Si cambia el área fija de alguien sin reemplazo, se mueve a la
+     nueva área fija.
+   · Todo esto aplica solo al mes en curso.
+═════════════════════════════════════════ */
+
+function _normCodigoAgente(c) {
+  return String(c || '').replace(/\s+/g, '').toUpperCase();
+}
+
+/* Saca al agente del listado de un área+mes. Devuelve el objeto que
+   estaba guardado (para no perder los días ya registrados) o null. */
+async function quitarAgenteDeAreaNovedades(area, periodo, codigo) {
+  if (!area || !codigo) return null;
+  const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+  const snap = await window._fb.getDoc(ref);
+  if (!snap.exists()) return null;
+  const agentes = snap.data().agentes || [];
+  const buscado = _normCodigoAgente(codigo);
+  const encontrado = agentes.find(a => _normCodigoAgente(a.codigo) === buscado) || null;
+  if (!encontrado) return null;
+  await window._fb.setDoc(ref, {
+    agentes: agentes.filter(a => _normCodigoAgente(a.codigo) !== buscado),
+    ultimaModificacion: new Date()
+  }, { merge: true });
+  return encontrado;
+}
+
+/* Agrega al agente al listado de un área+mes. Si el mes de esa área
+   todavía no existe, lo crea con la misma estructura que la importación. */
+async function agregarAgenteAAreaNovedades(area, periodo, agente) {
+  if (!area || !agente || !agente.codigo) return false;
+  const ref = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+  const snap = await window._fb.getDoc(ref);
+  const data = snap.exists() ? snap.data() : null;
+  const agentes = data ? [...(data.agentes || [])] : [];
+  const buscado = _normCodigoAgente(agente.codigo);
+  if (agentes.some(a => _normCodigoAgente(a.codigo) === buscado)) return false;
+  agentes.push(agente);
+  await window._fb.setDoc(ref, {
+    agentes,
+    estado: (data && data.estado) || 'activo',
+    diasBloqueados: (data && data.diasBloqueados) || [],
+    diasDesbloqueados: (data && data.diasDesbloqueados) || [],
+    diasNoCompletados: (data && data.diasNoCompletados) || Array.from({length: 31}, (_, i) => i + 1),
+    fechaCreacion: (data && data.fechaCreacion) || new Date(),
+    ultimaModificacion: new Date()
+  });
+  return true;
+}
+
+/* Mueve al agente entre áreas dentro del mes en curso cuando cambia su
+   área fija o su área temporal. El área temporal manda: si hay un
+   reemplazo activo, el agente vive en esa área aunque se le corrija el
+   área fija. Devuelve {desde, hacia, periodo} o null si no hay nada
+   que mover. */
+async function sincronizarAreaEnNovedades(datos) {
+  const periodo = obtenerFechaParts().periodo;
+  const nuevaTemp = datos.areaTemporal ? sanitizarNombreArea(datos.areaTemporal) : null;
+  const viejaTemp = datos.areaTemporalAnterior ? sanitizarNombreArea(datos.areaTemporalAnterior) : null;
+  const areaFija = sanitizarNombreArea(datos.area);
+  const areaFijaAnterior = datos.areaAnterior ? sanitizarNombreArea(datos.areaAnterior) : areaFija;
+
+  // Dónde figura hoy en Novedades y dónde debería figurar tras el cambio
+  const origen = viejaTemp || areaFijaAnterior;
+  const destino = nuevaTemp || areaFija;
+  if (!origen || !destino || origen === destino) return null;
+
+  // Se lo saca del área donde está hoy, conservando sus días ya registrados
+  const guardado = await quitarAgenteDeAreaNovedades(origen, periodo, datos.codigo);
+  const nombreCompleto = `${datos.apellidos || ''} ${datos.nombres || ''}`.trim();
+  const agente = guardado
+    ? { ...guardado,
+        grado: datos.grado || guardado.grado || '',
+        apellidosNombres: nombreCompleto || guardado.apellidosNombres || '' }
+    : { codigo: datos.codigo,
+        grado: datos.grado || '',
+        apellidosNombres: nombreCompleto,
+        novedadesPorDia: {},
+        observaciones: '' };
+
+  await agregarAgenteAAreaNovedades(destino, periodo, agente);
+  return { desde: origen, hacia: destino, periodo, conservoDias: !!guardado };
+}
+
 async function guardarRegistroPersonal() {
   const codigo = $('modal-personal-codigo').value.trim();
   const grado = $('modal-personal-grado').value.trim();
@@ -5266,13 +5363,38 @@ async function guardarRegistroPersonal() {
       });
     }
 
+    // ── Mover al agente en las Novedades del mes en curso si cambió su
+    //    área fija o su área temporal (antes esto solo se guardaba en el
+    //    directorio, no se reflejaba en el mes) ──
+    const registroPrevio = modalPersonalIdEdicion
+      ? personalDirectorioCache.find(x => x.id === modalPersonalIdEdicion)
+      : null;
+    let movimiento = null;
+    try {
+      movimiento = await sincronizarAreaEnNovedades({
+        codigo, grado, apellidos, nombres,
+        area: areaSanitizada,
+        areaTemporal: areaTemporal || null,
+        areaAnterior: registroPrevio ? registroPrevio.area : null,
+        areaTemporalAnterior: registroPrevio ? registroPrevio.areaTemporal : null
+      });
+    } catch(e) {
+      console.error('No se pudo mover al agente en Novedades:', e);
+      toast('⚠️ El registro se guardó, pero no se pudo mover al agente en Novedades: ' + e.message, 'err');
+    }
+
     await registrarEnAuditoria(
       modalPersonalIdEdicion ? 'editar_personal' : 'crear_personal',
-      areaSanitizada, usuario.email, null, null, { codigo, areaTemporal },
-      `${modalPersonalIdEdicion ? 'Editado' : 'Agregado'} registro de personal: ${codigo} — ${apellidos} ${nombres}${areaTemporal ? ` (reemplazo temporal en ${areaTemporal})` : ''}`
+      areaSanitizada, usuario.email, null, null, { codigo, areaTemporal, movimiento },
+      `${modalPersonalIdEdicion ? 'Editado' : 'Agregado'} registro de personal: ${codigo} — ${apellidos} ${nombres}${areaTemporal ? ` (reemplazo temporal en ${areaTemporal})` : ''}${movimiento ? ` · Novedades ${movimiento.periodo}: movido de ${movimiento.desde} a ${movimiento.hacia}` : ''}`
     );
 
-    toast(`✅ Registro ${modalPersonalIdEdicion ? 'actualizado' : 'agregado'}`, 'ok');
+    toast(
+      movimiento
+        ? `✅ Registro actualizado · en Novedades de ${movimiento.periodo} pasó a "${movimiento.hacia}"`
+        : `✅ Registro ${modalPersonalIdEdicion ? 'actualizado' : 'agregado'}`,
+      'ok'
+    );
     cerrarModalPersonal();
     cargarDirectorioPersonal();
   } catch(e) {
