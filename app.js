@@ -78,6 +78,14 @@ async function obtenerSelloCTE() {
   catch(e) { console.warn('No se pudo cargar el sello de la CTE:', e); return null; }
 }
 
+// ── Logo institucional de la CTE: reemplaza al escudo del Ecuador en las
+//    exportaciones del módulo Novedades (PDF y Excel). Colocar el archivo
+//    en img/logo-cte.png ──
+async function obtenerLogoCTE() {
+  try { return await cargarImagenComoBase64('img/logo-cte.png'); }
+  catch(e) { console.warn('No se pudo cargar el logo de la CTE:', e); return null; }
+}
+
 const CODIGOS_VALIDOS = ["S/N", "OA", "X", "CS", "B", "Li", "V", "PE"];
 const CODIGOS_DESC = {
   "S/N": "SIN NOVEDAD (normal)",
@@ -2105,16 +2113,12 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   estiloNavy(areaCell);
   ws.getRow(2).height = 20;
 
-  // ── Escudo del Ecuador (izquierda) y sello institucional de la CTE
-  //    (derecha) sobre el banner navy (filas 1-2) ──
-  const [escudoB64Nov, selloB64Nov] = await Promise.all([obtenerEscudoEcuador(), obtenerSelloCTE()]);
-  if (escudoB64Nov) {
-    const logoIdEscudo = wb.addImage({ base64: escudoB64Nov, extension: 'png' });
-    ws.addImage(logoIdEscudo, { tl: { col: 0.15, row: 0.12 }, ext: { width: 31, height: 38 } });
-  }
-  if (selloB64Nov) {
-    const logoIdSello = wb.addImage({ base64: selloB64Nov, extension: 'png' });
-    ws.addImage(logoIdSello, { tl: { col: numCols - 0.24, row: 0.12 }, ext: { width: 38, height: 38 } });
+  // ── Logo institucional de la CTE (izquierda) sobre el banner navy
+  //    (filas 1-2). Es la única imagen del encabezado ──
+  const logoB64Nov = await obtenerLogoCTE();
+  if (logoB64Nov) {
+    const logoIdCteNov = wb.addImage({ base64: logoB64Nov, extension: 'png' });
+    ws.addImage(logoIdCteNov, { tl: { col: 0.15, row: 0.12 }, ext: { width: 38, height: 38 } });
   }
 
   ws.addRow([]);
@@ -2284,7 +2288,7 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
 
   // Se cargan una sola vez ANTES de dibujarBanner porque esta última se
   // invoca de forma síncrona (didDrawPage de autoTable no admite async)
-  const [escudoB64Pdf, selloB64Pdf] = await Promise.all([obtenerEscudoEcuador(), obtenerSelloCTE()]);
+  const logoB64Pdf = await obtenerLogoCTE();
 
   // ── Banners de título (se redibujan en cada página vía didDrawPage) ──
   const dibujarBanner = () => {
@@ -2301,12 +2305,10 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
     doc.text(`ÁREA: ${area}   ·   MES: ${nombreMes.toUpperCase()} ${anio}   ·   EFECTIVO: ${totalEfectivo}`, anchoPagina / 2, 21, { align: 'center' });
     doc.setTextColor(0, 0, 0);
 
-    // ── Escudo del Ecuador (izquierda) y sello institucional de la CTE
-    //    (derecha), sobre el banner — igual disposición que el formulario
-    //    oficial de la institución ──
+    // ── Logo institucional de la CTE (izquierda) sobre el banner. Es la
+    //    única imagen del encabezado y se redibuja en cada página ──
     try {
-      if (escudoB64Pdf) doc.addImage(escudoB64Pdf, 'PNG', 12, 8.6, 11.2, 13.6);
-      if (selloB64Pdf) doc.addImage(selloB64Pdf, 'PNG', anchoPagina - 10 - 13.6, 8.6, 13.6, 13.6);
+      if (logoB64Pdf) doc.addImage(logoB64Pdf, 'PNG', 12, 8.6, 13.6, 13.6);
     } catch (e) { /* si el navegador no soporta el formato, se omite sin romper el PDF */ }
 
     // ── Nota de pie de página discreta: identifica el sistema que generó
