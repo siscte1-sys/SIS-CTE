@@ -421,7 +421,7 @@ function actualizarNav() {
       let ie = $('nav-iniciales');
       if (!ie) {
         ie = document.createElement('div'); ie.id = 'nav-iniciales';
-        ie.style.cssText = 'width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+        ie.style.cssText = 'width:26px;height:26px;border-radius:50%;background:#0d1b3e;color:#e8b84b;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
         fotoEl.parentNode.insertBefore(ie, fotoEl.nextSibling);
       }
       const nombre = usuario.nombre || usuario.email || '?';
@@ -5520,15 +5520,18 @@ async function borrarTodaLaBaseNovedades() {
 
 const PERFILES = {
   SECRETARIO:    { label: 'SECRETARIO',    color: 'gold',  desc: 'Carga las novedades de su área. Sin acceso al Panel de Control.' },
-  SUPERVISOR:    { label: 'SUPERVISOR',    color: 'blue',  desc: 'Ve y exporta todo el sistema, incluida la auditoría. No puede modificar nada.' },
+  SUPERVISOR:    { label: 'SUPERVISOR',    color: 'orange',  desc: 'Ve y exporta todo el sistema, incluida la auditoría. No puede modificar nada.' },
   ADMINISTRADOR: { label: 'ADMINISTRADOR', color: 'green', desc: 'Acceso completo al Panel de Control: importar, accesos, desbloqueos, auditoría.' },
 };
 
 const COLORES_PERFIL = {
-  gold:  'background:var(--gold-l);color:var(--gold);',
-  blue:  'background:var(--blue-l);color:var(--blue);',
-  green: 'background:var(--green-l);color:var(--green);',
-  red:   'background:var(--red-l);color:var(--red);',
+  gold:   'background:var(--gold-l);color:var(--gold);',
+  orange: 'background:var(--orange-l);color:var(--orange);',
+  green:  'background:var(--green-l);color:var(--green);',
+  red:    'background:var(--red-l);color:var(--red);',
+  // 'blue' se mantiene por compatibilidad, pero resuelto en tonos cálidos
+  // para que en modo oscuro no aparezca como celeste
+  blue:   'background:var(--orange-l);color:var(--orange);',
 };
 
 let accesosCache = [];          // [{ correo, codigo, area, estado, perfil, nombre, grado }]
@@ -5714,7 +5717,7 @@ function renderizarAccesos() {
 
     return `
       <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;${a.estado ? '' : 'opacity:.6;'}">
-        <div style="width:38px;height:38px;flex-shrink:0;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;">
+        <div style="width:38px;height:38px;flex-shrink:0;border-radius:50%;background:#0d1b3e;color:#e8b84b;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;">
           ${inicialesDe(titulo)}
         </div>
         <div style="flex:1;min-width:0;">
@@ -5771,8 +5774,8 @@ function filtrarGrupoAccesos(grupo) {
   accesosPagina = 1;
   document.querySelectorAll('.chip-grupo-acceso').forEach(b => {
     const activo = b.dataset.grupo === grupo;
-    b.style.background = activo ? 'var(--blue)' : 'transparent';
-    b.style.color = activo ? '#fff' : 'var(--txt2)';
+    b.style.background = activo ? '#0d1b3e' : 'transparent';
+    b.style.color = activo ? '#e8b84b' : 'var(--txt2)';
   });
   renderizarAccesos();
 }
