@@ -845,3 +845,75 @@ body:not(.dark-mode) .nav-btn.nav-btn-admin.active{
   .nav-btn.nav-btn-admin{padding:0 8px;font-size:11px;letter-spacing:.02em;}
   .nav-right .nav-divider{margin:0 5px;}
 }
+
+/* ══════════════════════════════════════════════════════
+   SUBMENÚ DEL PANEL DE CONTROL — mismo estilo que el menú principal
+   ------------------------------------------------------
+   Las pestañas del panel (Envíos, Importar BD, Accesos, Auditoría,
+   Desbloqueos, Resumen, Áreas, Permisos) pasan de botones tipo píldora
+   a pestañas planas pegadas sobre una franja, con el ítem activo en
+   dorado y subrayado. Solo aplica a #admin-tabs, no a las demás
+   filas de botones del panel.
+══════════════════════════════════════════════════════ */
+
+#admin-tabs{
+  display:flex;
+  flex-wrap:wrap;
+  gap:0;
+  background:rgba(0,0,0,.28);
+  border:1px solid rgba(201,162,39,.25);
+  border-radius:9px;
+  overflow:hidden;
+  padding:0;
+}
+body.dark-mode #admin-tabs{
+  background:rgba(0,0,0,.35);
+  border-color:rgba(232,184,75,.28);
+}
+
+#admin-tabs .admin-tab,
+#admin-tabs .admin-tab.btn-acc,
+#admin-tabs .admin-tab.btn-acc-blue{
+  background:transparent !important;
+  border:none !important;
+  border-bottom:3px solid transparent !important;
+  border-radius:0 !important;
+  padding:10px 16px;
+  margin:0;
+  color:#9aa4b5 !important;
+  font-family:var(--font-brand);
+  font-size:13px;
+  font-weight:600;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:color .15s, background .15s, border-color .15s;
+}
+
+#admin-tabs .admin-tab:hover{
+  background:rgba(255,255,255,.06) !important;
+  color:#f5d76e !important;
+  border-bottom-color:rgba(201,162,39,.4) !important;
+}
+
+#admin-tabs .admin-tab.active,
+#admin-tabs .admin-tab.active:hover{
+  background:rgba(232,184,75,.14) !important;
+  color:#f5d76e !important;
+  border-bottom-color:#e8b84b !important;
+}
+
+/* La franja se alinea a la izquierda, no pegada al borde derecho */
+.admin-top{justify-content:flex-start;}
+
+@media(max-width:768px){
+  #admin-tabs .admin-tab{padding:9px 12px;font-size:12px;letter-spacing:.03em;}
+}
+@media(max-width:480px){
+  #admin-tabs{border-radius:8px;}
+  #admin-tabs .admin-tab{padding:8px 10px;font-size:11px;letter-spacing:.02em;flex:1 1 auto;justify-content:center;}
+}
