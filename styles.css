@@ -758,3 +758,90 @@ body:not(.dark-mode) .modal-sub,
 body:not(.dark-mode) .form-label{
   color:#5a6378;
 }
+
+/* ══════════════════════════════════════════════════════
+   MENÚ PRINCIPAL — estilo pestañas (igual a Personal CTE)
+   ------------------------------------------------------
+   Los ítems dejan de ser botones tipo píldora: ahora son pestañas
+   planas de altura completa sobre una franja más oscura que el resto
+   de la barra. El ítem inactivo va en gris apagado y el activo en
+   dorado, con fondo más claro y subrayado dorado.
+══════════════════════════════════════════════════════ */
+
+nav{
+  border-bottom:2px solid rgba(201,162,39,.45);
+}
+body.dark-mode nav{
+  border-bottom:2px solid rgba(232,184,75,.45);
+}
+
+/* La franja del menú: pestañas pegadas entre sí */
+.nav-right{gap:0;}
+.nav-right .nav-divider{margin:0 10px;}
+.nav-right .nav-user,
+.nav-right .btn-modo,
+.nav-right .nav-salir{margin-left:6px;}
+
+.nav-btn,
+.nav-btn.nav-btn-admin{
+  align-self:stretch;
+  height:100%;
+  background:rgba(0,0,0,.28);
+  border:none;
+  border-bottom:3px solid transparent;
+  border-radius:0;
+  padding:0 15px;
+  color:#9aa4b5;
+  font-family:var(--font-brand);
+  font-size:13px;
+  font-weight:600;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  cursor:pointer;
+  transition:color .15s, background .15s, border-color .15s;
+  white-space:nowrap;
+}
+
+.nav-btn:hover,
+.nav-btn.nav-btn-admin:hover{
+  background:rgba(255,255,255,.06);
+  color:#f5d76e;
+  border-bottom-color:rgba(201,162,39,.4);
+}
+
+.nav-btn.active,
+.nav-btn.nav-btn-admin.active{
+  background:rgba(232,184,75,.13);
+  color:#f5d76e;
+  border-bottom-color:#e8b84b;
+}
+
+/* Primera y última pestaña con esquinas suaves */
+.nav-right .nav-btn:first-of-type{border-top-left-radius:6px;}
+
+/* En modo claro la franja del menú se oscurece un poco más
+   para separarse del degradado del encabezado */
+body:not(.dark-mode) .nav-btn,
+body:not(.dark-mode) .nav-btn.nav-btn-admin{
+  background:rgba(0,0,0,.22);
+  color:#93a0b5;
+}
+body:not(.dark-mode) .nav-btn.active,
+body:not(.dark-mode) .nav-btn.nav-btn-admin.active{
+  background:rgba(201,162,39,.16);
+  color:#f5d76e;
+}
+
+/* En pantallas chicas las pestañas se comprimen pero mantienen el estilo */
+@media(max-width:768px){
+  .nav-btn,
+  .nav-btn.nav-btn-admin{padding:0 11px;font-size:12px;letter-spacing:.04em;}
+}
+@media(max-width:480px){
+  .nav-btn,
+  .nav-btn.nav-btn-admin{padding:0 8px;font-size:11px;letter-spacing:.02em;}
+  .nav-right .nav-divider{margin:0 5px;}
+}
