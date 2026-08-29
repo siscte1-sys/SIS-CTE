@@ -589,7 +589,6 @@
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="desbloqueos">🔓 Desbloqueos</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="resumen">📊 Resumen General</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="areas" id="tab-btn-areas" style="display:none;">🗺️ Áreas</button>
-          <button class="btn-acc btn-acc-blue admin-tab" data-tab="permisos" id="tab-btn-permisos" style="display:none;">🔑 Permisos</button>
         </div>
       </div>
 
@@ -874,8 +873,13 @@
       <div id="admin-tab-auditoria" class="admin-tab-content" style="display:none">
         <div class="panel-white">
           <div style="padding:20px;">
-            <div class="sec-titulo">Auditoría — Log de Cambios</div>
-            <div class="filtros-grid" style="margin-bottom:16px;">
+            <div class="sec-titulo">Auditoría — Historial de Actividad</div>
+            <p style="font-size:12px;color:var(--txt2);margin:-6px 0 14px;">
+              Todo lo que ocurre en el sistema queda registrado aquí. Use los filtros para acotar la búsqueda
+              y luego exporte a Excel lo que necesite.
+            </p>
+
+            <div class="filtros-grid" style="margin-bottom:14px;">
               <div class="filtro-campo">
                 <label>Desde</label>
                 <input type="date" id="audit-desde" class="filtro-input">
@@ -887,25 +891,36 @@
               <div class="filtro-campo">
                 <label>Acción</label>
                 <select id="audit-accion" class="filtro-select">
-                  <option value="">Todas</option>
-                  <option value="importar_bd">Importar BD</option>
-                  <option value="modificar_novedad">Modificar Novedad</option>
-                  <option value="desbloquear_dia">Desbloquear Día</option>
-                  <option value="desbloquear_mes">Desbloquear Mes</option>
-                  <option value="generar_reporte">Generar Reporte</option>
+                  <option value="">Todas las acciones</option>
                 </select>
               </div>
+              <div class="filtro-campo">
+                <label>Área</label>
+                <select id="audit-area" class="filtro-select">
+                  <option value="">Todas las áreas</option>
+                </select>
+              </div>
+              <div class="filtro-campo">
+                <label>Usuario (correo exacto)</label>
+                <input type="text" id="audit-usuario" class="filtro-input" placeholder="usuario@cte.gob.ec" autocomplete="off">
+              </div>
             </div>
-            <button class="btn-filtrar" onclick="filtrarAuditoria()">Filtrar</button>
-            <button class="btn-limpiar" onclick="limpiarAuditoria()" data-permiso="auditoria_limpiar">Limpiar Auditoría</button>
-            
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+              <button class="btn-filtrar" onclick="filtrarAuditoria()">🔍 Filtrar</button>
+              <button class="btn-acc btn-acc-ghost" onclick="limpiarFiltrosAuditoria()">Limpiar filtros</button>
+              <button class="btn-acc btn-acc-ghost" onclick="exportarAuditoria()" data-permiso="auditoria_exportar">📤 Exportar a Excel</button>
+              <button class="btn-limpiar" onclick="abrirModalEliminarAuditoria()" data-permiso="auditoria_limpiar">🗑 Eliminar historial</button>
+            </div>
+
             <div id="auditoria-tabla" style="margin-top:16px;overflow-x:auto;">
               <table style="font-size:11px;">
                 <thead>
                   <tr>
-                    <th>Timestamp</th>
-                    <th>Admin</th>
+                    <th>Fecha y hora</th>
+                    <th>Usuario</th>
                     <th>Acción</th>
+                    <th>Área</th>
                     <th>Descripción</th>
                   </tr>
                 </thead>
@@ -1056,43 +1071,6 @@
       </div>
 
       <!-- TAB 6: Permisos (solo superadmin) -->
-      <div id="admin-tab-permisos" class="admin-tab-content" style="display:none">
-        <div class="panel-white" style="margin-bottom:16px;">
-          <div style="padding:20px;">
-            <div class="sec-titulo">🔑 Asignar permisos del Panel de Control</div>
-            <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
-              Dele acceso al Panel de Control a otra persona sin hacerla administrador total. Marque las acciones puntuales que va a poder usar — si solo marca las de "Ver" y "Exportar", esa persona va a poder mirar y descargar, pero no modificar nada.
-            </p>
-
-            <div class="form-field">
-              <label class="form-label">Correo</label>
-              <input type="email" id="permiso-correo" class="form-select" placeholder="correo@cte.ec">
-            </div>
-
-            <div id="permiso-tabs-container" class="form-field">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                <label class="form-label" style="margin-bottom:0;">Acciones permitidas</label>
-                <a href="#" style="font-size:11px;font-weight:600;" onclick="event.preventDefault(); marcarSoloVerYExportar()">Marcar solo "Ver / Exportar" (acceso de solo lectura)</a>
-              </div>
-              <div id="permiso-acciones-grupos" style="display:flex;flex-direction:column;gap:14px;">
-                <!-- Se genera dinámicamente desde PERMISOS_DISPONIBLES -->
-              </div>
-            </div>
-
-            <button class="btn-acc btn-acc-green" onclick="guardarPermiso()" style="margin-top:8px;">➕ Asignar permiso</button>
-          </div>
-        </div>
-
-        <div class="panel-white">
-          <div style="padding:20px;">
-            <div class="sec-titulo">Personas con acceso asignado</div>
-            <div id="permisos-lista" style="display:flex;flex-direction:column;gap:8px;">
-              <p class="td-vacio">Cargando...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
     </div>
   </div>
 
@@ -1281,6 +1259,61 @@
       <div class="modal-footer">
         <button class="btn-modal-cancel" onclick="cerrarModalAcceso()">Cancelar</button>
         <button class="btn-modal-primary" onclick="confirmarGuardarAcceso()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-eliminar-auditoria" class="modal-overlay" style="display:none">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-ico">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </div>
+      <div>
+        <div class="modal-titulo">Eliminar historial de auditoría</div>
+        <div class="modal-sub">Elija el rango a eliminar</div>
+      </div>
+      <button class="modal-cerrar" onclick="cerrarModalEliminarAuditoria()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field">
+        <label class="form-label">¿Qué desea eliminar?</label>
+        <select id="elim-audit-modo" class="form-select" onchange="cambiarModoEliminarAuditoria()">
+          <option value="rango">Un rango de fechas</option>
+          <option value="todo">TODO el historial</option>
+        </select>
+      </div>
+
+      <div id="elim-audit-fechas" class="filtros-grid" style="margin-bottom:14px;">
+        <div class="filtro-campo">
+          <label>Desde</label>
+          <input type="date" id="elim-audit-desde" class="filtro-input">
+        </div>
+        <div class="filtro-campo">
+          <label>Hasta</label>
+          <input type="date" id="elim-audit-hasta" class="filtro-input">
+        </div>
+      </div>
+
+      <div id="elim-audit-aviso" style="padding:10px 12px;background:var(--red-l);border:1px solid var(--red-m);border-radius:8px;font-size:12px;line-height:1.5;margin-bottom:14px;"></div>
+
+      <p style="font-size:11px;color:var(--txt2);margin:-6px 0 14px;line-height:1.5;">
+        Antes de eliminar, se recomienda generar el respaldo del período desde la pestaña
+        correspondiente: el archivo queda en Drive y permite recuperar lo eliminado.
+        La eliminación en sí queda asentada en la auditoría (quién, cuándo, qué rango y cuántos registros).
+      </p>
+
+      <label style="display:flex;gap:9px;align-items:flex-start;font-size:12px;cursor:pointer;margin-bottom:14px;">
+        <input type="checkbox" id="elim-audit-confirmar" onchange="verificarCheckEliminarAuditoria()" style="margin-top:2px;">
+        <span>Confirmo que entiendo que esta acción <strong>no se puede deshacer</strong>.</span>
+      </label>
+
+      <div id="elim-audit-progreso" style="font-size:12px;font-weight:600;min-height:16px;margin-bottom:10px;"></div>
+
+      <div class="modal-footer">
+        <button class="btn-modal-cancel" onclick="cerrarModalEliminarAuditoria()">Cancelar</button>
+        <button class="btn-modal-primary" id="btn-elim-audit" onclick="ejecutarEliminarAuditoria()" disabled>Eliminar historial</button>
       </div>
     </div>
   </div>
