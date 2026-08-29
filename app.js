@@ -5504,44 +5504,434 @@ async function borrarTodaLaBaseNovedades() {
    PANEL ADMIN — Gestionar Accesos
 ═════════════════════════════════════════ */
 
-async function cargarAccesos() {
+/* ═════════════════════════════════════════
+   PANEL ADMIN — Accesos (ficha por usuario, perfiles, bloqueo)
+   ─────────────────────────────────────────
+   Un acceso vive en `accesos/{correo}` y guarda:
+     correo, codigo, area, estado (true=activo / false=bloqueado),
+     fechaCreacion, ultimaEdicion
+   El PERFIL vive aparte, en `permisos_panel/{correo}`:
+     SECRETARIO      → no tiene documento (solo carga novedades de su área)
+     SUPERVISOR      → { tipo:'supervisor' }           lectura + exportación de todo
+     ADMINISTRADOR   → { tipo:'parcial', acciones:[…] } con todas las acciones
+   El ADMINISTRADOR RAÍZ es el de ADMIN_EMAILS (dentro de este archivo) y no se
+   puede cambiar desde la interfaz — es la cuenta que nadie puede revocar.
+═════════════════════════════════════════ */
+
+const PERFILES = {
+  SECRETARIO:    { label: 'SECRETARIO',    color: 'gold',  desc: 'Carga las novedades de su área. Sin acceso al Panel de Control.' },
+  SUPERVISOR:    { label: 'SUPERVISOR',    color: 'blue',  desc: 'Ve y exporta todo el sistema, incluida la auditoría. No puede modificar nada.' },
+  ADMINISTRADOR: { label: 'ADMINISTRADOR', color: 'green', desc: 'Acceso completo al Panel de Control: importar, accesos, desbloqueos, auditoría.' },
+};
+
+const COLORES_PERFIL = {
+  gold:  'background:var(--gold-l);color:var(--gold);',
+  blue:  'background:var(--blue-l);color:var(--blue);',
+  green: 'background:var(--green-l);color:var(--green);',
+  red:   'background:var(--red-l);color:var(--red);',
+};
+
+let accesosCache = [];          // [{ correo, codigo, area, estado, perfil, nombre, grado }]
+let accesosPagina = 1;
+let accesosBusqueda = '';
+let accesosFiltroGrupo = 'todos';   // 'todos' | 'G1' | 'G2' | 'sin'
+let accesosAreasSinAcceso = [];
+const ACCESOS_POR_PAGINA = 25;
+
+/* Devuelve un Map(codigo → {grado, nombre}) leyendo UN solo documento
+   (`sistema/personal_lis`), en vez de recorrer los miles de registros de
+   la colección `personal`. Ese documento lo arma la importación de la base
+   con el formato "CODIGO - GRADO APELLIDOS NOMBRES". */
+async function obtenerMapaPersonal() {
+  const mapa = new Map();
   try {
-    const accesoSnapshot = await window._fb.getDocs(window._fb.collection(db, 'accesos'));
-    const lista = $('accesos-lista');
-    const vacio = $('accesos-vacio');
-    
-    lista.innerHTML = '';
-    
-    if (accesoSnapshot.empty) {
-      show('accesos-vacio');
-      return;
-    }
-    
-    hide('accesos-vacio');
-    
-    accesoSnapshot.forEach(doc => {
-      const data = doc.data();
-      const div = document.createElement('div');
-      div.style.cssText = 'display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;';
-      
-      div.innerHTML = `
-        <div style="flex:1;">
-          <div style="font-weight:600;font-size:13px;">${data.correo}</div>
-          <div style="font-size:11px;color:var(--txt2);">${data.area}</div>
-        </div>
-        ${tienePermisoAccion('accesos_gestionar') ? `
-        <button class="btn-acc btn-acc-blue" onclick="editarAcceso('${doc.id}', '${data.correo.replace(/'/g,"\\'")}', '${data.area.replace(/'/g,"\\'")}')">✎</button>
-        <button class="btn-acc btn-acc-red" onclick="eliminarAcceso('${doc.id}')">🗑</button>` : ''}
-      `;
-      lista.appendChild(div);
+    const snap = await window._fb.getDoc(window._fb.doc(db, 'sistema', 'personal_lis'));
+    if (!snap.exists()) return mapa;
+    (snap.data().lista || []).forEach(linea => {
+      const partes = String(linea).split(' - ');
+      if (partes.length < 2) return;
+      const codigo = partes[0].trim();
+      const resto = partes.slice(1).join(' - ').trim();
+      mapa.set(codigo, { texto: resto });
     });
-    
+  } catch(e) {
+    console.warn('No se pudo leer la lista de personal:', e);
+  }
+  return mapa;
+}
+
+/* Perfil efectivo de un correo, mirando la lista raíz y `permisos_panel`. */
+function resolverPerfil(correo, permisoDoc) {
+  if (ADMIN_EMAILS.map(x => x.toLowerCase()).includes(String(correo).toLowerCase())) return 'RAIZ';
+  if (!permisoDoc) return 'SECRETARIO';
+  if (permisoDoc.tipo === 'supervisor') return 'SUPERVISOR';
+  if (permisoDoc.tipo === 'parcial') {
+    const todas = PERMISOS_DISPONIBLES.flatMap(g => g.acciones).map(a => a.key);
+    const tiene = permisoDoc.acciones || [];
+    return todas.every(k => tiene.includes(k)) ? 'ADMINISTRADOR' : 'PERSONALIZADO';
+  }
+  return 'SECRETARIO';
+}
+
+/* Extrae el sufijo de grupo del nombre del área ("UCT SALITRE G1" → "G1"). */
+function grupoDeArea(area) {
+  const m = String(area || '').trim().match(/\b-?\s*G\s*([12])$/i);
+  return m ? 'G' + m[1] : null;
+}
+
+function inicialesDe(texto) {
+  const limpio = String(texto || '').replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ ]/g, ' ').trim();
+  const palabras = limpio.split(/\s+/).filter(Boolean);
+  if (!palabras.length) return '??';
+  if (palabras.length === 1) return palabras[0].slice(0, 2).toUpperCase();
+  return (palabras[0][0] + palabras[palabras.length - 1][0]).toUpperCase();
+}
+
+async function cargarAccesos() {
+  const lista = $('accesos-lista');
+  if (lista) lista.innerHTML = `<p class="td-vacio">Cargando accesos...</p>`;
+
+  try {
+    const [accesoSnapshot, permisosSnapshot, mapaPersonal, areasCatalogo] = await Promise.all([
+      window._fb.getDocs(window._fb.collection(db, 'accesos')),
+      window._fb.getDocs(window._fb.collection(db, 'permisos_panel')),
+      obtenerMapaPersonal(),
+      obtenerAreasNovedades(),
+    ]);
+
+    const permisosPorCorreo = new Map();
+    permisosSnapshot.forEach(d => permisosPorCorreo.set(String(d.id).toLowerCase(), d.data()));
+
+    accesosCache = accesoSnapshot.docs.map(d => {
+      const data = d.data();
+      const correo = data.correo || d.id;
+      const codigo = String(data.codigo || '').trim();
+      const info = codigo ? mapaPersonal.get(codigo) : null;
+      return {
+        id: d.id,
+        correo,
+        codigo,
+        area: data.area || '',
+        estado: data.estado !== false,       // si el campo no existe, se asume activo
+        perfil: resolverPerfil(correo, permisosPorCorreo.get(String(correo).toLowerCase())),
+        nombre: info ? info.texto : '',
+      };
+    });
+
+    // Ordenado por ÁREA — así los dos grupos de una misma UCT quedan juntos
+    accesosCache.sort((a, b) =>
+      (a.area || '').localeCompare(b.area || '', 'es') || (a.correo || '').localeCompare(b.correo || '', 'es')
+    );
+
+    // Áreas del catálogo que quedaron sin ningún correo asignado
+    const areasConAcceso = new Set(accesosCache.map(a => String(a.area || '').toLowerCase()));
+    accesosAreasSinAcceso = (areasCatalogo || []).filter(a => !areasConAcceso.has(String(a).toLowerCase()));
+
+    accesosPagina = 1;
+    renderizarAccesos();
+
   } catch(e) {
     console.error('Error cargando accesos:', e);
+    if (lista) lista.innerHTML = `<p class="td-vacio">❌ Error cargando accesos: ${e.message}</p>`;
     toast('Error: ' + e.message, 'err');
   }
 }
 
+function accesosFiltrados() {
+  const q = accesosBusqueda.toLowerCase().trim();
+  return accesosCache.filter(a => {
+    if (accesosFiltroGrupo !== 'todos') {
+      const g = grupoDeArea(a.area);
+      if (accesosFiltroGrupo === 'sin' ? g !== null : g !== accesosFiltroGrupo) return false;
+    }
+    if (!q) return true;
+    return [a.correo, a.area, a.codigo, a.nombre].some(v => String(v || '').toLowerCase().includes(q));
+  });
+}
+
+function renderizarAccesos() {
+  const lista = $('accesos-lista');
+  const vacio = $('accesos-vacio');
+  if (!lista) return;
+
+  const puedeGestionar = tienePermisoAccion('accesos_gestionar');
+  const filtrados = accesosFiltrados();
+
+  // ── Resumen de cobertura ──
+  const resumen = $('accesos-resumen');
+  if (resumen) {
+    const totalAreas = accesosCache.length + accesosAreasSinAcceso.length;
+    const faltan = accesosAreasSinAcceso.length;
+    resumen.innerHTML = `
+      <span><strong>${accesosCache.length}</strong> accesos configurados</span>
+      ${faltan
+        ? `<span style="color:var(--red);font-weight:700;">· ${faltan} área${faltan === 1 ? '' : 's'} sin acceso asignado</span>
+           <button class="btn-acc btn-acc-ghost" style="padding:3px 10px;font-size:11px;" onclick="verAreasSinAcceso()">Ver cuáles</button>`
+        : `<span style="color:var(--green);font-weight:700;">· todas las áreas del catálogo tienen acceso</span>`}
+      <span style="color:var(--txt3);">(${accesosCache.length} de ${totalAreas})</span>`;
+  }
+
+  if (!accesosCache.length) {
+    lista.innerHTML = '';
+    if (vacio) show('accesos-vacio');
+    const pag = $('accesos-paginacion'); if (pag) pag.innerHTML = '';
+    return;
+  }
+  if (vacio) hide('accesos-vacio');
+
+  if (!filtrados.length) {
+    lista.innerHTML = `<p class="td-vacio">No hay accesos que coincidan con la búsqueda</p>`;
+    const pag = $('accesos-paginacion'); if (pag) pag.innerHTML = '';
+    return;
+  }
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / ACCESOS_POR_PAGINA));
+  if (accesosPagina > totalPaginas) accesosPagina = totalPaginas;
+  const inicio = (accesosPagina - 1) * ACCESOS_POR_PAGINA;
+  const pagina = filtrados.slice(inicio, inicio + ACCESOS_POR_PAGINA);
+
+  lista.innerHTML = pagina.map(a => {
+    const esRaiz = a.perfil === 'RAIZ';
+    const cfg = PERFILES[a.perfil];
+    const badge = esRaiz
+      ? `<span style="${COLORES_PERFIL.red}padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.3px;">ADMINISTRADOR RAÍZ</span>`
+      : cfg
+        ? `<span style="${COLORES_PERFIL[cfg.color]}padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.3px;">${cfg.label}</span>`
+        : `<span style="${COLORES_PERFIL.blue}padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.3px;">PERSONALIZADO</span>`;
+
+    const badgeEstado = a.estado
+      ? ''
+      : `<span style="${COLORES_PERFIL.red}padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;">BLOQUEADO</span>`;
+
+    const titulo = a.nombre || a.correo;
+    const grupo = grupoDeArea(a.area);
+    const esc = s => String(s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+    const meta = [
+      a.area ? `<span style="color:var(--gold);font-weight:700;">📍 ${a.area}</span>` : `<span style="color:var(--red);">Sin área asignada</span>`,
+      a.codigo ? `CÓD: ${a.codigo}` : `<span style="color:var(--red);">sin código</span>`,
+    ].join(' <span style="color:var(--txt3);">|</span> ');
+
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;${a.estado ? '' : 'opacity:.6;'}">
+        <div style="width:38px;height:38px;flex-shrink:0;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;">
+          ${inicialesDe(titulo)}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-weight:700;font-size:13px;text-transform:uppercase;">${titulo}</span>
+            ${badge}${badgeEstado}
+            ${grupo ? `<span style="${COLORES_PERFIL.gold}padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;">${grupo}</span>` : ''}
+          </div>
+          <div style="font-size:11px;color:var(--txt2);margin-top:2px;">${a.correo}</div>
+          <div style="font-size:11px;color:var(--txt2);margin-top:3px;">${meta}</div>
+        </div>
+        ${puedeGestionar ? `
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+          ${esRaiz ? '' : `<button class="btn-acc btn-acc-ghost" style="padding:5px 10px;font-size:11px;" onclick="abrirModalPerfil('${esc(a.correo)}')">Perfil</button>`}
+          <button class="btn-acc btn-acc-blue" style="padding:5px 10px;font-size:11px;" onclick="editarAcceso('${esc(a.id)}','${esc(a.correo)}','${esc(a.area)}','${esc(a.codigo)}')">✎ Editar</button>
+          ${esRaiz ? '' : `<button class="btn-acc ${a.estado ? 'btn-acc-orange' : 'btn-acc-green'}" style="padding:5px 10px;font-size:11px;" onclick="alternarBloqueoAcceso('${esc(a.id)}')">${a.estado ? '⊘ Bloquear' : '✓ Activar'}</button>`}
+          ${esRaiz ? '' : `<button class="btn-acc btn-acc-red" style="padding:5px 10px;font-size:11px;" onclick="eliminarAcceso('${esc(a.id)}')">🗑</button>`}
+        </div>` : ''}
+      </div>`;
+  }).join('');
+
+  renderizarPaginacionAccesos(filtrados.length, totalPaginas);
+}
+
+function renderizarPaginacionAccesos(totalItems, totalPaginas) {
+  const cont = $('accesos-paginacion');
+  if (!cont) return;
+  if (totalItems <= ACCESOS_POR_PAGINA) { cont.innerHTML = ''; return; }
+  cont.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+      <span style="font-size:12px;color:var(--txt2);">${totalItems} en total — página ${accesosPagina} de ${totalPaginas}</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-acc btn-acc-ghost" ${accesosPagina <= 1 ? 'disabled' : ''} onclick="cambiarPaginaAccesos(-1)">← Anterior</button>
+        <button class="btn-acc btn-acc-ghost" ${accesosPagina >= totalPaginas ? 'disabled' : ''} onclick="cambiarPaginaAccesos(1)">Siguiente →</button>
+      </div>
+    </div>`;
+}
+
+function cambiarPaginaAccesos(delta) {
+  const total = Math.max(1, Math.ceil(accesosFiltrados().length / ACCESOS_POR_PAGINA));
+  accesosPagina = Math.min(total, Math.max(1, accesosPagina + delta));
+  renderizarAccesos();
+  $('accesos-lista')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function buscarAccesos(valor) {
+  accesosBusqueda = valor || '';
+  accesosPagina = 1;
+  renderizarAccesos();
+}
+
+function filtrarGrupoAccesos(grupo) {
+  accesosFiltroGrupo = grupo;
+  accesosPagina = 1;
+  document.querySelectorAll('.chip-grupo-acceso').forEach(b => {
+    const activo = b.dataset.grupo === grupo;
+    b.style.background = activo ? 'var(--blue)' : 'transparent';
+    b.style.color = activo ? '#fff' : 'var(--txt2)';
+  });
+  renderizarAccesos();
+}
+
+function verAreasSinAcceso() {
+  if (!accesosAreasSinAcceso.length) { toast('Todas las áreas tienen acceso asignado', 'ok'); return; }
+  const cont = $('modal-areas-sin-acceso-lista');
+  $('modal-areas-sin-acceso-sub').textContent =
+    `${accesosAreasSinAcceso.length} área(s) del catálogo sin ningún correo asignado — nadie puede cargar novedades ahí`;
+  cont.innerHTML = accesosAreasSinAcceso.map(a => `
+    <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <span>${a}</span>
+      ${grupoDeArea(a) ? `<span style="${COLORES_PERFIL.gold}padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;">${grupoDeArea(a)}</span>` : ''}
+    </div>`).join('');
+  $('modal-areas-sin-acceso').style.display = 'flex';
+}
+
+function cerrarModalAreasSinAcceso() { $('modal-areas-sin-acceso').style.display = 'none'; }
+
+/* ── Exportar usuarios a Excel ── */
+async function exportarAccesos() {
+  if (!accesosCache.length) { toast('No hay accesos para exportar', 'err'); return; }
+  try {
+    toast('⏳ Generando archivo...', 'ok');
+    if (!window.ExcelJS) {
+      await new Promise((res, rej) => {
+        const sc = document.createElement('script');
+        sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+        sc.onload = res; sc.onerror = rej;
+        document.head.appendChild(sc);
+      });
+    }
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Usuarios');
+
+    ws.columns = [
+      { header: 'CORREO',   key: 'correo', width: 34 },
+      { header: 'CODIGO',   key: 'codigo', width: 12 },
+      { header: 'NOMBRE',   key: 'nombre', width: 44 },
+      { header: 'AREA',     key: 'area',   width: 34 },
+      { header: 'GRUPO',    key: 'grupo',  width: 10 },
+      { header: 'PERFIL',   key: 'perfil', width: 18 },
+      { header: 'ESTADO',   key: 'estado', width: 12 },
+    ];
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A6E' } };
+
+    accesosFiltrados().forEach(a => ws.addRow({
+      correo: a.correo,
+      codigo: a.codigo || '',
+      nombre: a.nombre || '',
+      area: a.area || '',
+      grupo: grupoDeArea(a.area) || '',
+      perfil: a.perfil === 'RAIZ' ? 'ADMINISTRADOR RAÍZ' : (PERFILES[a.perfil]?.label || a.perfil),
+      estado: a.estado ? 'ACTIVO' : 'BLOQUEADO',
+    }));
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `USUARIOS_SISCTE_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('✅ Usuarios exportados', 'ok');
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error exportando: ' + e.message, 'err');
+  }
+}
+
+/* ── Cambio de perfil ── */
+let perfilCorreoEditando = null;
+
+function abrirModalPerfil(correo) {
+  const acceso = accesosCache.find(a => a.correo === correo);
+  if (!acceso) { toast('No se encontró ese acceso', 'err'); return; }
+  perfilCorreoEditando = correo;
+
+  $('modal-perfil-sub').textContent = `${acceso.nombre || correo} — perfil actual: ${acceso.perfil === 'RAIZ' ? 'ADMINISTRADOR RAÍZ' : (PERFILES[acceso.perfil]?.label || acceso.perfil)}`;
+
+  $('modal-perfil-opciones').innerHTML = Object.entries(PERFILES).map(([key, cfg]) => `
+    <label style="display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;">
+      <input type="radio" name="perfil-opcion" value="${key}" ${acceso.perfil === key ? 'checked' : ''} style="margin-top:3px;">
+      <span>
+        <span style="${COLORES_PERFIL[cfg.color]}padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;">${cfg.label}</span>
+        <span style="display:block;font-size:11px;color:var(--txt2);margin-top:5px;">${cfg.desc}</span>
+      </span>
+    </label>`).join('');
+
+  $('modal-perfil').style.display = 'flex';
+}
+
+function cerrarModalPerfil() {
+  $('modal-perfil').style.display = 'none';
+  perfilCorreoEditando = null;
+}
+
+async function guardarPerfilAcceso() {
+  if (!perfilCorreoEditando) return;
+  const elegido = document.querySelector('input[name="perfil-opcion"]:checked');
+  if (!elegido) { toast('Elija un perfil', 'err'); return; }
+  const perfil = elegido.value;
+  const correo = String(perfilCorreoEditando).toLowerCase();
+
+  try {
+    const ref = window._fb.doc(db, 'permisos_panel', correo);
+
+    if (perfil === 'SECRETARIO') {
+      await window._fb.deleteDoc(ref).catch(() => {});
+    } else if (perfil === 'SUPERVISOR') {
+      await window._fb.setDoc(ref, {
+        correo, tipo: 'supervisor', acciones: [], perfil: 'SUPERVISOR', ultimaEdicion: new Date()
+      });
+    } else if (perfil === 'ADMINISTRADOR') {
+      const todas = PERMISOS_DISPONIBLES.flatMap(g => g.acciones).map(a => a.key);
+      await window._fb.setDoc(ref, {
+        correo, tipo: 'parcial', acciones: todas, perfil: 'ADMINISTRADOR', ultimaEdicion: new Date()
+      });
+    }
+
+    await registrarEnAuditoria('cambiar_perfil', null, correo, null, null, { perfil },
+      `Perfil de ${correo} cambiado a ${perfil}`);
+
+    toast(`✅ Perfil actualizado a ${perfil}`, 'ok');
+    cerrarModalPerfil();
+    cargarAccesos();
+    if (typeof poblarListaPermisos === 'function' && $('permisos-lista')) poblarListaPermisos();
+  } catch(e) {
+    toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
+/* ── Bloquear / activar ── */
+async function alternarBloqueoAcceso(docId) {
+  const acceso = accesosCache.find(a => a.id === docId);
+  if (!acceso) return;
+  const bloquear = acceso.estado;
+
+  if (bloquear && !(await confirmarAccion(
+      `¿Bloquear el acceso de ${acceso.nombre || acceso.correo}? No podrá cargar novedades hasta que lo reactive.`,
+      'Bloquear acceso'))) return;
+
+  try {
+    await window._fb.updateDoc(window._fb.doc(db, 'accesos', docId), {
+      estado: !bloquear, ultimaEdicion: new Date()
+    });
+    await registrarEnAuditoria(bloquear ? 'bloquear_acceso' : 'activar_acceso', acceso.area, acceso.correo, null, null, {},
+      `${bloquear ? 'Bloqueado' : 'Activado'} el acceso de ${acceso.correo}`);
+    toast(bloquear ? '✅ Acceso bloqueado' : '✅ Acceso activado', 'ok');
+    acceso.estado = !bloquear;
+    renderizarAccesos();
+  } catch(e) {
+    toast('Error: ' + e.message, 'err');
+  }
+}
+
+/* ── Alta / edición ── */
 let modalAccesoDocIdEdicion = null; // null = creando nuevo, string = editando existente
 let comboboxAreaAcceso = null;
 
@@ -5558,25 +5948,47 @@ async function poblarSelectAreaAcceso(areaSeleccionada) {
   $('modal-acceso-area').value = areaSeleccionada || '';
 }
 
+/* Al escribir el código en el modal, muestra a quién corresponde. */
+async function verificarCodigoAcceso() {
+  const codigo = ($('modal-acceso-codigo')?.value || '').trim();
+  const el = $('modal-acceso-codigo-info');
+  if (!el) return;
+  if (!codigo) { el.textContent = ''; return; }
+  const mapa = await obtenerMapaPersonal();
+  const info = mapa.get(codigo);
+  if (info) {
+    el.style.color = 'var(--green)';
+    el.textContent = '✓ ' + info.texto;
+  } else {
+    el.style.color = 'var(--red)';
+    el.textContent = '✗ Ese código no está en la base de personal';
+  }
+}
+
 async function mostrarFormAcceso() {
   modalAccesoDocIdEdicion = null;
   await poblarSelectAreaAcceso();
   $('modal-acceso-titulo').textContent = 'Nuevo Acceso';
-  $('modal-acceso-sub').textContent = 'Asigná un área a este correo';
+  $('modal-acceso-sub').textContent = 'Asigne un código y un área a este correo';
   $('modal-acceso-correo').value = '';
   $('modal-acceso-correo').disabled = false;
+  if ($('modal-acceso-codigo')) $('modal-acceso-codigo').value = '';
+  if ($('modal-acceso-codigo-info')) $('modal-acceso-codigo-info').textContent = '';
   $('modal-acceso').style.display = 'flex';
   hide('modal-acceso-error');
   $('modal-acceso-correo').focus();
 }
 
-async function editarAcceso(docId, correoActual, areaAsignada) {
+async function editarAcceso(docId, correoActual, areaAsignada, codigoActual) {
   modalAccesoDocIdEdicion = docId;
   await poblarSelectAreaAcceso(areaAsignada);
   $('modal-acceso-titulo').textContent = 'Editar Acceso';
-  $('modal-acceso-sub').textContent = 'Cambie el área asignada a este correo';
+  $('modal-acceso-sub').textContent = 'Cambie el código o el área asignada a este correo';
   $('modal-acceso-correo').value = correoActual || docId;
   $('modal-acceso-correo').disabled = true; // el correo es el ID del documento, no se cambia acá
+  if ($('modal-acceso-codigo')) $('modal-acceso-codigo').value = codigoActual || '';
+  if ($('modal-acceso-codigo-info')) $('modal-acceso-codigo-info').textContent = '';
+  if (codigoActual) verificarCodigoAcceso();
   hide('modal-acceso-error');
   $('modal-acceso').style.display = 'flex';
 }
@@ -5589,24 +6001,25 @@ function cerrarModalAcceso() {
 async function confirmarGuardarAcceso() {
   const correo = $('modal-acceso-correo').value.trim();
   const area = $('modal-acceso-area').value;
+  const codigo = ($('modal-acceso-codigo')?.value || '').trim();
   const errorEl = $('modal-acceso-error');
 
   if (!correo || !correo.includes('@')) {
-    errorEl.textContent = 'Ingresá un correo válido';
+    errorEl.textContent = 'Ingrese un correo válido';
     show('modal-acceso-error');
     return;
   }
   if (!area) {
-    errorEl.textContent = 'Elegí un área';
+    errorEl.textContent = 'Elija un área';
     show('modal-acceso-error');
     return;
   }
 
-  await guardarAcceso(correo, area);
+  await guardarAcceso(correo, area, codigo);
   cerrarModalAcceso();
 }
 
-async function guardarAcceso(correo, area) {
+async function guardarAcceso(correo, area, codigo) {
   try {
     const correoNorm = correo.toLowerCase().trim();
     // Un solo registro por correo (usando el correo como ID) — si la persona ya tenía
@@ -5616,32 +6029,36 @@ async function guardarAcceso(correo, area) {
 
     await window._fb.setDoc(accesoRef, {
       correo: correoNorm,
+      codigo: String(codigo || '').trim(),
       area: area,
-      estado: true,
+      estado: existente.exists() ? (existente.data().estado !== false) : true,
       fechaCreacion: existente.exists() ? existente.data().fechaCreacion : new Date(),
       ultimaEdicion: new Date()
     });
 
     await registrarEnAuditoria(
       existente.exists() ? 'editar_acceso' : 'crear_acceso',
-      area, correoNorm, null, null, {},
+      area, correoNorm, null, null, { codigo },
       existente.exists()
-        ? `Área actualizada: ${correoNorm} → ${area} (antes: ${existente.data().area})`
+        ? `Acceso actualizado: ${correoNorm} → ${area} (antes: ${existente.data().area})`
         : `Nuevo acceso: ${correoNorm} → ${area}`
     );
-    
+
     toast(`✅ Acceso ${existente.exists() ? 'actualizado' : 'creado'}`, 'ok');
     cargarAccesos();
-    
+
   } catch(e) {
     toast('Error: ' + e.message, 'err');
   }
 }
 
 async function eliminarAcceso(docId) {
-  if (!(await confirmarAccion('¿Eliminar este acceso?', 'Eliminar acceso'))) return;
+  const acceso = accesosCache.find(a => a.id === docId);
+  if (!(await confirmarAccion(`¿Eliminar el acceso de ${acceso ? (acceso.nombre || acceso.correo) : docId}?`, 'Eliminar acceso'))) return;
   try {
     await window._fb.deleteDoc(window._fb.doc(db, 'accesos', docId));
+    await registrarEnAuditoria('eliminar_acceso', acceso?.area || null, acceso?.correo || docId, null, null, {},
+      `Acceso eliminado: ${acceso?.correo || docId}`);
     toast('✅ Acceso eliminado', 'ok');
     cargarAccesos();
   } catch(e) {
@@ -5680,6 +6097,7 @@ async function importarAccesosDesdeArchivo(event) {
     const columnas = Object.keys(filas[0]);
     const colCorreo = columnas.find(c => /correo|email|e-mail|mail/i.test(c));
     const colArea   = columnas.find(c => /área|area/i.test(c));
+    const colCodigo = columnas.find(c => /c[oó]digo|codigo|^cod$|^c[oó]d\.?$/i.test(c));
 
     if (!colCorreo || !colArea) {
       toast('❌ No se encontró una columna de correo y/o de área en el archivo. Verifique los encabezados.', 'err');
@@ -5690,13 +6108,14 @@ async function importarAccesosDesdeArchivo(event) {
       const correo = String(fila[colCorreo] || '').toLowerCase().trim();
       const areaTexto = String(fila[colArea] || '').trim();
       const areaReal = areasNorm.get(areaTexto.toLowerCase());
+      const codigo = colCodigo ? String(fila[colCodigo] || '').trim() : '';
 
       let valido = true, motivo = '';
       if (!correo || !correo.includes('@')) { valido = false; motivo = 'Correo inválido o vacío'; }
       else if (!areaTexto) { valido = false; motivo = 'Área vacía'; }
       else if (!areaReal) { valido = false; motivo = `Área "${areaTexto}" no existe en el sistema`; }
 
-      return { correo, area: areaReal || areaTexto, valido, motivo };
+      return { correo, codigo, area: areaReal || areaTexto, valido, motivo };
     });
 
     mostrarPrevisualizacionImportarAccesos();
@@ -5719,7 +6138,7 @@ function mostrarPrevisualizacionImportarAccesos() {
     <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;">
       <span style="width:16px;flex-shrink:0;">${f.valido ? '✅' : '❌'}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-        <strong>${f.correo || '(sin correo)'}</strong> — ${f.area || '(sin área)'}
+        <strong>${f.correo || '(sin correo)'}</strong>${f.codigo ? ` · CÓD ${f.codigo}` : ''} — ${f.area || '(sin área)'}
       </span>
       ${!f.valido ? `<span style="color:var(--red);font-size:11px;flex-shrink:0;">${f.motivo}</span>` : ''}
     </div>
@@ -5753,8 +6172,9 @@ async function confirmarImportarAccesos() {
       const existente = await window._fb.getDoc(accesoRef);
       await window._fb.setDoc(accesoRef, {
         correo: correoNorm,
+        codigo: fila.codigo || (existente.exists() ? (existente.data().codigo || '') : ''),
         area: fila.area,
-        estado: true,
+        estado: existente.exists() ? (existente.data().estado !== false) : true,
         fechaCreacion: existente.exists() ? existente.data().fechaCreacion : new Date(),
         ultimaEdicion: new Date()
       });
@@ -6729,6 +7149,18 @@ window.confirmarRestaurarBackup      = confirmarRestaurarBackup;
 window.guardarAcceso                = guardarAcceso;
 window.eliminarAcceso               = eliminarAcceso;
 window.editarAcceso                 = editarAcceso;
+window.cargarAccesos                = cargarAccesos;
+window.buscarAccesos                = buscarAccesos;
+window.filtrarGrupoAccesos          = filtrarGrupoAccesos;
+window.cambiarPaginaAccesos         = cambiarPaginaAccesos;
+window.verAreasSinAcceso            = verAreasSinAcceso;
+window.cerrarModalAreasSinAcceso    = cerrarModalAreasSinAcceso;
+window.exportarAccesos              = exportarAccesos;
+window.abrirModalPerfil             = abrirModalPerfil;
+window.cerrarModalPerfil            = cerrarModalPerfil;
+window.guardarPerfilAcceso          = guardarPerfilAcceso;
+window.alternarBloqueoAcceso        = alternarBloqueoAcceso;
+window.verificarCodigoAcceso        = verificarCodigoAcceso;
 window.importarAccesosDesdeArchivo  = importarAccesosDesdeArchivo;
 window.cerrarModalImportarAccesos   = cerrarModalImportarAccesos;
 window.confirmarImportarAccesos     = confirmarImportarAccesos;
