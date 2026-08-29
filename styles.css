@@ -25,7 +25,7 @@
 ══════════════════════════════ */
 body.dark-mode{
   --blue:#4a7fd4;--blue-d:#3b6cb8;--blue-l:#1a2540;--blue-m:#243352;
-  --txt:#e8ecf4;--txt2:#8fa3c8;--txt3:#5a6f8c;
+  --txt:#e8ecf4;--txt2:#b3b9c4;--txt3:#828a97;
   --border:#2a3550;--bg:#0f1523;--white:#1a2540;
   --green:#22c55e;--green-l:#0f2318;--green-m:#1a4028;
   --red:#f87171;--red-l:#2a1216;--red-m:#5c2626;--orange:#fbbf24;--orange-l:#1f1500;--orange-m:#3d2900;
@@ -657,3 +657,104 @@ body:not(.dark-mode) .seccion-titulo{color:#1a1f2e;}
 body:not(.dark-mode) .filtros-titulo{color:#1a1f2e;}
 body:not(.dark-mode) .envio-card-titulo{color:#1a1f2e;}
 body:not(.dark-mode) .modal-titulo{color:#1a1f2e;}
+
+/* ══════════════════════════════════════════════════════
+   SIN LETRAS CELESTES  —  paleta institucional navy/dorado
+   ------------------------------------------------------
+   En modo oscuro la variable --blue pasa a #4a7fd4 (celeste) y esa
+   misma variable se usa como COLOR DE LETRA en encabezados de tabla,
+   insignias, enlaces y botones. Acá se reemplaza por dorado o blanco,
+   igual que en el sistema de referencia. Los fondos no se tocan.
+══════════════════════════════════════════════════════ */
+
+/* --- MODO OSCURO: texto que era celeste → dorado --- */
+body.dark-mode .badge-area,
+body.dark-mode .mei-area,
+body.dark-mode .arch-stat,
+body.dark-mode .link-archivo,
+body.dark-mode .btn-link,
+body.dark-mode .fp-modo,
+body.dark-mode .info-note,
+body.dark-mode .aviso-azul,
+body.dark-mode .btn-acc-blue,
+body.dark-mode .btn-acc-green,
+body.dark-mode .auth-tab.active,
+body.dark-mode .tabla-novedades th,
+body.dark-mode .lc-codigo,
+body.dark-mode .admin-tab.active{
+  color:#f5d76e !important;
+}
+
+/* Bordes y fondos suaves de esos mismos elementos, en tono dorado */
+body.dark-mode .badge-area,
+body.dark-mode .mei-area,
+body.dark-mode .arch-stat,
+body.dark-mode .info-note,
+body.dark-mode .aviso-azul,
+body.dark-mode .btn-acc-blue,
+body.dark-mode .btn-acc-green{
+  background:#1f1800;
+  border-color:#3d3000;
+}
+body.dark-mode .tabla-novedades th{
+  background:#1a1f2e;
+  border-bottom-color:#3d3000;
+}
+body.dark-mode .admin-tab.active{
+  background:#1f1800;
+  border-bottom-color:#e8b84b;
+}
+
+/* Botones sólidos: dorado con letra oscura, en vez de celeste con letra blanca */
+body.dark-mode .btn-modal-primary,
+body.dark-mode .btn-filtrar,
+body.dark-mode .btn-primary-full,
+body.dark-mode .persona-badge,
+body.dark-mode .btn-acc-blue:hover,
+body.dark-mode .btn-acc-green:hover,
+body.dark-mode .admin-tab.active:hover{
+  background:#e8b84b !important;
+  color:#12182a !important;
+}
+
+/* Foco de los campos: borde dorado, no celeste */
+body.dark-mode .form-select:focus,
+body.dark-mode .form-input:focus,
+body.dark-mode .form-textarea:focus,
+body.dark-mode .filtro-input:focus,
+body.dark-mode .filtro-select:focus{
+  border-color:#e8b84b;
+  box-shadow:0 0 0 3px rgba(232,184,75,.18);
+}
+body.dark-mode .btn-acc-ghost:hover{
+  border-color:#e8b84b;
+  color:#f5d76e;
+}
+
+/* Cualquier texto suelto que haya quedado con el celeste literal */
+body.dark-mode [style*="color:var(--blue)"],
+body.dark-mode [style*="color: var(--blue)"]{
+  color:#f5d76e !important;
+}
+
+/* --- MODO CLARO: el azul de letra siempre es navy oscuro, nunca celeste --- */
+body:not(.dark-mode) .badge-area,
+body:not(.dark-mode) .mei-area,
+body:not(.dark-mode) .arch-stat,
+body:not(.dark-mode) .link-archivo,
+body:not(.dark-mode) .btn-link,
+body:not(.dark-mode) .fp-modo,
+body:not(.dark-mode) .info-note,
+body:not(.dark-mode) .aviso-azul,
+body:not(.dark-mode) .btn-acc-blue,
+body:not(.dark-mode) .btn-acc-green,
+body:not(.dark-mode) .auth-tab.active,
+body:not(.dark-mode) .tabla-novedades th,
+body:not(.dark-mode) .lc-codigo,
+body:not(.dark-mode) .admin-tab.active{
+  color:#0d1b3e !important;
+}
+body:not(.dark-mode) .modal-sub,
+body:not(.dark-mode) .form-label{
+  color:#5a6378;
+}
