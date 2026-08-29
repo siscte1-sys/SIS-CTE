@@ -247,7 +247,8 @@ const PERMISOS_DISPONIBLES = [
   ]},
   { tab: 'auditoria', tabLabel: '📋 Auditoría', acciones: [
     { key: 'auditoria_ver',             label: 'Ver auditoría' },
-    { key: 'auditoria_limpiar',         label: 'Limpiar historial de auditoría' },
+    { key: 'auditoria_exportar',        label: 'Exportar auditoría a Excel' },
+    { key: 'auditoria_limpiar',         label: 'Eliminar historial de auditoría' },
   ]},
   { tab: 'desbloqueos', tabLabel: '🔓 Desbloqueos', acciones: [
     { key: 'desbloqueos_ver',           label: 'Ver solicitudes de desbloqueo' },
@@ -377,7 +378,7 @@ function actualizarVistaActual() {
       const tabActiva = document.querySelector('.admin-tab.active')?.dataset.tab;
       if (tabActiva === 'envios')      cargarAdmin();
       else if (tabActiva === 'accesos')     cargarAccesos();
-      else if (tabActiva === 'auditoria')   cargarAuditoria();
+      else if (tabActiva === 'auditoria')   { poblarFiltrosAuditoria(); cargarAuditoria(); }
       else if (tabActiva === 'desbloqueos') { cargarDesbloqueos(); poblarSelectoresDesbloqueoDirecto(); }
       else if (tabActiva === 'resumen')     cargarResumenGeneral();
       else if (tabActiva === 'importar')    cargarDirectorioPersonal();
@@ -481,7 +482,11 @@ async function registrarEnAuditoria(accion, area, correoAfectado, dia, mes, deta
       descripcion: descripcion || ''
     });
   } catch(e) {
-    console.warn('No se pudo registrar en auditoría:', e);
+    // Antes esto se descartaba en silencio: si fallaba (cuota agotada, reglas
+    // de Firestore, sin conexión) el rastro se cortaba sin que nadie se
+    // enterara. Ahora se avisa en pantalla y se deja el detalle en consola.
+    console.error('No se pudo registrar en auditoría:', e);
+    try { toast('⚠️ La acción se guardó, pero NO quedó registrada en auditoría', 'err'); } catch(_) {}
   }
 }
 
@@ -666,8 +671,10 @@ async function cargarNovedadesActuales() {
     const periodo = dateParts.periodo;
     const diaHoy = dateParts.dia;
 
-    if (esAdmin()) {
-      // El admin tiene acceso total: elige el área a gestionar, sin requerir estar en "accesos"
+    if (esAdmin() || esSupervisor()) {
+      // El admin gestiona cualquier área; el supervisor puede recorrerlas todas
+      // en modo lectura (los controles de edición quedan igualmente bloqueados
+      // por tienePermisoAccion, que solo le concede acciones _ver y _exportar).
       await poblarSelectorAreaAdmin();
     } else {
       hide('admin-selector-area-novedades');
@@ -2650,7 +2657,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (content) content.style.display = 'block';
       if (tabName === 'envios')      cargarAdmin();
       if (tabName === 'accesos')     cargarAccesos();
-      if (tabName === 'auditoria')   cargarAuditoria();
+      if (tabName === 'auditoria')   { poblarFiltrosAuditoria(); cargarAuditoria(); }
       if (tabName === 'desbloqueos') { cargarDesbloqueos(); poblarSelectoresDesbloqueoDirecto(); }
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
       if (tabName === 'importar') { cargarDirectorioPersonal(); poblarSelectoresBackupManual(); }
@@ -6201,82 +6208,425 @@ async function confirmarImportarAccesos() {
 
 /* ═════════════════════════════════════════
    PANEL ADMIN — Auditoría
+   ─────────────────────────────────────────
+   Paginación del lado del SERVIDOR: nunca se descarga la colección
+   completa. Cada página es una consulta con `limit` y `startAfter`,
+   de modo que el historial puede crecer indefinidamente sin que la
+   pantalla se ponga lenta ni se dispare el consumo de lecturas.
 ═════════════════════════════════════════ */
 
-let auditoriaCache = [];
-let paginaAuditoria = 1;
+const AUDITORIA_POR_PAGINA = 50;
 
-async function cargarAuditoria() {
+/* Catálogo de acciones — el `value` debe coincidir con el primer
+   argumento de registrarEnAuditoria() en cada punto del sistema. */
+const ACCIONES_AUDITORIA = [
+  { grupo: 'Novedades', items: [
+    { v: 'modificar_novedad',             l: 'Modificar novedad' },
+    { v: 'modificar_novedad_mes_cerrado', l: 'Modificar novedad (mes cerrado)' },
+    { v: 'rellenar_sin_novedad',          l: 'Rellenar Sin Novedad' },
+    { v: 'combinar_duplicados',           l: 'Combinar duplicados' },
+    { v: 'cerrar_mes',                    l: 'Cerrar mes' },
+  ]},
+  { grupo: 'Desbloqueos', items: [
+    { v: 'aprobar_desbloqueo',            l: 'Aprobar desbloqueo' },
+    { v: 'desbloqueo_directo',            l: 'Desbloqueo directo' },
+  ]},
+  { grupo: 'Accesos y permisos', items: [
+    { v: 'crear_acceso',                  l: 'Crear acceso' },
+    { v: 'editar_acceso',                 l: 'Editar acceso' },
+    { v: 'eliminar_acceso',               l: 'Eliminar acceso' },
+    { v: 'bloquear_acceso',               l: 'Bloquear acceso' },
+    { v: 'activar_acceso',                l: 'Activar acceso' },
+    { v: 'importar_accesos',              l: 'Importar accesos' },
+    { v: 'cambiar_perfil',                l: 'Cambiar perfil' },
+    { v: 'asignar_permiso',               l: 'Asignar permiso' },
+    { v: 'quitar_permiso',                l: 'Quitar permiso' },
+  ]},
+  { grupo: 'Base de personal', items: [
+    { v: 'importar_bd',                   l: 'Importar base de datos' },
+    { v: 'crear_personal',                l: 'Crear registro de personal' },
+    { v: 'editar_personal',               l: 'Editar registro de personal' },
+    { v: 'eliminar_personal',             l: 'Eliminar registro de personal' },
+    { v: 'cambio_area_lote',              l: 'Cambio de área en lote' },
+  ]},
+  { grupo: 'Áreas', items: [
+    { v: 'area_agregar',                  l: 'Agregar área' },
+    { v: 'area_renombrar',                l: 'Renombrar área' },
+    { v: 'area_eliminar',                 l: 'Eliminar área' },
+    { v: 'area_importar',                 l: 'Importar catálogo de áreas' },
+  ]},
+  { grupo: 'Sistema', items: [
+    { v: 'backup_mensual',                l: 'Generar respaldo' },
+    { v: 'restaurar_backup',              l: 'Restaurar respaldo' },
+    { v: 'borrar_toda_base_novedades',    l: 'Borrar base de Novedades' },
+    { v: 'eliminar_auditoria',            l: 'Eliminar historial de auditoría' },
+  ]},
+];
+
+const ETIQUETA_ACCION = (() => {
+  const m = new Map();
+  ACCIONES_AUDITORIA.forEach(g => g.items.forEach(i => m.set(i.v, i.l)));
+  return m;
+})();
+
+let auditoriaPagina = 1;
+let auditoriaCursores = [];    // último doc de cada página, para avanzar
+let auditoriaHayMas = false;
+let auditoriaCache = [];       // solo la página en pantalla
+let auditoriaFiltros = { desde: '', hasta: '', accion: '', usuario: '', area: '' };
+
+/* Arma la consulta con los filtros activos.
+   `cursor` es el último documento de la página anterior (o null). */
+function construirConsultaAuditoria(cursor, cantidad) {
+  const F = window._fb;
+  const partes = [F.collection(db, 'auditoria')];
+
+  if (auditoriaFiltros.accion)  partes.push(F.where('accion', '==', auditoriaFiltros.accion));
+  if (auditoriaFiltros.usuario) partes.push(F.where('admin', '==', auditoriaFiltros.usuario.toLowerCase().trim()));
+  if (auditoriaFiltros.area)    partes.push(F.where('area', '==', auditoriaFiltros.area));
+
+  if (auditoriaFiltros.desde) {
+    const d = new Date(auditoriaFiltros.desde + 'T00:00:00');
+    partes.push(F.where('timestamp', '>=', d));
+  }
+  if (auditoriaFiltros.hasta) {
+    const h = new Date(auditoriaFiltros.hasta + 'T23:59:59');
+    partes.push(F.where('timestamp', '<=', h));
+  }
+
+  partes.push(F.orderBy('timestamp', 'desc'));
+  if (cursor) partes.push(F.startAfter(cursor));
+  partes.push(F.limit(cantidad));
+
+  return F.query(...partes);
+}
+
+/* Traduce el error de índice faltante de Firestore en algo accionable:
+   la consola de Firebase devuelve el enlace directo para crearlo. */
+function mostrarErrorAuditoria(e) {
+  const cont = $('auditoria-body');
+  const texto = String(e && e.message || e);
+  const enlace = (texto.match(/https:\/\/console\.firebase\.google\.com\/\S+/) || [])[0];
+
+  if (enlace) {
+    cont.innerHTML = `<tr><td colspan="5" style="padding:16px;font-size:12px;line-height:1.6;">
+      ⚠️ Esta combinación de filtros necesita un <strong>índice</strong> en Firestore.
+      Se crea una sola vez y es gratuito.<br>
+      <a href="${enlace}" target="_blank" rel="noopener" style="font-weight:700;text-decoration:underline;">
+        Abrir la consola de Firebase para crearlo →</a><br>
+      <span style="color:var(--txt2);">Tarda 1-2 minutos en construirse. Después vuelva a filtrar.</span>
+    </td></tr>`;
+  } else {
+    cont.innerHTML = `<tr><td colspan="5" style="padding:16px;">❌ Error cargando la auditoría: ${texto}</td></tr>`;
+  }
+  hide('auditoria-vacio');
+  const pag = $('auditoria-paginacion'); if (pag) pag.innerHTML = '';
+}
+
+async function cargarAuditoria(reiniciar = true) {
+  const cont = $('auditoria-body');
+  if (!cont) return;
+  cont.innerHTML = `<tr><td colspan="5" class="td-vacio">Cargando...</td></tr>`;
+
+  if (reiniciar) { auditoriaPagina = 1; auditoriaCursores = []; }
+
   try {
-    const auditSnapshot = await window._fb.getDocs(
-      window._fb.query(window._fb.collection(db, 'auditoria'), window._fb.orderBy('timestamp', 'desc'))
-    );
+    const cursor = auditoriaPagina > 1 ? auditoriaCursores[auditoriaPagina - 2] : null;
+    // Se pide UNO de más para saber si existe página siguiente, sin contar toda la colección
+    const snap = await window._fb.getDocs(construirConsultaAuditoria(cursor, AUDITORIA_POR_PAGINA + 1));
 
-    auditoriaCache = auditSnapshot.docs.map(doc => doc.data());
-    paginaAuditoria = 1;
+    const docs = snap.docs;
+    auditoriaHayMas = docs.length > AUDITORIA_POR_PAGINA;
+    const dePagina = auditoriaHayMas ? docs.slice(0, AUDITORIA_POR_PAGINA) : docs;
 
-    if (auditoriaCache.length === 0) {
-      show('auditoria-vacio');
-      $('auditoria-body').innerHTML = '';
-      $('auditoria-paginacion').innerHTML = '';
-      return;
-    }
+    if (dePagina.length) auditoriaCursores[auditoriaPagina - 1] = dePagina[dePagina.length - 1];
+    auditoriaCache = dePagina.map(d => ({ id: d.id, ...d.data() }));
 
-    hide('auditoria-vacio');
     renderizarAuditoriaPagina();
-
   } catch(e) {
-    console.error('Error:', e);
-    toast('Error cargando auditoría: ' + e.message, 'err');
+    console.error('Error cargando auditoría:', e);
+    mostrarErrorAuditoria(e);
   }
 }
 
+function fechaAuditoria(ts) {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return isNaN(d) ? '' : d.toLocaleString('es-EC');
+}
+
 function renderizarAuditoriaPagina() {
-  const inicio = (paginaAuditoria - 1) * POR_PAGINA_ENVIOS;
-  const pagina = auditoriaCache.slice(inicio, inicio + POR_PAGINA_ENVIOS);
   const tbody = $('auditoria-body');
+  if (!tbody) return;
 
-  tbody.innerHTML = pagina.map(data => {
-    const fecha = data.timestamp ? (data.timestamp.toDate ? data.timestamp.toDate().toLocaleString() : new Date(data.timestamp).toLocaleString()) : '';
-    return `
-      <tr>
-        <td style="font-size:10px;">${fecha}</td>
-        <td style="font-size:10px;">${data.admin || '—'}</td>
-        <td style="font-size:10px;">${data.accion || '—'}</td>
-        <td style="font-size:10px;">${data.descripcion || '—'}</td>
-      </tr>`;
-  }).join('');
+  if (!auditoriaCache.length) {
+    tbody.innerHTML = '';
+    show('auditoria-vacio');
+    $('auditoria-vacio').textContent = auditoriaPagina > 1
+      ? 'No hay más registros'
+      : 'No hay registros que coincidan con los filtros';
+    const pag = $('auditoria-paginacion'); if (pag) pag.innerHTML = '';
+    return;
+  }
+  hide('auditoria-vacio');
 
-  renderizarControlesPaginacion('auditoria-paginacion', auditoriaCache.length, paginaAuditoria, 'cambiarPaginaAuditoria');
+  tbody.innerHTML = auditoriaCache.map(d => `
+    <tr>
+      <td style="font-size:10px;white-space:nowrap;">${fechaAuditoria(d.timestamp)}</td>
+      <td style="font-size:10px;">${d.admin || '—'}</td>
+      <td style="font-size:10px;font-weight:700;">${ETIQUETA_ACCION.get(d.accion) || d.accion || '—'}</td>
+      <td style="font-size:10px;">${d.area || '—'}</td>
+      <td style="font-size:10px;">${d.descripcion || '—'}</td>
+    </tr>`).join('');
+
+  const pag = $('auditoria-paginacion');
+  if (pag) {
+    pag.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+        <span style="font-size:12px;color:var(--txt2);">
+          Página ${auditoriaPagina} — mostrando ${auditoriaCache.length} registro(s)
+        </span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-acc btn-acc-ghost" ${auditoriaPagina <= 1 ? 'disabled' : ''} onclick="cambiarPaginaAuditoria(-1)">← Anterior</button>
+          <button class="btn-acc btn-acc-ghost" ${auditoriaHayMas ? '' : 'disabled'} onclick="cambiarPaginaAuditoria(1)">Siguiente →</button>
+        </div>
+      </div>`;
+  }
 }
 
 function cambiarPaginaAuditoria(delta) {
-  const totalPaginas = Math.max(1, Math.ceil(auditoriaCache.length / POR_PAGINA_ENVIOS));
-  paginaAuditoria = Math.min(totalPaginas, Math.max(1, paginaAuditoria + delta));
-  renderizarAuditoriaPagina();
+  const destino = auditoriaPagina + delta;
+  if (destino < 1) return;
+  if (delta > 0 && !auditoriaHayMas) return;
+  auditoriaPagina = destino;
+  cargarAuditoria(false);
 }
 
 async function filtrarAuditoria() {
-  toast('⏳ Filtrado en desarrollo...', 'ok');
-  // Implementar filtros más adelante
+  auditoriaFiltros = {
+    desde:   ($('audit-desde')?.value || '').trim(),
+    hasta:   ($('audit-hasta')?.value || '').trim(),
+    accion:  ($('audit-accion')?.value || '').trim(),
+    usuario: ($('audit-usuario')?.value || '').trim(),
+    area:    ($('audit-area')?.value || '').trim(),
+  };
+  if (auditoriaFiltros.desde && auditoriaFiltros.hasta && auditoriaFiltros.desde > auditoriaFiltros.hasta) {
+    toast('La fecha "Desde" no puede ser posterior a "Hasta"', 'err');
+    return;
+  }
+  await cargarAuditoria(true);
 }
 
-async function limpiarAuditoria() {
-  if (!(await confirmarAccion('¿Eliminar TODO el historial de auditoría? Esta acción no se puede deshacer.', 'Limpiar auditoría'))) return;
+function limpiarFiltrosAuditoria() {
+  ['audit-desde','audit-hasta','audit-accion','audit-usuario','audit-area'].forEach(id => {
+    const el = $(id); if (el) el.value = '';
+  });
+  auditoriaFiltros = { desde: '', hasta: '', accion: '', usuario: '', area: '' };
+  cargarAuditoria(true);
+}
+
+/* Rellena el selector de acciones agrupado y el combobox de áreas. */
+async function poblarFiltrosAuditoria() {
+  const sel = $('audit-accion');
+  if (sel && sel.dataset.poblado !== '1') {
+    sel.innerHTML = '<option value="">Todas las acciones</option>' +
+      ACCIONES_AUDITORIA.map(g =>
+        `<optgroup label="${g.grupo}">` +
+        g.items.map(i => `<option value="${i.v}">${i.l}</option>`).join('') +
+        `</optgroup>`).join('');
+    sel.dataset.poblado = '1';
+  }
+  const selArea = $('audit-area');
+  if (selArea && selArea.dataset.poblado !== '1') {
+    const areas = await obtenerAreasNovedades();
+    selArea.innerHTML = '<option value="">Todas las áreas</option>' +
+      (areas || []).map(a => `<option value="${a}">${a}</option>`).join('');
+    selArea.dataset.poblado = '1';
+  }
+}
+
+/* ── Exportar a Excel lo que esté filtrado ──
+   Trae los registros POR LOTES, no todos de una vez, para no ahogar
+   el navegador cuando el filtro abarca un mes completo. */
+async function exportarAuditoria() {
+  const LOTE = 500;
+  const TECHO = 50000;   // resguardo: más que esto conviene acotar el rango
+
   try {
-    const auditSnapshot = await window._fb.getDocs(window._fb.collection(db, 'auditoria'));
-    const batch = window._fb.writeBatch(db);
-    
-    auditSnapshot.forEach(doc => {
-      batch.delete(doc.ref);
-    });
-    
-    await batch.commit();
-    toast('✅ Auditoría limpiada', 'ok');
-    cargarAuditoria();
-    
+    toast('⏳ Recopilando registros...', 'ok');
+
+    const filas = [];
+    let cursor = null;
+    while (filas.length < TECHO) {
+      const snap = await window._fb.getDocs(construirConsultaAuditoria(cursor, LOTE));
+      if (snap.empty) break;
+      snap.docs.forEach(d => filas.push(d.data()));
+      cursor = snap.docs[snap.docs.length - 1];
+      if (snap.docs.length < LOTE) break;
+      toast(`⏳ ${filas.length} registros...`, 'ok');
+    }
+
+    if (!filas.length) { toast('No hay registros que coincidan con los filtros', 'err'); return; }
+
+    if (!window.ExcelJS) {
+      await new Promise((res, rej) => {
+        const sc = document.createElement('script');
+        sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+        sc.onload = res; sc.onerror = rej;
+        document.head.appendChild(sc);
+      });
+    }
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Auditoría');
+    ws.columns = [
+      { header: 'FECHA Y HORA', key: 'fecha',  width: 22 },
+      { header: 'USUARIO',      key: 'admin',  width: 32 },
+      { header: 'ACCIÓN',       key: 'accion', width: 30 },
+      { header: 'ÁREA',         key: 'area',   width: 30 },
+      { header: 'PERÍODO',      key: 'mes',    width: 12 },
+      { header: 'DÍA',          key: 'dia',    width: 7  },
+      { header: 'AFECTADO',     key: 'afect',  width: 32 },
+      { header: 'DESCRIPCIÓN',  key: 'desc',   width: 70 },
+    ];
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A6E' } };
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+    filas.forEach(d => ws.addRow({
+      fecha:  fechaAuditoria(d.timestamp),
+      admin:  d.admin || '',
+      accion: ETIQUETA_ACCION.get(d.accion) || d.accion || '',
+      area:   d.area || '',
+      mes:    d.mes || '',
+      dia:    d.dia || '',
+      afect:  d.correoAfectado || '',
+      desc:   d.descripcion || '',
+    }));
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const sufijo = auditoriaFiltros.desde || auditoriaFiltros.hasta
+      ? `_${auditoriaFiltros.desde || 'inicio'}_a_${auditoriaFiltros.hasta || 'hoy'}`
+      : '';
+    a.download = `AUDITORIA_SISCTE${sufijo}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`✅ ${filas.length} registros exportados`, 'ok');
   } catch(e) {
-    toast('Error: ' + e.message, 'err');
+    console.error(e);
+    if (String(e.message || '').includes('index')) { mostrarErrorAuditoria(e); return; }
+    toast('❌ Error exportando: ' + e.message, 'err');
+  }
+}
+
+/* ── Eliminar historial: por rango de fechas o todo ──
+   Solo con el permiso `auditoria_limpiar`. El borrado se hace en lotes
+   de 400 porque Firestore rechaza los lotes de más de 500 operaciones
+   (por eso el botón anterior fallaba apenas había algo de historial). */
+function abrirModalEliminarAuditoria() {
+  if (!tienePermisoAccion('auditoria_limpiar')) { toast('No tiene permiso para esta acción', 'err'); return; }
+  $('elim-audit-modo').value = 'rango';
+  $('elim-audit-desde').value = '';
+  $('elim-audit-hasta').value = new Date().toISOString().slice(0, 10);
+  $('elim-audit-confirmar').checked = false;
+  $('elim-audit-progreso').textContent = '';
+  cambiarModoEliminarAuditoria();
+  verificarCheckEliminarAuditoria();
+  $('modal-eliminar-auditoria').style.display = 'flex';
+}
+
+function cerrarModalEliminarAuditoria() { $('modal-eliminar-auditoria').style.display = 'none'; }
+
+function cambiarModoEliminarAuditoria() {
+  const todo = $('elim-audit-modo').value === 'todo';
+  $('elim-audit-fechas').style.display = todo ? 'none' : 'grid';
+  $('elim-audit-aviso').innerHTML = todo
+    ? '⚠️ Se eliminará <strong>TODO</strong> el historial de auditoría, desde el primer registro. Esta acción no se puede deshacer.'
+    : '⚠️ Se eliminarán los registros comprendidos en el rango indicado. Esta acción no se puede deshacer.';
+}
+
+function verificarCheckEliminarAuditoria() {
+  $('btn-elim-audit').disabled = !$('elim-audit-confirmar').checked;
+}
+
+async function ejecutarEliminarAuditoria() {
+  if (!tienePermisoAccion('auditoria_limpiar')) { toast('No tiene permiso para esta acción', 'err'); return; }
+  if (!$('elim-audit-confirmar').checked) return;
+
+  const modo  = $('elim-audit-modo').value;
+  const desde = $('elim-audit-desde').value;
+  const hasta = $('elim-audit-hasta').value;
+
+  if (modo === 'rango' && !desde && !hasta) {
+    toast('Indique al menos una de las dos fechas', 'err');
+    return;
+  }
+  if (modo === 'rango' && desde && hasta && desde > hasta) {
+    toast('La fecha "Desde" no puede ser posterior a "Hasta"', 'err');
+    return;
+  }
+
+  const detalle = modo === 'todo'
+    ? 'TODO el historial de auditoría'
+    : `los registros del ${desde || 'inicio'} al ${hasta || 'hoy'}`;
+  if (!(await confirmarAccion(`¿Confirma eliminar ${detalle}? Esta acción no se puede deshacer.`, 'Eliminar historial'))) return;
+
+  const btn = $('btn-elim-audit');
+  const prog = $('elim-audit-progreso');
+  btn.disabled = true;
+  btn.textContent = 'Eliminando...';
+
+  let borrados = 0;
+  try {
+    const F = window._fb;
+    while (true) {
+      const partes = [F.collection(db, 'auditoria')];
+      if (modo === 'rango') {
+        if (desde) partes.push(F.where('timestamp', '>=', new Date(desde + 'T00:00:00')));
+        if (hasta) partes.push(F.where('timestamp', '<=', new Date(hasta + 'T23:59:59')));
+      }
+      partes.push(F.orderBy('timestamp', 'desc'));
+      partes.push(F.limit(400));   // Firestore rechaza lotes de más de 500 operaciones
+
+      const snap = await F.getDocs(F.query(...partes));
+      if (snap.empty) break;
+
+      const batch = F.writeBatch(db);
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+
+      borrados += snap.docs.length;
+      prog.textContent = `Eliminando... ${borrados} registro(s)`;
+      if (snap.docs.length < 400) break;
+    }
+
+    // El asiento del borrado se escribe DESPUÉS, así sobrevive a la eliminación
+    // y el historial nunca queda en blanco sin explicación.
+    await registrarEnAuditoria(
+      'eliminar_auditoria', null, usuario.email, null, null,
+      { modo, desde: desde || null, hasta: hasta || null, borrados },
+      `Historial de auditoría eliminado (${modo === 'todo' ? 'todo' : `${desde || 'inicio'} a ${hasta || 'hoy'}`}) — ${borrados} registro(s), por ${usuario.email}`
+    );
+
+    prog.textContent = `✅ Listo. Se eliminaron ${borrados} registro(s).`;
+    toast(`✅ ${borrados} registro(s) eliminados`, 'ok');
+    setTimeout(() => { cerrarModalEliminarAuditoria(); cargarAuditoria(true); }, 1200);
+
+  } catch(e) {
+    console.error(e);
+    if (String(e.message || '').includes('index')) {
+      prog.textContent = '⚠️ Firestore necesita un índice para ese rango. Revise la consola del navegador para el enlace.';
+    } else {
+      prog.textContent = '❌ Error: ' + e.message;
+    }
+    toast('❌ Error eliminando: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Eliminar historial';
   }
 }
 
@@ -7168,7 +7518,17 @@ window.importarAccesosDesdeArchivo  = importarAccesosDesdeArchivo;
 window.cerrarModalImportarAccesos   = cerrarModalImportarAccesos;
 window.confirmarImportarAccesos     = confirmarImportarAccesos;
 window.filtrarAuditoria             = filtrarAuditoria;
-window.limpiarAuditoria             = limpiarAuditoria;
+window.cargarAuditoria              = cargarAuditoria;
+window.filtrarAuditoria             = filtrarAuditoria;
+window.limpiarFiltrosAuditoria      = limpiarFiltrosAuditoria;
+window.cambiarPaginaAuditoria       = cambiarPaginaAuditoria;
+window.exportarAuditoria            = exportarAuditoria;
+window.abrirModalEliminarAuditoria  = abrirModalEliminarAuditoria;
+window.cerrarModalEliminarAuditoria = cerrarModalEliminarAuditoria;
+window.cambiarModoEliminarAuditoria = cambiarModoEliminarAuditoria;
+window.verificarCheckEliminarAuditoria = verificarCheckEliminarAuditoria;
+window.ejecutarEliminarAuditoria    = ejecutarEliminarAuditoria;
+window.poblarFiltrosAuditoria       = poblarFiltrosAuditoria;
 window.aprobarDesbloqueo            = aprobarDesbloqueo;
 window.rechazarDesbloqueo           = rechazarDesbloqueo;
 window.cerrarModalRechazarDesbloqueo = cerrarModalRechazarDesbloqueo;
