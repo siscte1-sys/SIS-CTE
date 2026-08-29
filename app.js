@@ -382,7 +382,6 @@ function actualizarVistaActual() {
       else if (tabActiva === 'desbloqueos') { cargarDesbloqueos(); poblarSelectoresDesbloqueoDirecto(); }
       else if (tabActiva === 'resumen')     cargarResumenGeneral();
       else if (tabActiva === 'importar')    cargarDirectorioPersonal();
-      else if (tabActiva === 'permisos')    poblarListaPermisos();
       else if (tabActiva === 'areas')       cargarAreasPanel();
       break;
     }
@@ -1936,10 +1935,6 @@ function aplicarVisibilidadTabsAdmin() {
 
   document.querySelectorAll('.admin-tab').forEach(tab => {
     const tabName = tab.dataset.tab;
-    if (tabName === 'permisos') {
-      tab.style.display = esAdmin() ? 'inline-flex' : 'none';
-      return;
-    }
     const permitido = tabPermitido(tabName);
     tab.style.display = permitido ? 'inline-flex' : 'none';
     if (permitido && !primeraVisible) primeraVisible = tabName;
@@ -2648,8 +2643,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.admin-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       const tabName = tab.dataset.tab;
-      if (tabName !== 'permisos' && !tabPermitido(tabName)) return; // defensa extra, el botón ya está oculto
-      if (tabName === 'permisos' && !esAdmin()) return;
+      if (!tabPermitido(tabName)) return; // defensa extra, el botón ya está oculto
       document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.admin-tab-content').forEach(c => c.style.display = 'none');
       tab.classList.add('active');
@@ -2661,7 +2655,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'desbloqueos') { cargarDesbloqueos(); poblarSelectoresDesbloqueoDirecto(); }
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
       if (tabName === 'importar') { cargarDirectorioPersonal(); poblarSelectoresBackupManual(); }
-      if (tabName === 'permisos') { poblarListaPermisos(); actualizarVisibilidadTabsPermiso(); }
       if (tabName === 'areas') cargarAreasPanel();
       aplicarPermisosBotones();
     });
@@ -4697,159 +4690,6 @@ async function importarBaseDatos() {
 ═════════════════════════════════════════ */
 
 /* ═════════════════════════════════════════
-   PANEL ADMIN — Permisos (acceso parcial / supervisor)
-═════════════════════════════════════════ */
-
-function renderizarGruposPermisos() {
-  const cont = $('permiso-acciones-grupos');
-  if (cont.dataset.renderizado === '1') return;
-  cont.innerHTML = PERMISOS_DISPONIBLES.map(grupo => `
-    <div>
-      <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
-        <span>${grupo.tabLabel}</span>
-        <a href="#" style="font-size:11px;font-weight:600;" onclick="event.preventDefault(); marcarGrupoPermiso('${grupo.tab}', true)">Marcar todo</a>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:4px;padding-left:8px;">
-        ${grupo.acciones.map(a => `
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
-            <input type="checkbox" value="${a.key}" data-grupo="${grupo.tab}" class="permiso-accion-check"> ${a.label}
-          </label>
-        `).join('')}
-      </div>
-    </div>
-  `).join('');
-  cont.dataset.renderizado = '1';
-}
-
-function marcarGrupoPermiso(tab, valor) {
-  document.querySelectorAll(`.permiso-accion-check[data-grupo="${tab}"]`).forEach(c => c.checked = valor);
-}
-
-function actualizarVisibilidadTabsPermiso() {
-  renderizarGruposPermisos();
-}
-
-function marcarSoloVerYExportar() {
-  renderizarGruposPermisos();
-  document.querySelectorAll('.permiso-accion-check').forEach(c => {
-    c.checked = c.value.endsWith('_ver') || c.value.endsWith('_exportar');
-  });
-  toast('✅ Se marcaron solo las acciones de ver/exportar', 'ok');
-}
-
-async function guardarPermiso() {
-  const correo = $('permiso-correo').value.trim().toLowerCase();
-  const tipo = 'parcial';
-
-  if (!correo || !correo.includes('@')) { toast('Ingrese un correo válido', 'err'); return; }
-
-  try {
-    const existente = await window._fb.getDoc(window._fb.doc(db, 'permisos_panel', correo));
-    if (existente.exists()) {
-      const continuar = await confirmarAccion(`El correo ${correo} ya tiene un permiso asignado.\n\n¿Quiere reemplazarlo por el nuevo que eligió?`, 'Permiso ya existente');
-      if (!continuar) return;
-    }
-  } catch(e) { /* si falla la verificación, seguimos igual */ }
-
-  const acciones = Array.from(document.querySelectorAll('.permiso-accion-check:checked')).map(c => c.value);
-
-  if (acciones.length === 0) {
-    toast('Marque al menos una acción', 'err');
-    return;
-  }
-
-  try {
-    await window._fb.setDoc(window._fb.doc(db, 'permisos_panel', correo), {
-      correo, tipo, acciones,
-      asignadoPor: usuario.email,
-      fechaAsignacion: new Date()
-    });
-
-    const resumenAcciones = acciones
-      .map(key => PERMISOS_DISPONIBLES.flatMap(g => g.acciones).find(a => a.key === key)?.label || key)
-      .join(', ');
-
-    await registrarEnAuditoria('asignar_permiso', null, correo, null, null, { tipo, acciones }, `Permiso "${tipo}" asignado a ${correo}${resumenAcciones ? ' — ' + resumenAcciones : ''}`);
-
-    toast(`✅ Permiso asignado a ${correo}`, 'ok');
-    $('permiso-correo').value = '';
-    document.querySelectorAll('.permiso-accion-check').forEach(c => c.checked = false);
-    poblarListaPermisos();
-  } catch(e) {
-    toast('❌ Error: ' + e.message, 'err');
-  }
-}
-
-async function poblarListaPermisos() {
-  const cont = $('permisos-lista');
-  cont.innerHTML = `<p class="td-vacio">Cargando...</p>`;
-
-  try {
-    const snap = await window._fb.getDocs(window._fb.collection(db, 'permisos_panel'));
-    if (snap.empty) {
-      cont.innerHTML = `<p class="td-vacio">Todavía no le asignaste acceso a nadie más</p>`;
-      return;
-    }
-
-    const todasLasAcciones = PERMISOS_DISPONIBLES.flatMap(g => g.acciones);
-
-    cont.innerHTML = snap.docs.map(d => {
-      const data = d.data();
-      const badge = data.tipo === 'supervisor'
-        ? '<span style="background:var(--blue-l);color:var(--blue);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">SUPERVISOR (solo lectura)</span>'
-        : '<span style="background:var(--green-l);color:var(--green);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">ACCESO PARCIAL</span>';
-      const accionesTxt = (data.acciones || [])
-        .map(key => todasLasAcciones.find(a => a.key === key)?.label || key)
-        .join(' · ');
-      return `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:12px;background:var(--bg);border-radius:8px;gap:12px;">
-          <div>
-            <div style="font-weight:600;">${data.correo} ${badge}</div>
-            ${accionesTxt ? `<div style="font-size:11px;color:var(--txt2);margin-top:4px;">${accionesTxt}</div>` : ''}
-          </div>
-          <div style="display:flex;gap:6px;white-space:nowrap;">
-            <button class="btn-acc btn-acc-blue" style="padding:4px 10px;font-size:11px;" onclick="editarPermiso('${d.id}')">✎ Editar</button>
-            <button class="btn-acc btn-acc-red" style="padding:4px 10px;font-size:11px;" onclick="eliminarPermiso('${d.id}')">Quitar acceso</button>
-          </div>
-        </div>`;
-    }).join('');
-  } catch(e) {
-    cont.innerHTML = `<p class="td-vacio">❌ Error cargando permisos: ${e.message}</p>`;
-  }
-}
-
-async function editarPermiso(correo) {
-  try {
-    const snap = await window._fb.getDoc(window._fb.doc(db, 'permisos_panel', correo));
-    if (!snap.exists()) { toast('No se encontró ese permiso', 'err'); return; }
-    const data = snap.data();
-
-    renderizarGruposPermisos();
-    $('permiso-correo').value = data.correo;
-    document.querySelectorAll('.permiso-accion-check').forEach(c => {
-      c.checked = (data.acciones || []).includes(c.value);
-    });
-
-    $('permiso-correo').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    toast(`Editando permiso de ${correo} — ajuste las casillas y presione "Asignar permiso" para guardar`, 'ok');
-  } catch(e) {
-    toast('❌ Error: ' + e.message, 'err');
-  }
-}
-
-async function eliminarPermiso(correo) {
-  if (!(await confirmarAccion(`¿Quitarle el acceso a ${correo}?`, 'Quitar acceso'))) return;
-  try {
-    await window._fb.deleteDoc(window._fb.doc(db, 'permisos_panel', correo));
-    await registrarEnAuditoria('quitar_permiso', null, correo, null, null, {}, `Permiso quitado a ${correo}`);
-    toast('✅ Acceso quitado', 'ok');
-    poblarListaPermisos();
-  } catch(e) {
-    toast('❌ Error: ' + e.message, 'err');
-  }
-}
-
-/* ═════════════════════════════════════════
    VISTA REPORTES — actividad de solo lectura (supervisor)
 ═════════════════════════════════════════ */
 
@@ -5911,7 +5751,6 @@ async function guardarPerfilAcceso() {
     toast(`✅ Perfil actualizado a ${perfil}`, 'ok');
     cerrarModalPerfil();
     cargarAccesos();
-    if (typeof poblarListaPermisos === 'function' && $('permisos-lista')) poblarListaPermisos();
   } catch(e) {
     toast('❌ Error: ' + e.message, 'err');
   }
@@ -7458,11 +7297,6 @@ window.cerrarErrorCodigo            = cerrarErrorCodigo;
 
 /* Panel Admin — Novedades */
 window.importarBaseDatos            = importarBaseDatos;
-window.actualizarVisibilidadTabsPermiso = actualizarVisibilidadTabsPermiso;
-window.guardarPermiso               = guardarPermiso;
-window.marcarGrupoPermiso           = marcarGrupoPermiso;
-window.eliminarPermiso              = eliminarPermiso;
-window.editarPermiso                = editarPermiso;
 window.desbloquearDiaDirecto        = desbloquearDiaDirecto;
 window.borrarTodaLaBaseNovedades    = borrarTodaLaBaseNovedades;
 window.mostrarFormAcceso            = mostrarFormAcceso;
