@@ -210,11 +210,12 @@
 
       <!-- SECCIÓN: Cierre de mes anterior pendiente -->
       <div id="cierre-mes-container" class="panel-white" style="display:none;padding:20px;margin-bottom:20px;border:2px solid var(--blue-m);">
-        <div class="sec-titulo">🔒 Cierre de mes — <span id="cierre-mes-nombre"></span></div>
-        <p style="font-size:12px;color:var(--txt2);margin-bottom:16px;">
+        <div class="sec-titulo"><span id="cierre-mes-titulo-icono">🔒 Cierre de mes</span> — <span id="cierre-mes-nombre"></span></div>
+        <p style="font-size:12px;color:var(--txt2);margin-bottom:12px;" id="cierre-mes-texto">
           El mes anterior ya no se puede modificar.
         </p>
-        <div class="tabla-scroll-container" style="margin-bottom:16px;">
+        <button class="btn-acc btn-acc-blue" id="btn-ver-detalle-cierre" style="display:none;margin-bottom:12px;" onclick="alternarDetalleCierre()">👁️ Ver detalle del mes anterior</button>
+        <div class="tabla-scroll-container" id="cierre-mes-tabla-wrap" style="margin-bottom:16px;">
           <table id="tabla-cierre-mes" class="tabla-novedades"></table>
         </div>
 
@@ -250,6 +251,10 @@
           <div class="info-badge">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <span id="info-dia-actual">Hoy es día 7</span>
+          </div>
+          <div class="info-badge" id="info-ventana-llenado" style="display:none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span id="info-ventana-llenado-txt"></span>
           </div>
           <div class="info-badge" id="info-dias-pendientes" style="display:none">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -589,6 +594,7 @@
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="desbloqueos">🔓 Desbloqueos</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="resumen">📊 Resumen General</button>
           <button class="btn-acc btn-acc-blue admin-tab" data-tab="areas" id="tab-btn-areas" style="display:none;">🗺️ Áreas</button>
+          <button class="btn-acc btn-acc-blue admin-tab" data-tab="config" id="tab-btn-config" style="display:none;">⚙️ Configuración</button>
         </div>
       </div>
 
@@ -1010,6 +1016,7 @@
             <button class="btn-acc btn-acc-blue" onclick="cargarResumenGeneral()" style="margin-top:18px;" data-permiso="resumen_ver,resumen_exportar">Generar resumen</button>
             <button class="btn-acc btn-acc-green" onclick="exportarResumenGeneralExcel()" style="margin-top:18px;" data-permiso="resumen_exportar">📥 Exportar a Excel</button>
           </div>
+          <div id="resumen-areas-sin-asignar" class="info-badge" style="display:none;margin:0 20px 16px;align-items:center;gap:8px;flex-wrap:wrap;"></div>
         </div>
 
         <div class="panel-white">
@@ -1067,6 +1074,65 @@
           <input type="text" id="areas-panel-buscar" class="form-select" placeholder="Buscar en la lista..." style="margin-bottom:12px;" oninput="renderizarListaAreasPanel()">
           <div id="areas-panel-total" style="font-size:12px;color:var(--txt2);margin-bottom:8px;"></div>
           <div id="areas-panel-lista" style="max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;"></div>
+        </div>
+      </div>
+
+      <!-- TAB: Configuración del cierre mensual -->
+      <div id="admin-tab-config" class="admin-tab-content" style="display:none">
+        <div class="panel-white" style="padding:20px;">
+          <div class="sec-titulo">⚙️ Cierre mensual — plazo del informe</div>
+          <p style="color:var(--txt2);margin-bottom:18px;font-size:12px;">
+            Define en qué día del mes siguiente se habilita la generación del informe del mes culminado y desde qué día
+            se bloquea el registro de novedades si el informe todavía no se generó. Aplica a <strong>todas las áreas</strong>.
+            Si la disposición institucional cambia, basta con modificar estos valores aquí: no hace falta tocar el sistema.
+          </p>
+          <p style="color:var(--txt2);margin-bottom:18px;font-size:12px;">
+            Puede elegir del 1 al 31. Si el mes resulta más corto que el día elegido, el sistema aplica automáticamente el
+            último día de ese mes: febrero se ajusta a 29 en los años bisiestos y a 28 en los demás, y los meses de 30 días al 30.
+          </p>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+            <div class="form-field" style="margin-bottom:0;">
+              <label class="form-label">Día que habilita el informe</label>
+              <input type="number" id="config-dia-habilitacion" class="form-select" min="1" max="31" step="1" value="1">
+              <p style="font-size:11px;color:var(--txt2);margin-top:4px;">
+                Desde este día del mes siguiente, el área ya puede generar el informe del mes culminado. Sigue registrando
+                el mes en curso con normalidad — todavía no se bloquea nada.
+              </p>
+            </div>
+            <div class="form-field" style="margin-bottom:0;">
+              <label class="form-label">Día que bloquea el registro</label>
+              <input type="number" id="config-dia-bloqueo" class="form-select" min="1" max="31" step="1" value="1">
+              <p style="font-size:11px;color:var(--txt2);margin-top:4px;">
+                Si al llegar este día el informe no se generó, el área queda bloqueada hasta cerrar el mes anterior.
+                No puede ser anterior al día de habilitación.
+              </p>
+            </div>
+          </div>
+
+          <div class="info-badge" id="config-cierre-resumen" style="margin-bottom:24px;"></div>
+
+          <div class="sec-titulo" style="margin-top:8px;">🗓️ Modo de llenado de novedades</div>
+          <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
+            Define qué días quedan abiertos para que el área registre sus novedades. Aplica a <strong>todas las áreas</strong>.
+            En ningún modo se habilitan días futuros: solo se registra lo que ya ocurrió.
+          </p>
+          <div class="form-field" style="max-width:420px;">
+            <label class="form-label">Modo</label>
+            <select id="config-modo-llenado" class="form-select">
+              <option value="diario">Diario — solo el día de hoy</option>
+              <option value="semanal">Semanal — de lunes a domingo</option>
+              <option value="mensual">Mensual — todo el mes en curso</option>
+            </select>
+          </div>
+          <div class="info-badge" id="config-modo-resumen" style="margin-bottom:16px;"></div>
+
+          <div id="config-cierre-meta" style="font-size:11px;color:var(--txt2);margin-bottom:16px;"></div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;" data-permiso="config_editar">
+            <button class="btn-acc btn-acc-blue" onclick="guardarConfigCierre()">💾 Guardar configuración</button>
+            <button class="btn-acc btn-acc-blue" onclick="restaurarConfigCierrePorDefecto()">↩️ Restaurar valores por defecto (1 y 1)</button>
+          </div>
         </div>
       </div>
 
