@@ -549,7 +549,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Área</th><th>Responsable</th><th>Total Personal</th><th>Reemplazos (R)</th>
+                  <th>Área</th><th>Responsable</th><th>Total Personal</th>
                   <th>S/N</th><th>OA</th><th>X</th><th>CS</th><th>B</th><th>Li</th><th>V</th><th>PE</th>
                 </tr>
               </thead>
@@ -703,6 +703,30 @@
           </div>
         </div>
 
+        <!-- Actualización de áreas desde Excel — SOLO ADMINISTRADOR -->
+        <div class="panel-white" id="panel-actualizar-areas" style="border:2px solid var(--gold, #e8b84b);margin-top:16px;display:none;">
+          <div style="padding:20px;">
+            <div class="sec-titulo">🔄 Actualizar áreas de los efectivos desde Excel</div>
+            <p style="color:var(--txt2);margin-bottom:16px;font-size:12px;">
+              Compara el archivo contra la base que ya tiene y <strong>actualiza únicamente el área</strong> de los códigos
+              que coincidan. No borra personal, no toca las novedades ya cargadas y no modifica ningún otro dato.
+              El archivo debe traer al menos las columnas <strong>CÓDIGO</strong> y <strong>ÁREA</strong>; las demás se ignoran.
+            </p>
+            <div class="info-badge" style="margin-bottom:16px;">
+              El cambio de área rige desde el mes siguiente: el mes en curso queda tal como está, con lo ya registrado.
+            </div>
+            <div class="form-field">
+              <label class="form-label">Archivo (CSV o Excel)</label>
+              <input type="file" id="areas-update-file" accept=".csv,.xlsx,.xls" class="form-select">
+            </div>
+            <div class="form-field" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn-acc btn-acc-blue" onclick="analizarActualizacionAreas()">🔍 Analizar archivo</button>
+              <button class="btn-acc btn-acc-green" id="btn-aplicar-areas" style="display:none;" onclick="aplicarActualizacionAreas()">✅ Aplicar cambios</button>
+            </div>
+            <div id="areas-update-resultado" style="display:none;margin-top:16px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;"></div>
+          </div>
+        </div>
+
         <div class="panel-white" style="border:2px solid var(--blue-m);margin-top:16px;">
           <div style="padding:20px;">
             <div class="sec-titulo">📦 Backup a Drive (Novedades + Personal + Accesos + Auditoría + Envíos)</div>
@@ -804,7 +828,7 @@
                 <thead>
                   <tr>
                     <th style="width:32px;"><input type="checkbox" id="personal-check-todos" onchange="toggleSeleccionarTodosPersonal(this.checked)"></th>
-                    <th>Código</th><th>Grado</th><th>Apellidos</th><th>Nombres</th><th>Área</th><th>Área Temporal</th><th>Estado</th><th>Acciones</th>
+                    <th>Código</th><th>Grado</th><th>Apellidos</th><th>Nombres</th><th>Área</th><th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="personal-tabla-body"></tbody>
@@ -1024,7 +1048,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Área</th><th>Responsable</th><th>Total Personal</th><th>Reemplazos (R)</th>
+                  <th>Área</th><th>Responsable</th><th>Total Personal</th>
                   <th>S/N</th><th>OA</th><th>X</th><th>CS</th><th>B</th><th>Li</th><th>V</th><th>PE</th>
                 </tr>
               </thead>
@@ -1176,15 +1200,7 @@
         <label class="form-label">Área</label>
         <input type="text" id="modal-personal-area" class="form-select">
       </div>
-      <div class="form-field">
-        <label class="form-label">Área Temporal (opcional — si está de reemplazo/apoyo en otra área)</label>
-        <select id="modal-personal-area-temporal" class="form-select">
-          <option value="">— No aplica —</option>
-        </select>
-        <p style="font-size:11px;color:var(--txt2);margin-top:4px;">
-          Si elige un área acá, esta persona sigue perteneciendo a su área original de arriba, pero se marca con estado "R" (Reemplazo) en el área temporal.
-        </p>
-      </div>
+      
       <div id="modal-personal-error" style="display:none;padding:10px 12px;background:var(--red);color:white;border-radius:8px;font-size:12px;margin-bottom:16px;"></div>
       <div class="modal-footer">
         <button class="btn-modal-cancel" onclick="cerrarModalPersonal()">Cancelar</button>
