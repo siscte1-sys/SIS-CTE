@@ -265,6 +265,10 @@ const PERMISOS_DISPONIBLES = [
   { tab: 'actividad', tabLabel: '📈 Actividad del Administrador', acciones: [
     { key: 'actividad_ver',             label: 'Ver actividad del administrador (auditoría resumida) y descargarla' },
   ]},
+  { tab: 'config', tabLabel: '⚙️ Configuración', acciones: [
+    { key: 'config_ver',                label: 'Ver la configuración de cierre mensual' },
+    { key: 'config_editar',             label: 'Cambiar los días de habilitación y bloqueo del informe mensual' },
+  ]},
   { tab: 'reporte_novedades', tabLabel: '📄 Novedades — Generar Reporte', acciones: [
     { key: 'reporte_elegir_mes',        label: 'Elegir cualquier mes/año en "Generar Reporte" (como el administrador)' },
     { key: 'reporte_habilitar_campos',  label: 'Habilitar "Elaborado por" / "Responsable" y el botón para generar reportes tardíos (aunque el mes aún no cierre automáticamente)' },
@@ -383,6 +387,7 @@ function actualizarVistaActual() {
       else if (tabActiva === 'resumen')     cargarResumenGeneral();
       else if (tabActiva === 'importar')    cargarDirectorioPersonal();
       else if (tabActiva === 'areas')       cargarAreasPanel();
+      else if (tabActiva === 'config')      cargarConfigPanel();
       break;
     }
     default:
@@ -465,6 +470,130 @@ function obtenerFechaParts() {
 function obtenerNombreMes(mesNum) {
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   return meses[parseInt(mesNum) - 1];
+}
+
+/* ══════════════════════════════════
+   CONFIGURACIÓN DEL CIERRE MENSUAL
+   ──────────────────────────────────
+   Antes el cierre estaba quemado en el día 1: apenas cambiaba el mes,
+   aparecía la obligación de generar el informe y el área quedaba bloqueada.
+   Ahora el administrador define dos días del mes siguiente:
+
+     diaHabilitacion → desde ese día aparece la opción de generar el
+                       informe del mes anterior (el secretario puede
+                       generarlo apenas lo tenga listo, sin bloqueo).
+     diaBloqueo      → si al llegar ese día el informe no se generó,
+                       recién ahí se bloquea el registro del mes en curso.
+
+   Valores por defecto 1 y 1 = comportamiento anterior del sistema.
+══════════════════════════════════ */
+
+const CONFIG_CIERRE_DEFAULT = { diaHabilitacion: 1, diaBloqueo: 1, modoLlenado: 'diario' };
+
+/* Modo de llenado de novedades — define qué días quedan abiertos para escribir.
+   Es global: aplica igual a todas las áreas.
+     diario  → solo el día de hoy (comportamiento histórico del sistema)
+     semanal → desde el lunes de la semana en curso hasta hoy
+     mensual → desde el día 1 del mes en curso hasta hoy
+   En los tres casos nunca se habilitan días futuros: no se registra una
+   novedad de un día que todavía no ocurrió. */
+const MODOS_LLENADO = {
+  diario:  'Diario — solo el día de hoy',
+  semanal: 'Semanal — de lunes a domingo',
+  mensual: 'Mensual — todo el mes en curso'
+};
+let configCierreCache = null;
+
+async function obtenerConfigCierre(forzarRecarga = false) {
+  if (configCierreCache && !forzarRecarga) return configCierreCache;
+  try {
+    const ref = window._fb.doc(db, 'sistema', 'config_cierre');
+    const snap = await window._fb.getDoc(ref);
+    const data = snap.exists() ? snap.data() : {};
+    configCierreCache = {
+      diaHabilitacion: sanearDiaConfig(data.diaHabilitacion, CONFIG_CIERRE_DEFAULT.diaHabilitacion),
+      diaBloqueo:      sanearDiaConfig(data.diaBloqueo,      CONFIG_CIERRE_DEFAULT.diaBloqueo),
+      modoLlenado:     MODOS_LLENADO[data.modoLlenado] ? data.modoLlenado : CONFIG_CIERRE_DEFAULT.modoLlenado,
+      actualizadoPor:  data.actualizadoPor || null,
+      fechaActualizacion: data.fechaActualizacion || null
+    };
+    // El bloqueo nunca puede ser anterior a la habilitación
+    if (configCierreCache.diaBloqueo < configCierreCache.diaHabilitacion) {
+      configCierreCache.diaBloqueo = configCierreCache.diaHabilitacion;
+    }
+  } catch(e) {
+    console.warn('No se pudo cargar la configuración de cierre, se usan los valores por defecto:', e);
+    configCierreCache = { ...CONFIG_CIERRE_DEFAULT, actualizadoPor: null, fechaActualizacion: null };
+  }
+  return configCierreCache;
+}
+
+// Se admite del 1 al 31. Si el mes es más corto que el día configurado
+// (febrero de 28 o 29 días según el año, o los meses de 30), el día efectivo
+// pasa a ser el último día real de ese mes.
+function sanearDiaConfig(valor, porDefecto) {
+  const n = parseInt(valor, 10);
+  if (isNaN(n) || n < 1 || n > 31) return porDefecto;
+  return n;
+}
+
+// Traduce el día configurado al día que realmente corresponde en ese período.
+// diasEnMes() se apoya en el calendario del navegador, así que los años
+// bisiestos quedan resueltos solos: febrero de 2028 devuelve 29, el de 2026, 28.
+function ajustarDiaAlMes(dia, periodo) {
+  const ultimo = diasEnMes(periodo);
+  return Math.min(dia, ultimo);
+}
+
+/* ── Ventana de llenado ──────────────────────────────────────────
+   diaEsEditable() es la única regla de apertura de días. Antes esto
+   estaba repetido como `dia !== new Date().getDate()` en cuatro
+   lugares distintos; ahora todos consultan esta función. */
+
+function obtenerModoLlenado() {
+  return (configCierreCache && configCierreCache.modoLlenado) || CONFIG_CIERRE_DEFAULT.modoLlenado;
+}
+
+// Día del mes en que arranca la semana en curso (lunes). Si la semana viene
+// del mes anterior, se corta en el día 1: ese tramo pertenece a otro período
+// y se cierra con el informe de ese mes.
+function diaInicioSemana(referencia = new Date()) {
+  const d = new Date(referencia.getFullYear(), referencia.getMonth(), referencia.getDate());
+  const diaSemana = d.getDay();                       // 0 = domingo … 6 = sábado
+  const desdeLunes = diaSemana === 0 ? 6 : diaSemana - 1;
+  const lunes = new Date(d);
+  lunes.setDate(d.getDate() - desdeLunes);
+  return lunes.getMonth() === d.getMonth() ? lunes.getDate() : 1;
+}
+
+function diaEsEditable(dia, referencia = new Date()) {
+  const diaHoy = referencia.getDate();
+  if (dia > diaHoy) return false;                     // nunca se abre un día futuro
+  const modo = obtenerModoLlenado();
+  if (modo === 'mensual') return true;
+  if (modo === 'semanal') return dia >= diaInicioSemana(referencia);
+  return dia === diaHoy;
+}
+
+// El día está abierto por la ventana configurada o por un desbloqueo puntual del admin
+function diaAbiertoParaEscritura(dia) {
+  const desbloqueado = (novedadesActuales?.diasDesbloqueados || []).includes(dia);
+  return diaEsEditable(dia) || desbloqueado;
+}
+
+// Texto para avisar al usuario qué días tiene abiertos
+function descripcionVentanaLlenado() {
+  const modo = obtenerModoLlenado();
+  if (modo === 'mensual') return 'Este mes está abierto para registrar cualquier día ya transcurrido.';
+  if (modo === 'semanal') return `Esta semana está abierta desde el día ${diaInicioSemana()} hasta hoy.`;
+  return 'Solo está abierto el día de hoy.';
+}
+
+// Devuelve el período (AAAA-MM) siguiente al indicado
+function obtenerPeriodoSiguiente(periodo) {
+  const [anio, mes] = periodo.split('-').map(Number);
+  const d = new Date(anio, mes, 1); // mes es 1-based, así que esto ya cae en el mes siguiente
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 async function registrarEnAuditoria(accion, area, correoAfectado, dia, mes, detalles, descripcion) {
@@ -707,6 +836,28 @@ async function cargarNovedadesActuales() {
     const refAnterior = window._fb.doc(db, 'novedades', areaActual, periodoAnterior, 'datos');
     const docAnterior = await window._fb.getDoc(refAnterior);
 
+    // ── Ventana configurable de cierre (definida por el administrador) ──
+    // Los días guardados se ajustan al mes en curso: si el administrador fijó el
+    // día 30 y el mes es febrero, el efectivo será 28 o 29 según el año.
+    const cfgCierre = await obtenerConfigCierre();
+    const diaHabilitacion = ajustarDiaAlMes(cfgCierre.diaHabilitacion, periodo);
+    const diaBloqueo      = ajustarDiaAlMes(cfgCierre.diaBloqueo, periodo);
+    const cfgCierreEfectiva = { ...cfgCierre, diaHabilitacion, diaBloqueo };
+
+    // Aviso permanente de qué días tiene abiertos el área
+    const badgeVentana = $('info-ventana-llenado');
+    if (badgeVentana) {
+      $('info-ventana-llenado-txt').textContent = descripcionVentanaLlenado();
+      badgeVentana.style.display = obtenerModoLlenado() === 'diario' ? 'none' : 'flex';
+    }
+    // Desde el día de habilitación ya se puede generar el informe del mes anterior
+    const reporteHabilitado = diaHoy >= diaHabilitacion;
+    // Recién desde el día de bloqueo se corta el registro del mes en curso
+    const bloqueoActivo     = diaHoy >= diaBloqueo;
+
+    const prevTieneDatos = docAnterior.exists() && (docAnterior.data().agentes || []).length > 0;
+    const prevCerrado    = prevTieneDatos && docAnterior.data().estado === 'cerrado';
+
     // Panel "Generar Reporte" (arriba de la tabla):
     // - Admin: acceso total, cualquier área/mes/año, en cualquier momento.
     // - Usuario con permiso "reporte_elegir_mes": igual que el admin (puede elegir mes/año).
@@ -747,13 +898,19 @@ async function cargarNovedadesActuales() {
         $('btn-generar-reporte-prueba').style.cursor = '';
         fijarEstadoCamposReporte(true);
         poblarSelectoresReportePrueba();
-      } else if (docAnterior.exists() && docAnterior.data().estado === 'cerrado' && (docAnterior.data().agentes || []).length > 0) {
-        // El mes anterior ya quedó cerrado — habilitado, fijo a ese mes
+      } else if (prevCerrado || reporteHabilitado || (prevTieneDatos && tienePermisoAccion('reporte_habilitar_campos'))) {
+        // Habilitado y fijo al mes anterior. Se llega acá por tres caminos:
+        //  · el mes anterior ya quedó cerrado (se puede volver a generar el reporte)
+        //  · ya llegó el día de habilitación configurado por el administrador
+        //  · el usuario tiene el permiso puntual para generar reportes tardíos
+        const etiqueta = (!prevCerrado && !reporteHabilitado)
+          ? '📄 Generar Reporte (tardío)'
+          : (prevTieneDatos ? '📄 Generar Reporte' : '📄 Generar Reporte (sin novedades cargadas)');
         show('admin-generar-reporte');
         $('admin-generar-reporte').style.display = 'block';
         hide('reporte-prueba-selectores');
         $('reporte-prueba-selectores').style.display = 'none';
-        $('reporte-prueba-btn-txt').textContent = `📄 Generar Reporte — ${obtenerNombreMes(periodoAnterior.split('-')[1])} ${periodoAnterior.split('-')[0]}`;
+        $('reporte-prueba-btn-txt').textContent = `${etiqueta} — ${obtenerNombreMes(periodoAnterior.split('-')[1])} ${periodoAnterior.split('-')[0]}`;
         $('btn-generar-reporte-prueba').disabled = false;
         $('btn-generar-reporte-prueba').style.opacity = '';
         $('btn-generar-reporte-prueba').style.cursor = '';
@@ -762,28 +919,19 @@ async function cargarNovedadesActuales() {
         // Fijar el período al mes recién culminado
         $('reporte-prueba-mes').value = periodoAnterior.split('-')[1];
         $('reporte-prueba-anio').value = periodoAnterior.split('-')[0];
-      } else if (tienePermisoAccion('reporte_habilitar_campos') && docAnterior.exists() && (docAnterior.data().agentes || []).length > 0) {
-        // Permiso puntual del admin: generar reporte tardío del mes fijo, aunque
-        // el cierre automático (estado 'cerrado') todavía no se haya dado
-        show('admin-generar-reporte');
-        $('admin-generar-reporte').style.display = 'block';
-        hide('reporte-prueba-selectores');
-        $('reporte-prueba-selectores').style.display = 'none';
-        $('reporte-prueba-btn-txt').textContent = `📄 Generar Reporte (tardío) — ${obtenerNombreMes(periodoAnterior.split('-')[1])} ${periodoAnterior.split('-')[0]}`;
-        $('btn-generar-reporte-prueba').disabled = false;
-        $('btn-generar-reporte-prueba').style.opacity = '';
-        $('btn-generar-reporte-prueba').style.cursor = '';
-        fijarEstadoCamposReporte(true);
-        poblarSelectoresReportePrueba();
-        $('reporte-prueba-mes').value = periodoAnterior.split('-')[1];
-        $('reporte-prueba-anio').value = periodoAnterior.split('-')[0];
       } else {
-        // El mes en curso todavía no termina (o el área no tiene mes anterior aún)
+        // Todavía bloqueado. Dos escenarios distintos, con mensajes distintos:
+        //  · hay mes anterior pendiente pero aún no llega el día de habilitación
+        //  · no hay mes anterior: se habilita en el mes siguiente al que corre
         show('admin-generar-reporte');
         $('admin-generar-reporte').style.display = 'block';
         hide('reporte-prueba-selectores');
         $('reporte-prueba-selectores').style.display = 'none';
-        $('reporte-prueba-btn-txt').textContent = `🔒 Se habilita el 1 de ${obtenerNombreMes(periodo.split('-')[1] === '12' ? '01' : String(Number(periodo.split('-')[1]) + 1).padStart(2,'0'))}`;
+        const periodoSiguiente = obtenerPeriodoSiguiente(periodo);
+        const diaHabSiguiente  = ajustarDiaAlMes(cfgCierre.diaHabilitacion, periodoSiguiente);
+        $('reporte-prueba-btn-txt').textContent = docAnterior.exists()
+          ? `🔒 Se habilita el ${diaHabilitacion} de ${obtenerNombreMes(periodo.split('-')[1])}`
+          : `🔒 Se habilita el ${diaHabSiguiente} de ${obtenerNombreMes(periodoSiguiente.split('-')[1])}`;
         $('btn-generar-reporte-prueba').disabled = true;
         $('btn-generar-reporte-prueba').style.opacity = '0.5';
         $('btn-generar-reporte-prueba').style.cursor = 'not-allowed';
@@ -800,11 +948,25 @@ async function cargarNovedadesActuales() {
       }
     }
 
-    if (docAnterior.exists() && docAnterior.data().estado !== 'cerrado' && (docAnterior.data().agentes || []).length > 0) {
-      mostrarCierreMes(areaActual, periodoAnterior, docAnterior.data());
+    // ── Cierre del mes anterior ──
+    // Antes esto bloqueaba siempre. Ahora depende de la ventana configurada:
+    //  · antes del día de habilitación → ni se muestra (el área trabaja normal)
+    //  · entre habilitación y bloqueo  → se muestra como aviso, SIN bloquear:
+    //    el secretario sigue registrando el mes en curso y genera el informe
+    //    cuando lo tenga listo
+    //  · desde el día de bloqueo       → pantalla bloqueante, como antes
+    const cierrePendiente = prevTieneDatos && !prevCerrado;
+
+    if (cierrePendiente && bloqueoActivo) {
+      mostrarCierreMes(areaActual, periodoAnterior, docAnterior.data(), true, cfgCierreEfectiva);
       return;
     }
-    ocultarPantallaCierreMes();
+
+    if (cierrePendiente && reporteHabilitado) {
+      mostrarCierreMes(areaActual, periodoAnterior, docAnterior.data(), false, cfgCierreEfectiva);
+    } else {
+      ocultarPantallaCierreMes();
+    }
     verificarBackupPendiente(periodoAnterior);
 
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, periodo, 'datos');
@@ -1050,9 +1212,9 @@ function renderizarTablaNovedades(diaHoy) {
         const valor = agente.novedadesPorDia && agente.novedadesPorDia[String(dia)] ? agente.novedadesPorDia[String(dia)] : '';
         td.textContent = valor || '—';
         
-        // Bloquear días pasados
+        // Apertura del día según la ventana configurada (diaria / semanal / mensual)
         const desbloqueadoPorAdmin = (novedadesActuales.diasDesbloqueados || []).includes(dia);
-        const bloqueado = dia !== new Date().getDate() && !desbloqueadoPorAdmin;
+        const bloqueado = !diaEsEditable(dia) && !desbloqueadoPorAdmin;
         if (bloqueado) {
           td.style.opacity = '0.5';
           td.style.cursor = 'not-allowed';
@@ -1332,8 +1494,8 @@ function abrirMenuAccionRapida(idx, btnRef) {
 }
 
 async function aplicarCodigoRapido(idx, dia, codigo) {
-  if (!esAdmin() && dia !== new Date().getDate()) {
-    toast('❌ Solo puede editar el día de hoy. Para días anteriores, solicite desbloqueo.', 'err');
+  if (!esAdmin() && !diaAbiertoParaEscritura(dia)) {
+    toast(`❌ Ese día está fuera del plazo de registro. ${descripcionVentanaLlenado()} Para días anteriores, solicite desbloqueo.`, 'err');
     return;
   }
   const agente = novedadesActuales.agentes[idx];
@@ -1350,10 +1512,10 @@ async function aplicarCodigoRapido(idx, dia, codigo) {
   try {
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
 
-    // Si el día estaba desbloqueado por una solicitud aprobada, al completarlo se vuelve a bloquear
-    const diasDesbloqueados = (novedadesActuales.diasDesbloqueados || []).filter(d => d !== dia);
-    const seRebloqueo = diasDesbloqueados.length !== (novedadesActuales.diasDesbloqueados || []).length;
-    novedadesActuales.diasDesbloqueados = diasDesbloqueados;
+    // El día NO se vuelve a bloquear al completarlo: queda abierto mientras esté
+    // dentro de la ventana configurada (diaria / semanal / mensual) o mientras
+    // siga vigente el desbloqueo otorgado por el administrador.
+    const diasDesbloqueados = novedadesActuales.diasDesbloqueados || [];
 
     await window._fb.updateDoc(novedadesRef, {
       agentes: novedadesActuales.agentes,
@@ -1364,7 +1526,7 @@ async function aplicarCodigoRapido(idx, dia, codigo) {
     await registrarEnAuditoria('modificar_novedad', areaActual, usuario.email, dia, mesActual, { codigo }, `Acción rápida: ${agente.apellidosNombres} - Día ${dia} - ${codigo}`);
     renderizarTablaNovedades(new Date().getDate());
     verificarDiasPendientes();
-    toast(seRebloqueo ? `✅ Marcado como "${codigo}" — el día se volvió a bloquear` : `✅ Marcado como "${codigo}"`, 'ok');
+    toast(`✅ Marcado como "${codigo}"`, 'ok');
   } catch(e) {
     console.error(e);
     toast('❌ Error: ' + e.message, 'err');
@@ -1623,11 +1785,12 @@ async function guardarNovedad() {
   // Guardar en Firestore
   try {
     if (modalEsEdicionDeCierre && cierreMesData) {
-      // Edición de un día desbloqueado dentro de un mes YA CERRADO:
-      // se guarda en el documento de ese período (no en el actual),
-      // y el día se vuelve a bloquear automáticamente al guardar.
+      // Edición de un día desbloqueado dentro de un mes YA CERRADO: se guarda en
+      // el documento de ese período (no en el actual). El día queda abierto: el
+      // desbloqueo dado por el administrador se mantiene hasta que él lo retire,
+      // así se pueden hacer varias correcciones seguidas sin volver a solicitarlo.
       const { area, periodo, data } = cierreMesData;
-      const diasDesbloqueados = (data.diasDesbloqueados || []).filter(d => d !== modalDiaEdicion);
+      const diasDesbloqueados = data.diasDesbloqueados || [];
 
       const novedadesRef = window._fb.doc(db, 'novedades', area, periodo, 'datos');
       await window._fb.updateDoc(novedadesRef, {
@@ -1640,10 +1803,10 @@ async function guardarNovedad() {
       await registrarEnAuditoria(
         'modificar_novedad_mes_cerrado', area, usuario.email, modalDiaEdicion, periodo,
         { codigo: codigoNorm, observaciones: obs },
-        `Corrección en mes cerrado: ${modalAgenteEdicion.apellidosNombres} - Día ${modalDiaEdicion} - ${codigoNorm} (se vuelve a bloquear)`
+        `Corrección en mes cerrado: ${modalAgenteEdicion.apellidosNombres} - Día ${modalDiaEdicion} - ${codigoNorm}`
       );
 
-      toast('✅ Corrección guardada — el día se volvió a bloquear', 'ok');
+      toast('✅ Corrección guardada', 'ok');
       cerrarModalNovedad();
       modalEsEdicionDeCierre = false;
       renderizarTablaSoloLectura($('tabla-cierre-mes'), data, periodo);
@@ -1653,10 +1816,10 @@ async function guardarNovedad() {
     actualizarDiaCompletado(modalDiaEdicion);
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
 
-    // Si el día estaba desbloqueado por una solicitud aprobada, al completarlo se vuelve a bloquear
-    const diasDesbloqueados = (novedadesActuales.diasDesbloqueados || []).filter(d => d !== modalDiaEdicion);
-    const seRebloqueo = diasDesbloqueados.length !== (novedadesActuales.diasDesbloqueados || []).length;
-    novedadesActuales.diasDesbloqueados = diasDesbloqueados;
+    // El día NO se vuelve a bloquear al completarlo: queda abierto mientras esté
+    // dentro de la ventana configurada (diaria / semanal / mensual) o mientras
+    // siga vigente el desbloqueo otorgado por el administrador.
+    const diasDesbloqueados = novedadesActuales.diasDesbloqueados || [];
 
     await window._fb.updateDoc(novedadesRef, {
       agentes: novedadesActuales.agentes,
@@ -1680,7 +1843,7 @@ async function guardarNovedad() {
     renderizarTablaNovedades(new Date().getDate());
     verificarDiasPendientes();
     
-    toast(seRebloqueo ? '✅ Novedad guardada — el día se volvió a bloquear' : '✅ Novedad guardada', 'ok');
+    toast('✅ Novedad guardada', 'ok');
     cerrarModalNovedad();
     
   } catch(e) {
@@ -1715,10 +1878,10 @@ async function llenarSinNovedadDia(dia) {
     }
     actualizarDiaCompletado(dia);
 
-    // Si el día estaba desbloqueado por una solicitud aprobada, al completarlo se vuelve a bloquear
-    const diasDesbloqueados = (novedadesActuales.diasDesbloqueados || []).filter(d => d !== dia);
-    const seRebloqueo = diasDesbloqueados.length !== (novedadesActuales.diasDesbloqueados || []).length;
-    novedadesActuales.diasDesbloqueados = diasDesbloqueados;
+    // El día NO se vuelve a bloquear al completarlo: queda abierto mientras esté
+    // dentro de la ventana configurada (diaria / semanal / mensual) o mientras
+    // siga vigente el desbloqueo otorgado por el administrador.
+    const diasDesbloqueados = novedadesActuales.diasDesbloqueados || [];
 
     // Guardar en Firestore
     const novedadesRef = window._fb.doc(db, 'novedades', areaActual, mesActual, 'datos');
@@ -1741,9 +1904,7 @@ async function llenarSinNovedadDia(dia) {
     );
 
     renderizarTablaNovedades(new Date().getDate());
-    toast(seRebloqueo
-      ? `✅ Se llenó "Sin Novedad" para todos los agentes del día ${dia} — el día se volvió a bloquear`
-      : `✅ Se llenó "Sin Novedad" para todos los agentes del día ${dia}`, 'ok');
+    toast(`✅ Se llenó "Sin Novedad" para todos los agentes del día ${dia}`, 'ok');
 
   } catch(e) {
     console.error('Error:', e);
@@ -1758,9 +1919,9 @@ async function llenarSinNovedadHoy() {
 
 async function seleccionarDiaColumna(dia) {
   const desbloqueadoPorAdmin = (novedadesActuales.diasDesbloqueados || []).includes(dia);
-  const bloqueado = dia !== new Date().getDate() && !desbloqueadoPorAdmin;
+  const bloqueado = !diaEsEditable(dia) && !desbloqueadoPorAdmin;
   if (bloqueado && !esAdmin()) {
-    toast('❌ Ese día está bloqueado. Solicite desbloqueo al administrador si necesita corregirlo.', 'err');
+    toast(`❌ Ese día está fuera del plazo de registro. ${descripcionVentanaLlenado()}`, 'err');
     return;
   }
 
@@ -1784,16 +1945,62 @@ function diasEnMes(periodo) {
 
 let cierreMesData = null; // { area, periodo, data }
 
-function mostrarCierreMes(area, periodo, data) {
-  cierreMesData = { area, periodo, data };
+function mostrarCierreMes(area, periodo, data, bloqueante = true, cfg = null) {
+  cierreMesData = { area, periodo, data, bloqueante };
 
-  hide('tabla-novedades-container');
-  hide('novedades-top-controles');
+  const cont = $('cierre-mes-container');
   hide('tabla-cargando');
   show('cierre-mes-container');
-  $('cierre-mes-container').style.display = 'block';
+  cont.style.display = 'block';
 
-  $('cierre-mes-nombre').textContent = `${obtenerNombreMes(periodo.split('-')[1])} ${periodo.split('-')[0]} — ${area}`;
+  if (bloqueante) {
+    // Modo clásico: el área no puede registrar nada del mes en curso hasta cerrar
+    hide('tabla-novedades-container');
+    hide('novedades-top-controles');
+    cont.style.borderColor = 'var(--blue-m)';
+  } else {
+    // Modo aviso: el mes en curso sigue disponible más abajo. El informe está
+    // habilitado por si el secretario ya lo tiene listo, pero nada lo obliga
+    // todavía — el bloqueo llega recién el día configurado.
+    show('tabla-novedades-container');
+    show('novedades-top-controles');
+    cont.style.borderColor = 'var(--gold, #e8b84b)';
+  }
+
+  $('cierre-mes-nombre').textContent =
+    `${obtenerNombreMes(periodo.split('-')[1])} ${periodo.split('-')[0]} — ${area}`;
+
+  // Título y texto explicativo según el modo
+  const tituloEl = $('cierre-mes-titulo-icono');
+  if (tituloEl) tituloEl.textContent = bloqueante ? '🔒 Cierre de mes' : '📄 Informe pendiente';
+
+  const textoEl = $('cierre-mes-texto');
+  if (textoEl) {
+    if (bloqueante) {
+      textoEl.textContent = 'El mes anterior ya no se puede modificar. Debe generar el informe para continuar registrando el mes en curso.';
+    } else {
+      const diaBloqueo = cfg ? cfg.diaBloqueo : null;
+      const diaHoy = new Date().getDate();
+      const restantes = diaBloqueo ? (diaBloqueo - diaHoy) : null;
+      let plazo = '';
+      if (diaBloqueo) {
+        if (restantes > 1)       plazo = ` Tiene plazo hasta el día ${diaBloqueo} de este mes (faltan ${restantes} días).`;
+        else if (restantes === 1) plazo = ` Tiene plazo hasta el día ${diaBloqueo} de este mes (falta 1 día).`;
+        else                      plazo = ` El plazo vence hoy, día ${diaBloqueo}.`;
+      }
+      textoEl.textContent = `El informe del mes anterior ya está habilitado: puede generarlo ahora si ya lo tiene listo.${plazo} Mientras tanto, siga registrando el mes en curso con normalidad, más abajo.`;
+    }
+  }
+
+  // La tabla de solo lectura del mes anterior se muestra desplegada solo cuando
+  // el cierre es obligatorio; en modo aviso queda colapsada para no estorbar.
+  const wrapTabla = $('cierre-mes-tabla-wrap');
+  const btnVer    = $('btn-ver-detalle-cierre');
+  if (wrapTabla) wrapTabla.style.display = bloqueante ? 'block' : 'none';
+  if (btnVer) {
+    btnVer.style.display = bloqueante ? 'none' : 'inline-flex';
+    btnVer.textContent = '👁️ Ver detalle del mes anterior';
+  }
 
   renderizarTablaSoloLectura($('tabla-cierre-mes'), data, periodo);
 
@@ -1803,6 +2010,16 @@ function mostrarCierreMes(area, periodo, data) {
   $('cierre-elaborado-por').value = data.elaboradoPor || '';
   $('cierre-responsable').value = data.responsable || '';
   cargarListaPersonalParaCierre();
+}
+
+// Muestra u oculta la tabla del mes anterior cuando el cierre está en modo aviso
+function alternarDetalleCierre() {
+  const wrap = $('cierre-mes-tabla-wrap');
+  const btn  = $('btn-ver-detalle-cierre');
+  if (!wrap) return;
+  const visible = wrap.style.display !== 'none';
+  wrap.style.display = visible ? 'none' : 'block';
+  if (btn) btn.textContent = visible ? '👁️ Ver detalle del mes anterior' : '🙈 Ocultar detalle del mes anterior';
 }
 
 let personalListaCache = null; // caché en memoria de sistema/personal_lis
@@ -1913,12 +2130,14 @@ async function generarReportePrueba() {
     const ref = window._fb.doc(db, 'novedades', areaActual, periodo, 'datos');
     const snap = await window._fb.getDoc(ref);
 
-    if (!snap.exists() || (snap.data().agentes || []).length === 0) {
-      toast(`No hay datos de Novedades para ${areaActual} — ${periodo}`, 'err');
-      return;
+    // Un área sin nada cargado también debe poder generar su reporte: sale con
+    // el formato, el encabezado y las firmas, y las celdas de novedades vacías.
+    // Antes esto cortaba con "No hay datos" y dejaba al área sin documento.
+    const data = snap.exists() ? snap.data() : {};
+    if (!data.agentes) data.agentes = [];
+    if (data.agentes.length === 0) {
+      toast(`⚠️ ${areaActual} no tiene novedades cargadas en ${periodo} — se generará el reporte en blanco`, 'ok');
     }
-
-    const data = snap.data();
     await exportarNovedadesExcel(data, areaActual, periodo, elaboradoPor, responsable);
     await exportarNovedadesPDF(data, areaActual, periodo, elaboradoPor, responsable);
 
@@ -1955,6 +2174,175 @@ function aplicarVisibilidadTabsAdmin() {
 function ocultarPantallaCierreMes() {
   hide('cierre-mes-container');
   cierreMesData = null;
+}
+
+/* ═════════════════════════════════════════
+   PANEL ADMIN — Configuración del cierre mensual
+═════════════════════════════════════════ */
+
+async function cargarConfigPanel() {
+  const cfg = await obtenerConfigCierre(true); // siempre lectura fresca al abrir la pestaña
+  const inpHab = $('config-dia-habilitacion');
+  const inpBlo = $('config-dia-bloqueo');
+  const selModo = $('config-modo-llenado');
+  if (inpHab) inpHab.value = cfg.diaHabilitacion;
+  if (inpBlo) inpBlo.value = cfg.diaBloqueo;
+  if (selModo) selModo.value = cfg.modoLlenado;
+
+  // En modo solo lectura (supervisor o permiso sin edición) los campos se deshabilitan
+  const puedeEditar = tienePermisoAccion('config_editar');
+  [inpHab, inpBlo, selModo].forEach(el => {
+    if (!el) return;
+    el.disabled = !puedeEditar;
+    el.style.opacity = puedeEditar ? '' : '0.6';
+    el.style.cursor = puedeEditar ? '' : 'not-allowed';
+  });
+
+  const meta = $('config-cierre-meta');
+  if (meta) {
+    if (cfg.actualizadoPor) {
+      const f = cfg.fechaActualizacion?.toDate ? cfg.fechaActualizacion.toDate() : cfg.fechaActualizacion;
+      const fechaTxt = f ? new Date(f).toLocaleString('es-EC') : '';
+      meta.textContent = `Última modificación: ${cfg.actualizadoPor}${fechaTxt ? ' — ' + fechaTxt : ''}`;
+    } else {
+      meta.textContent = 'Todavía no se ha guardado una configuración: el sistema está usando los valores por defecto (día 1 y día 1).';
+    }
+  }
+
+  actualizarResumenConfigCierre();
+  actualizarResumenModoLlenado();
+  ['config-dia-habilitacion','config-dia-bloqueo'].forEach(id => {
+    const el = $(id);
+    if (el && !el.dataset.listenerConfig) {
+      el.addEventListener('input', actualizarResumenConfigCierre);
+      el.dataset.listenerConfig = '1';
+    }
+  });
+  if (selModo && !selModo.dataset.listenerConfig) {
+    selModo.addEventListener('change', actualizarResumenModoLlenado);
+    selModo.dataset.listenerConfig = '1';
+  }
+}
+
+function actualizarResumenConfigCierre() {
+  const cont = $('config-cierre-resumen');
+  if (!cont) return;
+  const hab = parseInt($('config-dia-habilitacion')?.value, 10);
+  const blo = parseInt($('config-dia-bloqueo')?.value, 10);
+
+  if (isNaN(hab) || isNaN(blo) || hab < 1 || hab > 31 || blo < 1 || blo > 31) {
+    cont.textContent = '⚠️ Los días deben estar entre 1 y 31.';
+    return;
+  }
+  if (blo < hab) {
+    cont.textContent = '⚠️ El día de bloqueo no puede ser anterior al día de habilitación.';
+    return;
+  }
+
+  const margen = blo - hab;
+  let texto = hab === blo
+    ? `Con esta configuración: el día ${hab} de cada mes se habilita el informe del mes anterior y, ese mismo día, el área queda bloqueada hasta generarlo.`
+    : `Con esta configuración: el informe del mes anterior se habilita el día ${hab} y el área tiene ${margen} día${margen === 1 ? '' : 's'} de margen; si al día ${blo} no lo ha generado, queda bloqueada hasta cerrarlo.`;
+
+  // Aviso solo si algún mes del calendario es más corto que los días elegidos:
+  // febrero varía entre 28 y 29 según el año bisiesto, y hay meses de 30 días.
+  const mayor = Math.max(hab, blo);
+  if (mayor > 28) {
+    const anio = new Date().getFullYear();
+    const feb = new Date(anio, 2, 0).getDate(); // 28 o 29 según el año en curso
+    const ejemplos = [];
+    if (mayor > feb) ejemplos.push(`en febrero de ${anio} se aplicará el día ${feb}`);
+    if (mayor > 30)  ejemplos.push('en los meses de 30 días se aplicará el día 30');
+    if (ejemplos.length) {
+      texto += ` Nota: cuando el mes es más corto, el sistema usa su último día — ${ejemplos.join(' y ')}.`;
+    }
+  }
+
+  cont.textContent = texto;
+}
+
+function actualizarResumenModoLlenado() {
+  const cont = $('config-modo-resumen');
+  if (!cont) return;
+  const modo = $('config-modo-llenado')?.value || 'diario';
+  if (modo === 'mensual') {
+    cont.textContent = 'El área podrá completar cualquier día ya transcurrido del mes en curso, hasta que llegue el día de bloqueo del cierre.';
+  } else if (modo === 'semanal') {
+    cont.textContent = 'El área podrá completar los días de la semana en curso, desde el lunes hasta hoy. Cada lunes arranca una semana nueva y la anterior queda cerrada; si una semana empieza en el mes anterior, ese tramo se cierra con el informe de ese mes.';
+  } else {
+    cont.textContent = 'El área solo podrá escribir en el día de hoy. Para corregir días anteriores deberá solicitar desbloqueo al administrador.';
+  }
+}
+
+async function guardarConfigCierre() {
+  if (!tienePermisoAccion('config_editar')) {
+    toast('❌ No tiene permiso para modificar la configuración', 'err');
+    return;
+  }
+
+  const hab = parseInt($('config-dia-habilitacion').value, 10);
+  const blo = parseInt($('config-dia-bloqueo').value, 10);
+  const modo = $('config-modo-llenado')?.value || 'diario';
+  if (!MODOS_LLENADO[modo]) { toast('❌ Modo de llenado no válido', 'err'); return; }
+
+  if (isNaN(hab) || hab < 1 || hab > 31 || isNaN(blo) || blo < 1 || blo > 31) {
+    toast('❌ Los días deben ser números del 1 al 31', 'err');
+    return;
+  }
+  if (blo < hab) {
+    toast('❌ El día de bloqueo no puede ser anterior al día de habilitación', 'err');
+    return;
+  }
+
+  const anterior = await obtenerConfigCierre();
+  const confirmar = await confirmarAccion(
+    `Se aplicará a TODAS las áreas:\n\n• El informe del mes anterior se habilita el día ${hab}.\n• El registro se bloquea el día ${blo} si no se generó.\n• Modo de llenado: ${MODOS_LLENADO[modo]}.\n\n¿Confirma el cambio?`,
+    'Configuración de cierre mensual'
+  );
+  if (!confirmar) return;
+
+  try {
+    const ref = window._fb.doc(db, 'sistema', 'config_cierre');
+    await window._fb.setDoc(ref, {
+      diaHabilitacion: hab,
+      diaBloqueo: blo,
+      modoLlenado: modo,
+      actualizadoPor: usuario.email,
+      fechaActualizacion: new Date()
+    }, { merge: true });
+
+    configCierreCache = null; // forzar relectura en la próxima consulta
+
+    await registrarEnAuditoria(
+      'cambiar_config_cierre',
+      null,
+      usuario.email,
+      null,
+      null,
+      { antes: { diaHabilitacion: anterior.diaHabilitacion, diaBloqueo: anterior.diaBloqueo, modoLlenado: anterior.modoLlenado },
+        despues: { diaHabilitacion: hab, diaBloqueo: blo, modoLlenado: modo } },
+      `Cierre mensual: habilitación día ${anterior.diaHabilitacion} → ${hab}, bloqueo día ${anterior.diaBloqueo} → ${blo}, modo de llenado ${anterior.modoLlenado} → ${modo}`
+    );
+
+    toast('✅ Configuración guardada — se aplica desde ahora en todas las áreas', 'ok');
+    await cargarConfigPanel();
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error al guardar: ' + e.message, 'err');
+  }
+}
+
+async function restaurarConfigCierrePorDefecto() {
+  if (!tienePermisoAccion('config_editar')) {
+    toast('❌ No tiene permiso para modificar la configuración', 'err');
+    return;
+  }
+  $('config-dia-habilitacion').value = CONFIG_CIERRE_DEFAULT.diaHabilitacion;
+  $('config-dia-bloqueo').value = CONFIG_CIERRE_DEFAULT.diaBloqueo;
+  if ($('config-modo-llenado')) $('config-modo-llenado').value = CONFIG_CIERRE_DEFAULT.modoLlenado;
+  actualizarResumenConfigCierre();
+  actualizarResumenModoLlenado();
+  toast('Valores restaurados en pantalla — pulse "Guardar configuración" para aplicarlos', 'ok');
 }
 
 function renderizarTablaSoloLectura(tabla, data, periodo) {
@@ -2656,6 +3044,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabName === 'resumen') { poblarSelectoresResumen(); cargarResumenGeneral(); }
       if (tabName === 'importar') { cargarDirectorioPersonal(); poblarSelectoresBackupManual(); }
       if (tabName === 'areas') cargarAreasPanel();
+      if (tabName === 'config') cargarConfigPanel();
       aplicarPermisosBotones();
     });
   });
@@ -4564,11 +4953,33 @@ async function importarBaseDatos() {
       registrosPersonal.push({ codigo, grado, apellidos, nombres, area });
     }
     
-    // Guardar la lista completa de personal (para los selectores de "Elaborado por" / "Responsable")
+    // Guardar la lista completa de personal (para los selectores de "Elaborado por" / "Responsable").
+    // IMPORTANTE: se FUSIONA con la lista que ya existe. Antes esto reemplazaba el
+    // documento entero, así que todo efectivo que no viniera en el Excel desaparecía
+    // de los selectores aunque siguiera en la institución. Ahora el archivo solo
+    // actualiza los códigos que trae; el resto se conserva tal cual.
+    let lisConservados = 0, lisActualizados = 0, lisNuevos = 0;
     try {
       const personalRef = window._fb.doc(db, 'sistema', 'personal_lis');
+      const lisSnap = await window._fb.getDoc(personalRef);
+      const listaPrevia = lisSnap.exists() ? (lisSnap.data().lista || []) : [];
+
+      // La entrada tiene el formato "CODIGO - GRADO APELLIDOS NOMBRES": el código es la llave
+      const codigoDeEntrada = (txt) => String(txt || '').split(' - ')[0].replace(/\s+/g, '').toUpperCase();
+      const fusionada = new Map();
+      listaPrevia.forEach(e => { const c = codigoDeEntrada(e); if (c) fusionada.set(c, e); });
+      lisConservados = fusionada.size;
+
+      personalCompleto.forEach(e => {
+        const c = codigoDeEntrada(e);
+        if (!c) return;
+        if (fusionada.has(c)) lisActualizados++; else lisNuevos++;
+        fusionada.set(c, e);
+      });
+      lisConservados -= lisActualizados;
+
       await window._fb.setDoc(personalRef, {
-        lista: personalCompleto,
+        lista: Array.from(fusionada.values()).sort((a, b) => a.localeCompare(b, 'es')),
         ultimaActualizacion: new Date()
       });
     } catch(e) {
@@ -4616,11 +5027,35 @@ async function importarBaseDatos() {
     }
     
     // Guardar en Firestore — se FUSIONA con lo existente, nunca se sobrescribe
-    // (si un agente rota de área a mitad de mes, sigue apareciendo en la anterior
-    //  con lo ya registrado, y se agrega también a la nueva sin perder nada)
+    // Un agente que rota de área NO se mueve dentro del mes en curso: se queda
+    // donde está con lo ya registrado, y el área nueva del Excel rige desde el
+    // mes siguiente. Antes se lo agregaba igual al área nueva y quedaba contado
+    // dos veces en el mismo mes, en dos áreas distintas.
     const dateParts = obtenerFechaParts();
     const periodo = dateParts.periodo;
 
+    // Mapa código → área donde el agente YA figura este mes
+    resultado.innerHTML = '⏳ Revisando en qué área está cada agente este mes...';
+    const ubicacionActual = new Map();
+    try {
+      const areasConocidas = Array.from(new Set([...(await obtenerAreasNovedades()), ...Object.keys(datos)]));
+      const tamanioLoteUbic = 25;
+      for (let i = 0; i < areasConocidas.length; i += tamanioLoteUbic) {
+        const lote = areasConocidas.slice(i, i + tamanioLoteUbic);
+        await Promise.all(lote.map(async area => {
+          const snap = await window._fb.getDoc(window._fb.doc(db, 'novedades', area, periodo, 'datos'));
+          if (!snap.exists()) return;
+          (snap.data().agentes || []).forEach(a => {
+            const c = String(a.codigo || '').replace(/\s+/g, '').toUpperCase();
+            if (c && !ubicacionActual.has(c)) ubicacionActual.set(c, area);
+          });
+        }));
+      }
+    } catch(e) {
+      console.warn('No se pudo mapear la ubicación actual de los agentes:', e);
+    }
+
+    let noMovidosEsteMes = 0;
     const entradas = Object.entries(datos);
     const tamanioLote = 25;
 
@@ -4637,7 +5072,14 @@ async function importarBaseDatos() {
           const yaExiste = codigoNuevoNorm && agentesFinal.some(a =>
             String(a.codigo || '').replace(/\s+/g, '').toUpperCase() === codigoNuevoNorm
           );
-          if (!yaExiste) agentesFinal.push(nuevo);
+          if (yaExiste) return;
+
+          // Si este mes ya figura en otra área, se respeta esa ubicación:
+          // el cambio de área del Excel recién aplica el mes que viene.
+          const areaEsteMes = ubicacionActual.get(codigoNuevoNorm);
+          if (areaEsteMes && areaEsteMes !== area) { noMovidosEsteMes++; return; }
+
+          agentesFinal.push(nuevo);
         });
 
         await window._fb.setDoc(novedadesRef, {
@@ -4663,9 +5105,11 @@ async function importarBaseDatos() {
       {
         coleccion: coleccion,
         totalRegistros: Object.values(datos).reduce((sum, arr) => sum + arr.length, 0),
-        areas: Object.keys(datos)
+        areas: Object.keys(datos),
+        lis: { conservados: lisConservados, actualizados: lisActualizados, nuevos: lisNuevos },
+        noMovidosEsteMes
       },
-      `Importación de BD: ${coleccion}`
+      `Importación de BD: ${coleccion} — ${lisActualizados} actualizados, ${lisNuevos} nuevos, ${lisConservados} conservados sin tocar`
     );
 
     resultado.innerHTML = `
@@ -4674,6 +5118,11 @@ async function importarBaseDatos() {
       Áreas: ${Object.keys(datos).length}<br>
       Registros en Novedades: ${Object.values(datos).reduce((sum, arr) => sum + arr.length, 0)}<br>
       Registros en Base de Personal: ${personalGuardados} / ${registrosPersonal.length}${personalErrorEjemplo ? ' ⚠️ (hubo errores, ver arriba)' : ' ✅'}
+      <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;">
+      <strong>No se borró nada de lo que ya tenía:</strong><br>
+      · ${lisActualizados} efectivo(s) actualizados desde el archivo<br>
+      · ${lisNuevos} efectivo(s) nuevos agregados<br>
+      · ${lisConservados} efectivo(s) que no venían en el archivo se conservaron intactos${noMovidosEsteMes ? `<br>· ${noMovidosEsteMes} efectivo(s) cambiaron de área: siguen en su área actual este mes y pasan a la nueva desde el mes siguiente` : ''}
     `;
     show('import-resultado');
     
@@ -4682,6 +5131,222 @@ async function importarBaseDatos() {
   } catch(e) {
     console.error('Error importando:', e);
     toast('❌ Error: ' + e.message, 'err');
+  }
+}
+
+
+/* ═════════════════════════════════════════
+   ACTUALIZACIÓN DE ÁREAS DESDE EXCEL — solo administrador
+   ─────────────────────────────────────────
+   Compara el archivo contra la Base de Personal existente y cambia
+   únicamente el campo `area` de los códigos que coincidan. Nunca borra
+   registros, nunca toca las novedades ya cargadas y no modifica grado,
+   apellidos ni nombres. El área nueva rige desde el mes siguiente: el
+   mes en curso queda tal cual, con lo que el área ya registró.
+═════════════════════════════════════════ */
+
+let actualizacionAreasPendiente = null; // { cambios:[], sinCambios:n, noEncontrados:[] }
+
+// Lee un CSV/Excel y devuelve filas (array de arrays). Compartido por las
+// dos rutinas de carga para no repetir la lectura de archivos.
+async function leerArchivoTabular(file) {
+  if (/\.xlsx?$/i.test(file.name)) {
+    if (!window.XLSX) {
+      await new Promise((res, rej) => {
+        const sc = document.createElement('script');
+        sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        sc.onload = res; sc.onerror = rej; document.head.appendChild(sc);
+      });
+    }
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: 'array' });
+    return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })
+      .map(fila => fila.map(celda => String(celda ?? '').trim()));
+  }
+  const text = await file.text();
+  return text.split('\n').filter(l => l.trim())
+    .map(linea => linea.split(',').map(pz => pz.replace(/^"|"$/g, '').trim()));
+}
+
+const normalizarCodigoPersonal = (c) => String(c || '').replace(/\s+/g, '').toUpperCase();
+
+async function analizarActualizacionAreas() {
+  if (!esAdmin()) { toast('❌ Esta función es exclusiva del administrador', 'err'); return; }
+
+  const input = $('areas-update-file');
+  const cont = $('areas-update-resultado');
+  hide('btn-aplicar-areas');
+  actualizacionAreasPendiente = null;
+
+  if (!input.files || !input.files.length) { toast('⚠️ Seleccione un archivo', 'err'); return; }
+
+  try {
+    cont.style.display = 'block';
+    cont.innerHTML = '⏳ Leyendo el archivo...';
+
+    const filas = await leerArchivoTabular(input.files[0]);
+    if (filas.length < 2) { cont.innerHTML = '❌ El archivo está vacío o mal formateado'; return; }
+
+    const encabezado = (filas[0] || []).map(h => String(h || '').toUpperCase().trim());
+    const buscar = (nombres) => { for (const n of nombres) { const i = encabezado.indexOf(n); if (i !== -1) return i; } return -1; };
+    const iCodigo = buscar(['CODIGO', 'CÓDIGO', 'N°', 'Nº', 'NUMERO']);
+    const iArea   = buscar(['AREA ACTUAL', 'ÁREA ACTUAL', 'AREA', 'ÁREA', 'AREA NUEVA', 'ÁREA NUEVA']);
+
+    if (iCodigo === -1 || iArea === -1) {
+      cont.innerHTML = '❌ No se encontraron las columnas necesarias. El archivo debe tener un encabezado con <strong>CÓDIGO</strong> y <strong>ÁREA</strong>.';
+      return;
+    }
+
+    cont.innerHTML = '⏳ Comparando contra la Base de Personal...';
+    const personalSnap = await window._fb.getDocs(window._fb.collection(db, 'personal'));
+    const base = new Map();
+    personalSnap.docs.forEach(d => base.set(normalizarCodigoPersonal(d.data().codigo || d.id), { id: d.id, ...d.data() }));
+
+    const cambios = [], noEncontrados = [], repetidos = [];
+    const vistos = new Set();
+    let sinCambios = 0;
+
+    for (let i = 1; i < filas.length; i++) {
+      const fila = filas[i] || [];
+      const codigoBruto = String(fila[iCodigo] || '').trim();
+      const areaBruta = String(fila[iArea] || '').trim();
+      if (!codigoBruto) continue;
+
+      const codigo = normalizarCodigoPersonal(codigoBruto);
+      if (vistos.has(codigo)) { repetidos.push(codigoBruto); continue; }
+      vistos.add(codigo);
+
+      if (!areaBruta) continue;                       // sin área en el archivo: no se toca
+      const registro = base.get(codigo);
+      if (!registro) { noEncontrados.push(codigoBruto); continue; }
+
+      const areaNueva = sanitizarNombreArea(areaBruta);
+      if (sanitizarNombreArea(registro.area || '') === areaNueva) { sinCambios++; continue; }
+
+      cambios.push({
+        id: registro.id,
+        codigo: codigoBruto,
+        nombre: `${registro.apellidos || ''} ${registro.nombres || ''}`.trim(),
+        areaAnterior: registro.area || '(sin área)',
+        areaNueva
+      });
+    }
+
+    actualizacionAreasPendiente = { cambios, sinCambios, noEncontrados, repetidos };
+
+    const listaCambios = cambios.slice(0, 50).map(c =>
+      `<tr><td style="padding:3px 8px;">${c.codigo}</td><td style="padding:3px 8px;">${c.nombre}</td>
+       <td style="padding:3px 8px;color:var(--txt2);">${c.areaAnterior}</td>
+       <td style="padding:3px 8px;">→</td>
+       <td style="padding:3px 8px;font-weight:700;">${c.areaNueva}</td></tr>`).join('');
+
+    cont.innerHTML = `
+      <strong>Resultado del análisis</strong><br><br>
+      · <strong>${cambios.length}</strong> efectivo(s) cambian de área<br>
+      · <strong>${sinCambios}</strong> ya estaban en el área correcta (no se tocan)<br>
+      · <strong>${noEncontrados.length}</strong> código(s) del archivo no existen en la base — se omiten<br>
+      ${repetidos.length ? `· <strong>${repetidos.length}</strong> código(s) repetidos en el archivo — se tomó la primera aparición<br>` : ''}
+      ${base.size ? `· ${base.size} efectivo(s) en la base permanecen intactos<br>` : ''}
+      ${noEncontrados.length ? `
+        <div style="margin-top:12px;padding:10px;background:#fff1f2;border:1px solid #fda4af;border-radius:8px;">
+          <strong style="color:var(--red);">Códigos no encontrados — revíselos y corrija el archivo:</strong><br>
+          <div style="margin-top:6px;max-height:140px;overflow:auto;font-family:monospace;font-size:11px;">${noEncontrados.join(', ')}</div>
+          <button class="btn-acc btn-acc-ghost" style="margin-top:8px;padding:3px 10px;font-size:11px;" onclick="descargarCodigosNoEncontrados()">📥 Descargar lista</button>
+        </div>` : ''}
+      ${cambios.length ? `
+        <div style="margin-top:12px;max-height:260px;overflow:auto;">
+          <table style="width:100%;font-size:11px;border-collapse:collapse;">
+            <thead><tr style="background:var(--bg);"><th style="padding:4px 8px;text-align:left;">Código</th><th style="padding:4px 8px;text-align:left;">Nombre</th><th style="padding:4px 8px;text-align:left;">Área actual</th><th></th><th style="padding:4px 8px;text-align:left;">Área nueva</th></tr></thead>
+            <tbody>${listaCambios}</tbody>
+          </table>
+          ${cambios.length > 50 ? `<p style="margin-top:6px;color:var(--txt2);">…y ${cambios.length - 50} más.</p>` : ''}
+        </div>` : '<br><em>No hay cambios de área que aplicar.</em>'}
+    `;
+
+    if (cambios.length) {
+      const btn = $('btn-aplicar-areas');
+      btn.style.display = 'inline-flex';
+      btn.textContent = `✅ Aplicar ${cambios.length} cambio(s) de área`;
+    }
+  } catch(e) {
+    console.error(e);
+    cont.innerHTML = '❌ Error leyendo el archivo: ' + e.message;
+  }
+}
+
+function descargarCodigosNoEncontrados() {
+  const lista = actualizacionAreasPendiente?.noEncontrados || [];
+  if (!lista.length) return;
+  const csv = 'CODIGO NO ENCONTRADO\n' + lista.join('\n');
+  const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `codigos_no_encontrados_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function aplicarActualizacionAreas() {
+  if (!esAdmin()) { toast('❌ Esta función es exclusiva del administrador', 'err'); return; }
+  const pend = actualizacionAreasPendiente;
+  if (!pend || !pend.cambios.length) { toast('Primero analice el archivo', 'err'); return; }
+
+  const confirmar = await confirmarAccion(
+    `Se cambiará el área de ${pend.cambios.length} efectivo(s).\n\nNo se borra ningún registro y las novedades del mes en curso quedan intactas: el área nueva rige desde el mes siguiente.\n\n¿Confirma?`,
+    'Actualizar áreas desde Excel'
+  );
+  if (!confirmar) return;
+
+  const cont = $('areas-update-resultado');
+  try {
+    const tamanioLote = 100;
+    let aplicados = 0;
+    for (let i = 0; i < pend.cambios.length; i += tamanioLote) {
+      const lote = pend.cambios.slice(i, i + tamanioLote);
+      await Promise.all(lote.map(c =>
+        window._fb.setDoc(window._fb.doc(db, 'personal', c.id), {
+          area: c.areaNueva,
+          ultimaActualizacion: new Date()
+        }, { merge: true })
+      ));
+      aplicados += lote.length;
+      cont.innerHTML = `⏳ Aplicando cambios... ${aplicados} / ${pend.cambios.length}`;
+    }
+
+    // Sumar al catálogo las áreas nuevas que no existían (unión, nunca reemplazo)
+    try {
+      const areasRef = window._fb.doc(db, 'sistema', 'areas_novedades');
+      const areasSnap = await window._fb.getDoc(areasRef);
+      const previas = areasSnap.exists() ? (areasSnap.data().lista || []) : [];
+      const union = Array.from(new Set([...previas, ...pend.cambios.map(c => c.areaNueva)])).sort();
+      if (union.length !== previas.length) {
+        await window._fb.setDoc(areasRef, { lista: union, ultimaActualizacion: new Date() });
+      }
+    } catch(e) {
+      console.warn('No se pudo actualizar el catálogo de áreas:', e);
+    }
+
+    await registrarEnAuditoria(
+      'actualizar_areas_personal', null, usuario.email, null, null,
+      { cambios: pend.cambios.length, sinCambios: pend.sinCambios, noEncontrados: pend.noEncontrados.length,
+        detalle: pend.cambios.slice(0, 200) },
+      `Actualización de áreas desde Excel: ${pend.cambios.length} efectivos cambiaron de área, ${pend.noEncontrados.length} códigos no encontrados`
+    );
+
+    cont.innerHTML = `
+      ✅ <strong>${pend.cambios.length} área(s) actualizadas</strong><br>
+      · ${pend.sinCambios} efectivo(s) ya estaban correctos<br>
+      · ${pend.noEncontrados.length} código(s) omitidos por no existir en la base<br>
+      · No se borró ningún registro ni se modificaron las novedades del mes en curso.
+    `;
+    hide('btn-aplicar-areas');
+    actualizacionAreasPendiente = null;
+    toast(`✅ ${pend.cambios.length} áreas actualizadas`, 'ok');
+    cargarDirectorioPersonal();
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message, 'err');
+    cont.innerHTML = '❌ Error aplicando los cambios: ' + e.message;
   }
 }
 
@@ -4854,6 +5519,10 @@ let personalPaginaActual = 1;
 const PERSONAL_POR_PAGINA = 20;
 
 async function cargarDirectorioPersonal() {
+  // El panel de actualización de áreas es exclusivo del administrador
+  const panelAreas = $('panel-actualizar-areas');
+  if (panelAreas) panelAreas.style.display = esAdmin() ? 'block' : 'none';
+
   const cargando = $('personal-cargando');
   const cont = $('personal-tabla-container');
   hide('personal-paginacion');
@@ -4914,7 +5583,7 @@ function renderizarTablaPersonal() {
 
   const tbody = $('personal-tabla-body');
   if (pagina.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="td-vacio">No se encontraron registros</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="td-vacio">No se encontraron registros</td></tr>`;
   } else {
     tbody.innerHTML = pagina.map(p => `
       <tr>
@@ -4924,8 +5593,6 @@ function renderizarTablaPersonal() {
         <td>${p.apellidos || ''}</td>
         <td>${p.nombres || ''}</td>
         <td>${p.area || ''}</td>
-        <td>${p.areaTemporal || '<span style="color:var(--txt3)">—</span>'}</td>
-        <td>${p.areaTemporal ? '<span style="background:var(--gold-l);color:var(--gold);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">R</span>' : ''}</td>
         <td style="white-space:nowrap;">
 ${tienePermisoAccion('importar_editar_personal') ? `
           <button class="btn-acc btn-acc-blue" style="padding:4px 8px;font-size:11px;" onclick="editarRegistroPersonal('${p.id}')">✎</button>
@@ -5036,17 +5703,9 @@ async function aplicarCambioAreaLote() {
 
 let modalPersonalIdEdicion = null;
 
-async function poblarSelectAreaTemporal() {
-  const sel = $('modal-personal-area-temporal');
-  if (sel.dataset.poblado === '1') return;
-  const areasReales = await obtenerAreasNovedades();
-  sel.innerHTML = '<option value="">— No aplica —</option>' + areasReales.map(a => `<option value="${a}">${a}</option>`).join('');
-  sel.dataset.poblado = '1';
-}
 
 async function abrirModalPersonal() {
   modalPersonalIdEdicion = null;
-  await poblarSelectAreaTemporal();
   $('modal-personal-titulo').textContent = 'Agregar registro';
   $('modal-personal-codigo').value = '';
   $('modal-personal-codigo').disabled = false;
@@ -5054,7 +5713,6 @@ async function abrirModalPersonal() {
   $('modal-personal-apellidos').value = '';
   $('modal-personal-nombres').value = '';
   $('modal-personal-area').value = '';
-  $('modal-personal-area-temporal').value = '';
   hide('modal-personal-error');
   $('modal-personal').style.display = 'flex';
 }
@@ -5063,7 +5721,6 @@ async function editarRegistroPersonal(id) {
   const p = personalDirectorioCache.find(x => x.id === id);
   if (!p) return;
   modalPersonalIdEdicion = id;
-  await poblarSelectAreaTemporal();
   $('modal-personal-titulo').textContent = 'Editar registro';
   $('modal-personal-codigo').value = p.codigo || '';
   $('modal-personal-codigo').disabled = true; // el código es el ID del documento
@@ -5071,7 +5728,6 @@ async function editarRegistroPersonal(id) {
   $('modal-personal-apellidos').value = p.apellidos || '';
   $('modal-personal-nombres').value = p.nombres || '';
   $('modal-personal-area').value = p.area || '';
-  $('modal-personal-area-temporal').value = p.areaTemporal || '';
   hide('modal-personal-error');
   $('modal-personal').style.display = 'flex';
 }
@@ -5144,21 +5800,17 @@ async function agregarAgenteAAreaNovedades(area, periodo, agente) {
   return true;
 }
 
-/* Mueve al agente entre áreas dentro del mes en curso cuando cambia su
-   área fija o su área temporal. El área temporal manda: si hay un
-   reemplazo activo, el agente vive en esa área aunque se le corrija el
-   área fija. Devuelve {desde, hacia, periodo} o null si no hay nada
-   que mover. */
+/* Mueve al agente entre áreas dentro del mes en curso cuando se le cambia
+   el área desde el modal de la Base de Personal. Es un cambio manual y de a
+   uno, así que conserva los días ya cargados y los lleva al área nueva.
+   La actualización masiva por Excel NO usa esta función: ahí el mes en curso
+   queda intacto y el área nueva rige recién desde el mes siguiente.
+   Devuelve {desde, hacia, periodo} o null si no hay nada que mover. */
 async function sincronizarAreaEnNovedades(datos) {
   const periodo = obtenerFechaParts().periodo;
-  const nuevaTemp = datos.areaTemporal ? sanitizarNombreArea(datos.areaTemporal) : null;
-  const viejaTemp = datos.areaTemporalAnterior ? sanitizarNombreArea(datos.areaTemporalAnterior) : null;
-  const areaFija = sanitizarNombreArea(datos.area);
-  const areaFijaAnterior = datos.areaAnterior ? sanitizarNombreArea(datos.areaAnterior) : areaFija;
+  const destino = sanitizarNombreArea(datos.area);
+  const origen  = datos.areaAnterior ? sanitizarNombreArea(datos.areaAnterior) : destino;
 
-  // Dónde figura hoy en Novedades y dónde debería figurar tras el cambio
-  const origen = viejaTemp || areaFijaAnterior;
-  const destino = nuevaTemp || areaFija;
   if (!origen || !destino || origen === destino) return null;
 
   // Se lo saca del área donde está hoy, conservando sus días ya registrados
@@ -5184,7 +5836,6 @@ async function guardarRegistroPersonal() {
   const apellidos = $('modal-personal-apellidos').value.trim();
   const nombres = $('modal-personal-nombres').value.trim();
   const area = $('modal-personal-area').value.trim();
-  const areaTemporal = $('modal-personal-area-temporal').value.trim();
   const errorEl = $('modal-personal-error');
 
   if (!codigo) { errorEl.textContent = 'El código es obligatorio'; show('modal-personal-error'); return; }
@@ -5194,8 +5845,6 @@ async function guardarRegistroPersonal() {
     const areaSanitizada = sanitizarNombreArea(area);
     await window._fb.setDoc(window._fb.doc(db, 'personal', codigo), {
       codigo, grado, apellidos, nombres, area: areaSanitizada,
-      areaTemporal: areaTemporal || null,
-      estadoTemporal: areaTemporal ? 'R' : null,
       ultimaActualizacion: new Date()
     }, { merge: true });
 
@@ -5221,9 +5870,7 @@ async function guardarRegistroPersonal() {
       movimiento = await sincronizarAreaEnNovedades({
         codigo, grado, apellidos, nombres,
         area: areaSanitizada,
-        areaTemporal: areaTemporal || null,
-        areaAnterior: registroPrevio ? registroPrevio.area : null,
-        areaTemporalAnterior: registroPrevio ? registroPrevio.areaTemporal : null
+        areaAnterior: registroPrevio ? registroPrevio.area : null
       });
     } catch(e) {
       console.error('No se pudo mover al agente en Novedades:', e);
@@ -5232,8 +5879,8 @@ async function guardarRegistroPersonal() {
 
     await registrarEnAuditoria(
       modalPersonalIdEdicion ? 'editar_personal' : 'crear_personal',
-      areaSanitizada, usuario.email, null, null, { codigo, areaTemporal, movimiento },
-      `${modalPersonalIdEdicion ? 'Editado' : 'Agregado'} registro de personal: ${codigo} — ${apellidos} ${nombres}${areaTemporal ? ` (reemplazo temporal en ${areaTemporal})` : ''}${movimiento ? ` · Novedades ${movimiento.periodo}: movido de ${movimiento.desde} a ${movimiento.hacia}` : ''}`
+      areaSanitizada, usuario.email, null, null, { codigo, movimiento },
+      `${modalPersonalIdEdicion ? 'Editado' : 'Agregado'} registro de personal: ${codigo} — ${apellidos} ${nombres}${movimiento ? ` · Novedades ${movimiento.periodo}: movido de ${movimiento.desde} a ${movimiento.hacia}` : ''}`
     );
 
     toast(
@@ -6087,6 +6734,7 @@ const ACCIONES_AUDITORIA = [
     { v: 'editar_personal',               l: 'Editar registro de personal' },
     { v: 'eliminar_personal',             l: 'Eliminar registro de personal' },
     { v: 'cambio_area_lote',              l: 'Cambio de área en lote' },
+    { v: 'actualizar_areas_personal',     l: 'Actualizar áreas desde Excel' },
   ]},
   { grupo: 'Áreas', items: [
     { v: 'area_agregar',                  l: 'Agregar área' },
@@ -6099,6 +6747,7 @@ const ACCIONES_AUDITORIA = [
     { v: 'restaurar_backup',              l: 'Restaurar respaldo' },
     { v: 'borrar_toda_base_novedades',    l: 'Borrar base de Novedades' },
     { v: 'eliminar_auditoria',            l: 'Eliminar historial de auditoría' },
+    { v: 'cambiar_config_cierre',         l: 'Cambiar configuración de cierre mensual' },
   ]},
 ];
 
@@ -6937,6 +7586,50 @@ function poblarSelectoresResumen(prefix = 'resumen') {
   selAnio.value = String(new Date().getFullYear());
 }
 
+/* Áreas del catálogo sin ningún correo asignado. Se muestra únicamente al
+   administrador dentro del Resumen General: es información de gestión interna,
+   no algo que deban ver los secretarios ni los supervisores. */
+async function verificarAreasSinAsignar(prefix = 'resumen') {
+  const banner = $(`${prefix}-areas-sin-asignar`);
+  if (!banner) return;
+
+  if (!esAdmin()) { banner.style.display = 'none'; return; }
+
+  try {
+    const [accesoSnapshot, areasCatalogo] = await Promise.all([
+      window._fb.getDocs(window._fb.collection(db, 'accesos')),
+      obtenerAreasNovedades(),
+    ]);
+
+    const areasConAcceso = new Set(
+      accesoSnapshot.docs.map(d => String(d.data().area || '').toLowerCase()).filter(Boolean)
+    );
+    // Se reutiliza la misma variable que alimenta el modal de la pestaña Accesos,
+    // así el botón "Ver cuáles" muestra el detalle sin duplicar lógica.
+    accesosAreasSinAcceso = (areasCatalogo || []).filter(a => !areasConAcceso.has(String(a).toLowerCase()));
+
+    const faltan = accesosAreasSinAcceso.length;
+    const total  = (areasCatalogo || []).length;
+
+    if (faltan === 0) {
+      banner.style.background = 'var(--green-l)';
+      banner.style.borderColor = 'var(--green-m)';
+      banner.innerHTML = `<span style="color:var(--green);font-weight:700;">✅ Las ${total} áreas del catálogo tienen correo asignado</span>`;
+    } else {
+      banner.style.background = '#fff1f2';
+      banner.style.borderColor = '#fda4af';
+      banner.innerHTML = `
+        <span style="color:var(--red);font-weight:700;">⚠️ ${faltan} área${faltan === 1 ? '' : 's'} no asignada${faltan === 1 ? '' : 's'}</span>
+        <span style="color:var(--txt2);">— sin correo responsable, nadie puede cargar novedades ahí (${total - faltan} de ${total} asignadas)</span>
+        <button class="btn-acc btn-acc-ghost" style="padding:3px 10px;font-size:11px;" onclick="verAreasSinAcceso()">Ver cuáles</button>`;
+    }
+    banner.style.display = 'flex';
+  } catch(e) {
+    console.warn('No se pudo verificar las áreas sin asignar:', e);
+    banner.style.display = 'none';
+  }
+}
+
 async function cargarResumenGeneral(prefix = 'resumen') {
   const mes = $(`${prefix}-mes`).value;
   const anio = $(`${prefix}-anio`).value;
@@ -6944,25 +7637,15 @@ async function cargarResumenGeneral(prefix = 'resumen') {
   const periodo = `${anio}-${mes}`;
 
   const tbody = $(`${prefix}-tabla-body`);
-  tbody.innerHTML = `<tr><td colspan="12" class="td-vacio">Cargando...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="11" class="td-vacio">Cargando...</td></tr>`;
   const detalleCont = $(`${prefix}-detalle-container`);
   if (detalleCont) hide(`${prefix}-detalle-container`);
+
+  verificarAreasSinAsignar(prefix);
 
   const filasPorArea = [];
   const totales = { total: 0, 'S/N':0, 'OA':0, 'X':0, 'CS':0, 'B':0, 'Li':0, 'V':0, 'PE':0 };
   const detalleAusenciasX = [];
-
-  // Reemplazos temporales (R) por área — se cuentan desde la Base de Personal
-  const reemplazosPorArea = {};
-  try {
-    const personalSnap = await window._fb.getDocs(window._fb.collection(db, 'personal'));
-    personalSnap.docs.forEach(d => {
-      const p = d.data();
-      if (p.areaTemporal) reemplazosPorArea[p.areaTemporal] = (reemplazosPorArea[p.areaTemporal] || 0) + 1;
-    });
-  } catch(e) {
-    console.warn('No se pudo cargar el conteo de reemplazos temporales:', e);
-  }
 
   const areasReales = await obtenerAreasNovedades();
   const tbodyProgreso = tbody;
@@ -7002,7 +7685,6 @@ async function cargarResumenGeneral(prefix = 'resumen') {
           area,
           responsable: data.responsable || data.elaboradoPor || '—',
           totalPersonal: agentes.length,
-          reemplazos: reemplazosPorArea[area] || 0,
           conteo,
           periodo
         });
@@ -7014,14 +7696,14 @@ async function cargarResumenGeneral(prefix = 'resumen') {
         console.warn(`Sin datos de ${area} para ${periodo}`);
       }
     }));
-    tbodyProgreso.innerHTML = `<tr><td colspan="12" class="td-vacio">Cargando... ${Math.min(i + tamanioLoteResumen, areasReales.length)} / ${areasReales.length} áreas revisadas</td></tr>`;
+    tbodyProgreso.innerHTML = `<tr><td colspan="11" class="td-vacio">Cargando... ${Math.min(i + tamanioLoteResumen, areasReales.length)} / ${areasReales.length} áreas revisadas</td></tr>`;
   }
 
   filasPorArea.sort((a, b) => a.area.localeCompare(b.area));
-  const totalReemplazos = filasPorArea.reduce((s, f) => s + f.reemplazos, 0);
+
 
   if (filasPorArea.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="12" class="td-vacio">No hay novedades registradas para ese mes</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="td-vacio">No hay novedades registradas para ese mes</td></tr>`;
     return;
   }
 
@@ -7031,7 +7713,6 @@ async function cargarResumenGeneral(prefix = 'resumen') {
       <td>${fila.area}</td>
       <td>${fila.responsable}</td>
       <td style="text-align:center">${fila.totalPersonal}</td>
-      <td style="text-align:center">${fila.reemplazos > 0 ? `<span style="background:var(--gold-l);color:var(--gold);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">R · ${fila.reemplazos}</span>` : '—'}</td>
       ${CODIGOS_VALIDOS.map(c => `<td style="text-align:center;cursor:pointer;text-decoration:underline;" onclick="mostrarDetalleCodigo('${fila.area.replace(/'/g,"\\'")}','${fila.periodo}','${c}','${prefix}')">${fila.conteo[c]}</td>`).join('')}
     </tr>`;
   });
@@ -7039,13 +7720,12 @@ async function cargarResumenGeneral(prefix = 'resumen') {
   html += `<tr style="font-weight:700;background:var(--bg);">
     <td>TOTAL GENERAL</td><td></td>
     <td style="text-align:center">${totales.total}</td>
-    <td style="text-align:center">${totalReemplazos}</td>
     ${CODIGOS_VALIDOS.map(c => `<td style="text-align:center">${totales[c]}</td>`).join('')}
   </tr>`;
 
   tbody.innerHTML = html;
 
-  resumenGeneralCache = { filasPorArea, totales, periodo, detalleAusenciasX, totalReemplazos };
+  resumenGeneralCache = { filasPorArea, totales, periodo, detalleAusenciasX };
 }
 
 async function exportarResumenGeneralExcel() {
@@ -7061,7 +7741,7 @@ async function exportarResumenGeneralExcel() {
     });
   }
 
-  const { filasPorArea, totales, periodo, detalleAusenciasX, totalReemplazos } = resumenGeneralCache;
+  const { filasPorArea, totales, periodo, detalleAusenciasX } = resumenGeneralCache;
   const [anio] = periodo.split('-');
 
   // Colores (mismos que el spreadsheet de referencia)
@@ -7069,15 +7749,14 @@ async function exportarResumenGeneralExcel() {
   const ROJO   = 'FFC00000';
   const ROJO_CLARO = 'FFF4CCCC';
   const AZUL_CLARO = 'FFDCE6F1';
-  const DORADO_CLARO = 'FFFFF2CC';
   const BLANCO = 'FFFFFFFF';
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Resumen General');
 
-  const headers = ['ÁREA', 'RESPONSABLE (CÓD. - APELLIDO)', 'TOTAL PERSONAL', 'REEMPLAZOS (R)', 'S/N', 'OA', 'X (Ausentes)', 'CS', 'B (Bajas)', 'Li (Licencias)', 'V', 'PE'];
+  const headers = ['ÁREA', 'RESPONSABLE (CÓD. - APELLIDO)', 'TOTAL PERSONAL', 'S/N', 'OA', 'X (Ausentes)', 'CS', 'B (Bajas)', 'Li (Licencias)', 'V', 'PE'];
   ws.columns = [
-    { width: 34 }, { width: 30 }, { width: 15 }, { width: 15 },
+    { width: 34 }, { width: 30 }, { width: 15 },
     { width: 10 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 }
   ];
 
@@ -7098,7 +7777,7 @@ async function exportarResumenGeneralExcel() {
   }
   if (selloB64Res) {
     const logoIdSelloRes = wb.addImage({ base64: selloB64Res, extension: 'png' });
-    ws.addImage(logoIdSelloRes, { tl: { col: 11.61, row: 0.1 }, ext: { width: 29, height: 29 } });
+    ws.addImage(logoIdSelloRes, { tl: { col: 10.61, row: 0.1 }, ext: { width: 29, height: 29 } });
   }
 
   // ── Encabezado ──
@@ -7109,10 +7788,10 @@ async function exportarResumenGeneralExcel() {
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
-  // ── Filas por área (con X en rojo si hay ausentes, R en dorado si hay reemplazos) ──
+  // ── Filas por área (con X en rojo si hay ausentes) ──
   filasPorArea.forEach((fila, i) => {
     const filaRow = ws.addRow([
-      fila.area, fila.responsable, fila.totalPersonal, fila.reemplazos || 0,
+      fila.area, fila.responsable, fila.totalPersonal,
       ...CODIGOS_VALIDOS.map(c => fila.conteo[c])
     ]);
     if (i % 2 === 0) {
@@ -7120,12 +7799,7 @@ async function exportarResumenGeneralExcel() {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
       });
     }
-    const celdaR = filaRow.getCell(4); // columna D = Reemplazos (R)
-    if (fila.reemplazos > 0) {
-      celdaR.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DORADO_CLARO } };
-      celdaR.font = { bold: true };
-    }
-    const celdaX = filaRow.getCell(7); // columna G = X (Ausentes)
+    const celdaX = filaRow.getCell(6); // columna F = X (Ausentes)
     if (fila.conteo['X'] > 0) {
       celdaX.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROJO } };
       celdaX.font = { bold: true, color: { argb: BLANCO } };
@@ -7136,7 +7810,7 @@ async function exportarResumenGeneralExcel() {
   });
 
   // ── Total general ──
-  const filaTotal = ws.addRow(['TOTAL GENERAL', '', totales.total, totalReemplazos || 0, ...CODIGOS_VALIDOS.map(c => totales[c])]);
+  const filaTotal = ws.addRow(['TOTAL GENERAL', '', totales.total, ...CODIGOS_VALIDOS.map(c => totales[c])]);
   filaTotal.eachCell(cell => {
     cell.font = { bold: true };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
@@ -7385,6 +8059,16 @@ window.cancelarRenombreAreaPanel    = cancelarRenombreAreaPanel;
 window.guardarRenombreAreaPanel     = guardarRenombreAreaPanel;
 window.eliminarAreaPanel            = eliminarAreaPanel;
 window.renderizarListaAreasPanel    = renderizarListaAreasPanel;
+window.analizarActualizacionAreas   = analizarActualizacionAreas;
+window.aplicarActualizacionAreas    = aplicarActualizacionAreas;
+window.descargarCodigosNoEncontrados = descargarCodigosNoEncontrados;
+window.verificarAreasSinAsignar     = verificarAreasSinAsignar;
+window.cargarConfigPanel            = cargarConfigPanel;
+window.guardarConfigCierre          = guardarConfigCierre;
+window.restaurarConfigCierrePorDefecto = restaurarConfigCierrePorDefecto;
+window.actualizarResumenConfigCierre = actualizarResumenConfigCierre;
+window.actualizarResumenModoLlenado = actualizarResumenModoLlenado;
+window.alternarDetalleCierre        = alternarDetalleCierre;
 
 /* ══════════════════════════════════
    MODO OSCURO / CLARO
