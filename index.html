@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Portal SISCTE v6.0 — Novedades + Envíos</title>
+<title>RCA v1.0 — Registro y Control de Asistencia</title>
 <link rel="icon" type="image/png" sizes="32x32" href="img/favicon_32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="img/favicon_16.png">
 <link rel="apple-touch-icon" href="img/SISCTE_logo_icono_256.png">
@@ -18,12 +18,12 @@
 <nav>
   <div class="nav-left" id="nav-left-home" onclick="irInicioNav()" style="cursor:pointer" title="Ir a Novedades">
     <div class="nav-logo-ico">
-      <svg width="13" height="20" viewBox="95 43 130 196" xmlns="http://www.w3.org/2000/svg" aria-label="Logo SISCTE">
+      <svg width="13" height="20" viewBox="95 43 130 196" xmlns="http://www.w3.org/2000/svg" aria-label="Logo RCA">
         <path d="M205,88 C205,68 188,58 160,58 C136,58 119,68 113,84" fill="none" stroke="#e8b84b" stroke-width="34" stroke-linecap="round"/>
         <path d="M113,84 C110,90 110,93 110,96 C110,122 132,130 160,138 C190,146 210,156 210,184 C210,210 190,224 160,224 C130,224 112,212 110,192" fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round"/>
       </svg>
     </div>
-    <span class="nav-brand">SISCTE v6.0</span>
+    <span class="nav-brand">RCA v1.0</span>
   </div>
   <div class="nav-right" id="nav-sesion" style="display:none">
     <button class="nav-btn" id="nb-novedades" style="display:none">📋 Novedades</button>
@@ -46,7 +46,7 @@
     </button>
   </div>
   <div id="nav-guest" style="display:flex;align-items:center;gap:8px;">
-    <span class="nav-guest-txt">Portal SISCTE</span>
+    <span class="nav-guest-txt">Portal RCA</span>
     <button class="btn-modo" id="btn-modo-guest" title="Cambiar modo">🌙</button>
   </div>
 </nav>
@@ -68,12 +68,12 @@
           </div>
           <div class="lpl-logo-row">
             <div class="lpl-logo">
-              <svg width="23" height="34" viewBox="95 43 130 196" xmlns="http://www.w3.org/2000/svg" aria-label="Logo SISCTE">
+              <svg width="23" height="34" viewBox="95 43 130 196" xmlns="http://www.w3.org/2000/svg" aria-label="Logo RCA">
                 <path d="M205,88 C205,68 188,58 160,58 C136,58 119,68 113,84" fill="none" stroke="#e8b84b" stroke-width="34" stroke-linecap="round"/>
                 <path d="M113,84 C110,90 110,93 110,96 C110,122 132,130 160,138 C190,146 210,156 210,184 C210,210 190,224 160,224 C130,224 112,212 110,192" fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round"/>
               </svg>
             </div>
-            <div class="lpl-title">SISCTE</div>
+            <div class="lpl-title">RCA</div>
           </div>
           <p class="lpl-sub">Portal de Gestión de Envíos · Personal CTE</p>
         </div>
@@ -85,7 +85,7 @@
             <div class="lpl-dot"></div>
           </div>
           <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.1);padding-top:12px;">
-            <p style="font-size:10px;color:rgba(255,255,255,.4);margin:0;line-height:1.6;">v6.0 2026 SISCTE<br>Todos los derechos reservados</p>
+            <p style="font-size:10px;color:rgba(255,255,255,.4);margin:0;line-height:1.6;">v1.0 2026 Registro y Control de Asistencia (RCA)<br>Todos los derechos reservados</p>
           </div>
         </div>
       </div>
@@ -881,12 +881,6 @@
               <input type="text" id="accesos-buscar" class="form-select" style="flex:1;min-width:220px;"
                      placeholder="Buscar por área, nombre, código o correo..."
                      oninput="buscarAccesos(this.value)" autocomplete="off">
-              <div style="display:flex;gap:6px;">
-                <button class="btn-acc btn-acc-ghost chip-grupo-acceso" data-grupo="todos" style="padding:5px 12px;font-size:11px;background:#0d1b3e;color:#e8b84b;" onclick="filtrarGrupoAccesos('todos')">Todos</button>
-                <button class="btn-acc btn-acc-ghost chip-grupo-acceso" data-grupo="G1" style="padding:5px 12px;font-size:11px;" onclick="filtrarGrupoAccesos('G1')">Grupo 1</button>
-                <button class="btn-acc btn-acc-ghost chip-grupo-acceso" data-grupo="G2" style="padding:5px 12px;font-size:11px;" onclick="filtrarGrupoAccesos('G2')">Grupo 2</button>
-                <button class="btn-acc btn-acc-ghost chip-grupo-acceso" data-grupo="sin" style="padding:5px 12px;font-size:11px;" onclick="filtrarGrupoAccesos('sin')">Sin grupo</button>
-              </div>
             </div>
             <div id="accesos-lista" style="display:flex;flex-direction:column;gap:8px;">
               <!-- Accesos se cargan aquí -->
@@ -1157,6 +1151,30 @@
             <button class="btn-acc btn-acc-blue" onclick="guardarConfigCierre()">💾 Guardar configuración</button>
             <button class="btn-acc btn-acc-blue" onclick="restaurarConfigCierrePorDefecto()">↩️ Restaurar valores por defecto (1 y 1)</button>
           </div>
+        </div>
+
+        <!-- Preparar mes: crea de una sola vez el mes en todas las áreas, arrastrando la nómina -->
+        <div id="config-preparar-mes" class="panel-white" style="display:none;padding:20px;margin-top:20px;border:2px solid var(--blue-m);">
+          <div class="sec-titulo">📅 Preparar mes en todas las áreas</div>
+          <p style="font-size:12px;color:var(--txt2);margin-bottom:16px;">
+            Crea el mes elegido en todas las áreas del catálogo que todavía no lo tengan, arrastrando la nómina
+            del mes anterior con las novedades en blanco. <strong>Las áreas que ya tienen el mes creado no se tocan</strong>,
+            así que puede ejecutarlo las veces que necesite sin riesgo de perder lo ya registrado.
+          </p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;max-width:460px;">
+            <div class="form-field" style="margin-bottom:0;">
+              <label class="form-label">Mes a preparar</label>
+              <select id="preparar-mes-mes" class="filtro-select"></select>
+            </div>
+            <div class="form-field" style="margin-bottom:0;">
+              <label class="form-label">Año</label>
+              <select id="preparar-mes-anio" class="filtro-select"></select>
+            </div>
+          </div>
+          <button class="btn-acc btn-acc-blue" id="btn-preparar-mes" onclick="prepararMesEnTodasLasAreas()">
+            📅 Preparar mes
+          </button>
+          <div id="preparar-mes-progreso" class="info-badge" style="display:none;margin-top:14px;"></div>
         </div>
       </div>
 
