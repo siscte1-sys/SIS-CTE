@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════
-   PORTAL SISCTE — app.js  v5.5
+   PORTAL RCA (Registro y Control de Asistencia) — app.js  v1.0
    Cambios v5.5:
      • Fix real del mailer: payload enviado como parámetro GET (URL encoded)
      • GAS lee e.parameter.data en doPost/doGet — compatible con no-cors
@@ -52,7 +52,7 @@ const AREAS = [
 const LOGO_SISCTE_PNG_BASE64 = "data:image/png;base64,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";
 
 // ── Escudo del Ecuador y sello de la CTE: se cargan desde la carpeta img/
-//    (a diferencia del logo SISCTE arriba, que sigue embebido) para no
+//    (a diferencia del logo RCA arriba, que sigue embebido) para no
 //    inflar el tamaño de este archivo. Se cachean tras la primera carga.
 const _cacheImagenesInstitucionales = {};
 async function cargarImagenComoBase64(ruta) {
@@ -359,7 +359,7 @@ function ir(v) {
 
 function irNovedades() { ir('vista-novedades'); cargarNovedadesActuales(); }
 
-// Clic en el logo/nombre "SISCTE v6.0": solo navega si hay sesión iniciada
+// Clic en el logo/nombre "RCA v1.0": solo navega si hay sesión iniciada
 function irInicioNav() {
   if (!usuario) return;
   irNovedades();
@@ -806,9 +806,13 @@ async function cargarNovedadesActuales() {
       await poblarSelectorAreaAdmin();
     } else {
       hide('admin-selector-area-novedades');
-      // Obtener area del usuario desde accesos
+      // Obtener area del usuario desde accesos.
+      // El correo se normaliza a minúsculas porque así se guarda siempre en
+      // `accesos` (ver guardarAcceso), y la comparación de Firestore distingue
+      // mayúsculas: sin esto, una cuenta con mayúsculas nunca encontraba su área.
       const accesoRef = window._fb.collection(db, 'accesos');
-      const q = window._fb.query(accesoRef, window._fb.where('correo', '==', usuario.email));
+      const correoNorm = String(usuario.email || '').toLowerCase().trim();
+      const q = window._fb.query(accesoRef, window._fb.where('correo', '==', correoNorm));
       const querySnapshot = await window._fb.getDocs(q);
 
       if (querySnapshot.empty) {
@@ -821,7 +825,22 @@ async function cargarNovedadesActuales() {
         return;
       }
 
-      areaActual = querySnapshot.docs[0].data().area;
+      const acceso = querySnapshot.docs[0].data();
+
+      // El botón "⊘ Bloquear" del panel de Accesos guarda estado:false. Antes
+      // ese valor no se revisaba en ninguna parte, así que un acceso bloqueado
+      // seguía entrando igual.
+      if (acceso.estado === false) {
+        toast('❌ Su acceso está bloqueado. Comuníquese con la Unidad de Personal y Movilidad.', 'err');
+        hide('tabla-novedades-container');
+        hide('cierre-mes-container');
+        hide('novedades-top-controles');
+        show('tabla-cargando');
+        $('tabla-cargando').textContent = '🔒 Acceso bloqueado';
+        return;
+      }
+
+      areaActual = acceso.area;
     }
 
     mesActual = periodo;
@@ -957,7 +976,14 @@ async function cargarNovedadesActuales() {
     //  · desde el día de bloqueo       → pantalla bloqueante, como antes
     const cierrePendiente = prevTieneDatos && !prevCerrado;
 
-    if (cierrePendiente && bloqueoActivo) {
+    // El bloqueo del mes en curso es una medida de control sobre el SECRETARIO
+    // del área. El administrador y el supervisor nunca deben quedar encerrados
+    // en esta pantalla: supervisan todas las áreas y necesitan ver el mes en
+    // curso aunque el informe del mes anterior siga pendiente. Antes este
+    // `return` cortaba para todos por igual y dejaba al admin sin ver la tabla.
+    const exentoDeBloqueo = esAdmin() || esSupervisor();
+
+    if (cierrePendiente && bloqueoActivo && !exentoDeBloqueo) {
       mostrarCierreMes(areaActual, periodoAnterior, docAnterior.data(), true, cfgCierreEfectiva);
       return;
     }
@@ -973,17 +999,31 @@ async function cargarNovedadesActuales() {
     const novedadesDoc = await window._fb.getDoc(novedadesRef);
 
     if (!novedadesDoc.exists()) {
-      // Crear estructura inicial
-      await window._fb.setDoc(novedadesRef, {
-        agentes: [],
+      // Mes nuevo. Antes nacía con `agentes: []` y el área amanecía vacía el
+      // día 1 hasta que un administrador reimportara toda la base. Ahora se
+      // arrastra la NÓMINA del mes anterior (solo la identidad de cada
+      // servidor); las novedades por día arrancan en blanco, porque cada mes
+      // es independiente. El documento del mes anterior solo se LEE: no se
+      // modifica ni se borra, conserva sus novedades, su cierre y sus firmas.
+      const agentesArrastrados = arrastrarNominaMesAnterior(docAnterior);
+
+      const estructuraInicial = {
+        agentes: agentesArrastrados,
         estado: 'activo',
         diasBloqueados: [],
         diasDesbloqueados: [],
         diasNoCompletados: Array.from({length: 31}, (_, i) => i + 1),
         fechaCreacion: new Date(),
         ultimaModificacion: new Date()
-      });
-      novedadesActuales = { agentes: [], diasDesbloqueados: [] };
+      };
+      if (agentesArrastrados.length) estructuraInicial.nominaArrastradaDe = periodoAnterior;
+
+      await window._fb.setDoc(novedadesRef, estructuraInicial);
+      novedadesActuales = { ...estructuraInicial };
+
+      if (agentesArrastrados.length) {
+        toast(`📋 Se arrastraron ${agentesArrastrados.length} servidor(es) desde ${obtenerNombreMes(periodoAnterior.split('-')[1])} — las novedades arrancan en blanco`, 'ok');
+      }
     } else {
       novedadesActuales = novedadesDoc.data();
     }
@@ -1101,6 +1141,37 @@ function compararPorGrado(gradoA, gradoB, codigoA, codigoB) {
 
 function ordenarAgentesPorGrado(agentes) {
   return [...(agentes || [])].sort((x, y) => compararPorGrado(x.grado, y.grado, x.codigo, y.codigo));
+}
+
+/* Copia la NÓMINA de un mes al siguiente — nunca las novedades.
+   De cada servidor se conserva solo su identidad: código, grado y nombres.
+   `novedadesPorDia` y `observaciones` arrancan vacíos, porque lo registrado en
+   un mes no guarda relación con el mes siguiente.
+   El documento de origen NO se toca: acá únicamente se lee.
+   Recibe el snapshot del mes anterior, que cargarNovedadesActuales ya trajo
+   para revisar el cierre, así que esto no genera una lectura extra. */
+function arrastrarNominaMesAnterior(docAnterior) {
+  if (!docAnterior || !docAnterior.exists()) return [];
+
+  const previos = docAnterior.data().agentes || [];
+  const vistos = new Set();
+  const nomina = [];
+
+  previos.forEach(a => {
+    const codigo = String(a.codigo || '').trim();
+    const clave = codigo.replace(/\s+/g, '').toUpperCase();
+    if (!codigo || vistos.has(clave)) return; // sin código o duplicado: no se arrastra
+    vistos.add(clave);
+    nomina.push({
+      codigo,
+      grado: a.grado || '',
+      apellidosNombres: a.apellidosNombres || '',
+      novedadesPorDia: {},
+      observaciones: ''
+    });
+  });
+
+  return ordenarAgentesPorGrado(nomina);
 }
 
 function renderizarTablaNovedades(diaHoy) {
@@ -2098,8 +2169,9 @@ function poblarSelectoresReportePrueba() {
       opt.textContent = m;
       selMes.appendChild(opt);
     });
-    const hoy = obtenerFechaParts();
-    selMes.value = hoy.mes;
+    // Arranca en el mes ANTERIOR, que es el que realmente se informa. Antes
+    // quedaba preseleccionado el mes en curso y había que corregirlo a mano.
+    selMes.value = obtenerPeriodoAnterior(obtenerFechaParts().periodo).split('-')[1];
   }
   if (selAnio.options.length === 0) {
     const anioActual = new Date().getFullYear();
@@ -2109,7 +2181,8 @@ function poblarSelectoresReportePrueba() {
       opt.textContent = String(a);
       selAnio.appendChild(opt);
     }
-    selAnio.value = String(anioActual);
+    // En enero el mes anterior cae en diciembre del año pasado
+    selAnio.value = obtenerPeriodoAnterior(obtenerFechaParts().periodo).split('-')[0];
   }
 }
 
@@ -2209,6 +2282,14 @@ async function cargarConfigPanel() {
     }
   }
 
+  // "Preparar mes" es una escritura masiva sobre todas las áreas: queda
+  // reservada al administrador raíz, no se delega por permiso.
+  const secPreparar = $('config-preparar-mes');
+  if (secPreparar) {
+    secPreparar.style.display = esAdmin() ? 'block' : 'none';
+    if (esAdmin()) poblarSelectoresPrepararMes();
+  }
+
   actualizarResumenConfigCierre();
   actualizarResumenModoLlenado();
   ['config-dia-habilitacion','config-dia-bloqueo'].forEach(id => {
@@ -2259,6 +2340,149 @@ function actualizarResumenConfigCierre() {
   }
 
   cont.textContent = texto;
+}
+
+/* ═════════════════════════════════════════
+   PANEL ADMIN — Preparar mes en todas las áreas
+   ─────────────────────────────────────────
+   Complementa el arrastre automático de nómina. El arrastre actúa área por
+   área, recién cuando alguien la abre; esto deja TODAS las áreas listas de
+   una sola vez, para que el día 1 el Resumen General ya salga completo y se
+   vea de inmediato qué áreas quedaron sin personal.
+
+   Es una operación segura de repetir: un área que ya tiene el mes creado se
+   omite y NUNCA se sobrescribe, así que jamás puede borrar lo ya registrado.
+═════════════════════════════════════════ */
+
+function poblarSelectoresPrepararMes() {
+  const selMes  = $('preparar-mes-mes');
+  const selAnio = $('preparar-mes-anio');
+  if (!selMes || !selAnio) return;
+
+  const hoy = obtenerFechaParts();
+
+  if (selMes.options.length === 0) {
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    meses.forEach((m, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i + 1).padStart(2, '0');
+      opt.textContent = m;
+      selMes.appendChild(opt);
+    });
+    selMes.value = hoy.mes; // acá sí es el mes EN CURSO: es el que se prepara
+  }
+  if (selAnio.options.length === 0) {
+    const anioActual = new Date().getFullYear();
+    for (let a = anioActual - 1; a <= anioActual + 1; a++) {
+      const opt = document.createElement('option');
+      opt.value = String(a);
+      opt.textContent = String(a);
+      selAnio.appendChild(opt);
+    }
+    selAnio.value = String(anioActual);
+  }
+}
+
+async function prepararMesEnTodasLasAreas() {
+  if (!esAdmin()) {
+    toast('❌ Solo el administrador puede preparar el mes', 'err');
+    return;
+  }
+
+  const mes  = $('preparar-mes-mes')?.value;
+  const anio = $('preparar-mes-anio')?.value;
+  if (!mes || !anio) { toast('❌ Elija mes y año', 'err'); return; }
+
+  const periodo = `${anio}-${mes}`;
+  const periodoAnterior = obtenerPeriodoAnterior(periodo);
+  const nombrePeriodo = `${obtenerNombreMes(mes)} ${anio}`;
+
+  const areas = await obtenerAreasNovedades();
+  if (!areas.length) { toast('❌ No hay áreas en el catálogo', 'err'); return; }
+
+  const confirmar = await confirmarAccion(
+    `Se revisarán las ${areas.length} áreas del catálogo y se creará ${nombrePeriodo} en las que aún no lo tengan, ` +
+    `arrastrando la nómina de ${obtenerNombreMes(periodoAnterior.split('-')[1])} con las novedades en blanco.\n\n` +
+    `Las áreas que ya tienen ese mes creado NO se modifican.\n\n¿Confirma?`,
+    'Preparar mes en todas las áreas'
+  );
+  if (!confirmar) return;
+
+  const btn = $('btn-preparar-mes');
+  const prog = $('preparar-mes-progreso');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  if (prog) { show('preparar-mes-progreso'); prog.style.display = 'block'; prog.textContent = 'Preparando...'; }
+
+  const resumen = { preparadas: 0, yaExistian: 0, sinMesAnterior: 0, errores: 0 };
+
+  try {
+    const tamanioLote = 25; // mismo lote que usan la importación y el backup
+    for (let i = 0; i < areas.length; i += tamanioLote) {
+      const lote = areas.slice(i, i + tamanioLote);
+
+      await Promise.all(lote.map(async area => {
+        try {
+          const refDestino = window._fb.doc(db, 'novedades', area, periodo, 'datos');
+          const docDestino = await window._fb.getDoc(refDestino);
+
+          // Regla de oro: si ya existe, no se toca. Nunca se sobrescribe.
+          if (docDestino.exists()) { resumen.yaExistian++; return; }
+
+          const docAnterior = await window._fb.getDoc(
+            window._fb.doc(db, 'novedades', area, periodoAnterior, 'datos')
+          );
+          const agentes = arrastrarNominaMesAnterior(docAnterior);
+
+          const estructura = {
+            agentes,
+            estado: 'activo',
+            diasBloqueados: [],
+            diasDesbloqueados: [],
+            diasNoCompletados: Array.from({length: 31}, (_, i2) => i2 + 1),
+            fechaCreacion: new Date(),
+            ultimaModificacion: new Date()
+          };
+          if (agentes.length) estructura.nominaArrastradaDe = periodoAnterior;
+
+          await window._fb.setDoc(refDestino, estructura);
+
+          if (agentes.length) resumen.preparadas++;
+          else                resumen.sinMesAnterior++;
+
+        } catch(e) {
+          console.error(`Error preparando ${area} en ${periodo}:`, e);
+          resumen.errores++;
+        }
+      }));
+
+      if (prog) prog.textContent = `⏳ Revisando áreas... ${Math.min(i + tamanioLote, areas.length)} / ${areas.length}`;
+    }
+
+    await registrarEnAuditoria(
+      'preparar_mes', null, usuario.email, null, periodo,
+      { ...resumen, areasRevisadas: areas.length },
+      `Preparación de ${nombrePeriodo}: ${resumen.preparadas} área(s) con nómina arrastrada, ` +
+      `${resumen.yaExistian} ya existían, ${resumen.sinMesAnterior} sin mes anterior` +
+      (resumen.errores ? `, ${resumen.errores} con error` : '')
+    );
+
+    if (prog) {
+      prog.innerHTML =
+        `✅ <strong>${nombrePeriodo} preparado.</strong><br>` +
+        `• ${resumen.preparadas} área(s) creadas con la nómina arrastrada<br>` +
+        `• ${resumen.yaExistian} ya tenían el mes (no se tocaron)<br>` +
+        `• ${resumen.sinMesAnterior} quedaron vacías: no tenían mes anterior — hay que importarles la base` +
+        (resumen.errores ? `<br>• ⚠️ ${resumen.errores} con error (revise la consola)` : '');
+    }
+    toast(`✅ ${resumen.preparadas} área(s) preparadas para ${nombrePeriodo}`, 'ok');
+
+  } catch(e) {
+    console.error(e);
+    if (prog) prog.textContent = '❌ Error: ' + e.message;
+    toast('❌ Error preparando el mes: ' + e.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+  }
 }
 
 function actualizarResumenModoLlenado() {
@@ -2625,7 +2849,7 @@ async function exportarNovedadesExcel(data, area, periodo, elaboradoPor, respons
   ws.mergeCells(filaFooterNum, 1, filaFooterNum, numCols);
   const filaFooter = ws.getCell(filaFooterNum, 1);
   const fechaGenExcel = new Date().toLocaleString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  filaFooter.value = `Documento generado automáticamente mediante el Sistema SISCTE v6.0 — Unidad de Personal y Movilidad CTE · Generado: ${fechaGenExcel}`;
+  filaFooter.value = `Documento generado automáticamente — Unidad de Personal y Movilidad CTE · Generado: ${fechaGenExcel}`;
   filaFooter.font = { size: 8, italic: true, color: { argb: 'FF888888' } };
   filaFooter.alignment = { horizontal: 'center' };
 
@@ -2708,7 +2932,7 @@ async function exportarNovedadesPDF(data, area, periodo, elaboradoPor, responsab
     doc.setFont(undefined, 'normal');
     doc.setFontSize(6.5);
     doc.setTextColor(120, 120, 120);
-    doc.text(`Documento generado automáticamente mediante el Sistema SISCTE v6.0 — Unidad de Personal y Movilidad CTE · Generado: ${fechaGen}`, anchoPagina / 2, altoPaginaFooter - 5, { align: 'center' });
+    doc.text(`Documento generado automáticamente — Unidad de Personal y Movilidad CTE · Generado: ${fechaGen}`, anchoPagina / 2, altoPaginaFooter - 5, { align: 'center' });
     doc.setTextColor(0, 0, 0);
   };
   dibujarBanner();
@@ -4065,7 +4289,7 @@ async function enviarArchivo() {
         p => setProgreso(55 + Math.round(p*0.10), `Subiendo Acta... ${Math.round(p)}%`));
     }
 
-    const numRegistro = 'SISCTE-' + Date.now().toString(36).toUpperCase();
+    const numRegistro = 'RCA-' + Date.now().toString(36).toUpperCase();
 
     /* 4. Generar comprobante PDF */
     setProgreso(68, 'Generando comprobante PDF...');
@@ -4214,8 +4438,8 @@ async function generarComprobantePDFComoURL(d) {
     doc.rect(0,0,W,50,'F');
     doc.setTextColor(255,255,255);
     doc.setFontSize(20); doc.setFont('helvetica','bold');
-    // Centrar como grupo el logo + "SISCTE" (medimos el ancho real del texto)
-    const anchoTextoSiscte = doc.getTextWidth('SISCTE');
+    // Centrar como grupo el logo + "RCA" (medimos el ancho real del texto)
+    const anchoTextoSiscte = doc.getTextWidth('RCA');
     const anchoIconoSiscte = 8, gapIconoSiscte = 3;
     const anchoGrupoSiscte = anchoIconoSiscte + gapIconoSiscte + anchoTextoSiscte;
     const xIconoSiscte = W/2 - anchoGrupoSiscte/2;
@@ -4223,7 +4447,7 @@ async function generarComprobantePDFComoURL(d) {
     try {
       doc.addImage(LOGO_SISCTE_PNG_BASE64, 'PNG', xIconoSiscte, 8.4, anchoIconoSiscte, anchoIconoSiscte * 196/130);
     } catch(e) { /* se omite el logo si el navegador no puede decodificarlo */ }
-    doc.text('SISCTE', xTextoSiscte, 18.5, { align:'center' });
+    doc.text('RCA', xTextoSiscte, 18.5, { align:'center' });
     doc.setFontSize(11); doc.setFont('helvetica','normal');
     doc.text('Portal de Gestión de Envíos · Personal CTE', W/2, 30, { align:'center' });
     doc.setFontSize(9);
@@ -4240,7 +4464,7 @@ async function generarComprobantePDFComoURL(d) {
     doc.text('¡Archivo registrado exitosamente!', W/2, 78, { align:'center' });
     doc.setFontSize(10); doc.setFont('helvetica','normal');
     doc.setTextColor(100,116,139);
-    doc.text('Su entrega fue guardada correctamente en el sistema SISCTE.', W/2, 85, { align:'center' });
+    doc.text('Su entrega fue guardada correctamente en el sistema RCA.', W/2, 85, { align:'center' });
 
     const campos = [
       ['ENVIADO POR', d.nombre],
@@ -4282,15 +4506,15 @@ async function generarComprobantePDFComoURL(d) {
     doc.setDrawColor(245,158,11); doc.setLineWidth(0.8);
     doc.line(14, y, 14, y+16);
     doc.setTextColor(120,53,15); doc.setFontSize(8); doc.setFont('helvetica','bold');
-    doc.text('Guarde este comprobante como respaldo de su entrega en el sistema SISCTE.', 20, y+6);
+    doc.text('Guarde este comprobante como respaldo de su entrega en el sistema RCA.', 20, y+6);
     doc.setFont('helvetica','normal');
     doc.text('Su archivo fue almacenado en Google Drive y el registro queda permanente.', 20, y+12);
 
     doc.setFillColor(37,99,235);
     doc.rect(0, 275, W, 22, 'F');
     doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont('helvetica','normal');
-    doc.text('Sistema SISCTE — Generado el '+d.fecha+' a las '+d.hora, 14, 284);
-    doc.text('siscte1-sys.github.io/SIS-CTE', W-14, 284, { align:'right' });
+    doc.text('Sistema Registro y Control de Asistencia (RCA) — Generado el '+d.fecha+' a las '+d.hora, 14, 284);
+    doc.text('sisrca1.github.io', W-14, 284, { align:'right' });
     doc.setFontSize(7); doc.setTextColor(179,207,255);
     doc.text('Este documento es un comprobante automático de su entrega.', W/2, 290, { align:'center' });
 
@@ -4595,7 +4819,7 @@ async function exportarExcel(docs, filtrado=false) {
   const ws = XLSX.utils.json_to_sheet(filas);
   ws['!cols'] = [{wch:4},{wch:28},{wch:34},{wch:22},{wch:38},{wch:30},{wch:40},{wch:12},{wch:22},{wch:14},{wch:12},{wch:50},{wch:50}];
   XLSX.utils.book_append_sheet(wb, ws, 'Entregas');
-  XLSX.writeFile(wb, `informe_SISCTE${filtrado?'_filtrado':'_completo'}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, `informe_RCA${filtrado?'_filtrado':'_completo'}_${new Date().toISOString().slice(0,10)}.xlsx`);
   toast(`Informe${filtrado?' filtrado':''} descargado ✓`);
 }
 
@@ -5501,7 +5725,7 @@ async function exportarReporteActividadExcel() {
   ws.mergeCells(filaFooterActNum, 1, filaFooterActNum, 5);
   const filaFooterAct = ws.getCell(filaFooterActNum, 1);
   const fechaGenAct = new Date().toLocaleString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  filaFooterAct.value = `Documento generado automáticamente mediante el Sistema SISCTE v6.0 — Unidad de Personal y Movilidad CTE · Generado: ${fechaGenAct}`;
+  filaFooterAct.value = `Documento generado automáticamente mediante el Sistema Registro y Control de Asistencia (RCA) v1.0 — Unidad de Personal y Movilidad CTE · Generado: ${fechaGenAct}`;
   filaFooterAct.font = { size: 8, italic: true, color: { argb: 'FF888888' } };
   filaFooterAct.alignment = { horizontal: 'center' };
 
@@ -6031,7 +6255,6 @@ const COLORES_PERFIL = {
 let accesosCache = [];          // [{ correo, codigo, area, estado, perfil, nombre, grado }]
 let accesosPagina = 1;
 let accesosBusqueda = '';
-let accesosFiltroGrupo = 'todos';   // 'todos' | 'G1' | 'G2' | 'sin'
 let accesosAreasSinAcceso = [];
 const ACCESOS_POR_PAGINA = 25;
 
@@ -6068,12 +6291,6 @@ function resolverPerfil(correo, permisoDoc) {
     return todas.every(k => tiene.includes(k)) ? 'ADMINISTRADOR' : 'PERSONALIZADO';
   }
   return 'SECRETARIO';
-}
-
-/* Extrae el sufijo de grupo del nombre del área ("UCT SALITRE G1" → "G1"). */
-function grupoDeArea(area) {
-  const m = String(area || '').trim().match(/\b-?\s*G\s*([12])$/i);
-  return m ? 'G' + m[1] : null;
 }
 
 function inicialesDe(texto) {
@@ -6137,10 +6354,6 @@ async function cargarAccesos() {
 function accesosFiltrados() {
   const q = accesosBusqueda.toLowerCase().trim();
   return accesosCache.filter(a => {
-    if (accesosFiltroGrupo !== 'todos') {
-      const g = grupoDeArea(a.area);
-      if (accesosFiltroGrupo === 'sin' ? g !== null : g !== accesosFiltroGrupo) return false;
-    }
     if (!q) return true;
     return [a.correo, a.area, a.codigo, a.nombre].some(v => String(v || '').toLowerCase().includes(q));
   });
@@ -6201,7 +6414,6 @@ function renderizarAccesos() {
       : `<span style="${COLORES_PERFIL.red}padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;">BLOQUEADO</span>`;
 
     const titulo = a.nombre || a.correo;
-    const grupo = grupoDeArea(a.area);
     const esc = s => String(s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
     const meta = [
@@ -6218,7 +6430,6 @@ function renderizarAccesos() {
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <span style="font-weight:700;font-size:13px;text-transform:uppercase;">${titulo}</span>
             ${badge}${badgeEstado}
-            ${grupo ? `<span style="${COLORES_PERFIL.gold}padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;">${grupo}</span>` : ''}
           </div>
           <div style="font-size:11px;color:var(--txt2);margin-top:2px;">${a.correo}</div>
           <div style="font-size:11px;color:var(--txt2);margin-top:3px;">${meta}</div>
@@ -6263,17 +6474,6 @@ function buscarAccesos(valor) {
   renderizarAccesos();
 }
 
-function filtrarGrupoAccesos(grupo) {
-  accesosFiltroGrupo = grupo;
-  accesosPagina = 1;
-  document.querySelectorAll('.chip-grupo-acceso').forEach(b => {
-    const activo = b.dataset.grupo === grupo;
-    b.style.background = activo ? '#0d1b3e' : 'transparent';
-    b.style.color = activo ? '#e8b84b' : 'var(--txt2)';
-  });
-  renderizarAccesos();
-}
-
 function verAreasSinAcceso() {
   if (!accesosAreasSinAcceso.length) { toast('Todas las áreas tienen acceso asignado', 'ok'); return; }
   const cont = $('modal-areas-sin-acceso-lista');
@@ -6282,7 +6482,6 @@ function verAreasSinAcceso() {
   cont.innerHTML = accesosAreasSinAcceso.map(a => `
     <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
       <span>${a}</span>
-      ${grupoDeArea(a) ? `<span style="${COLORES_PERFIL.gold}padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;">${grupoDeArea(a)}</span>` : ''}
     </div>`).join('');
   $('modal-areas-sin-acceso').style.display = 'flex';
 }
@@ -6310,7 +6509,6 @@ async function exportarAccesos() {
       { header: 'CODIGO',   key: 'codigo', width: 12 },
       { header: 'NOMBRE',   key: 'nombre', width: 44 },
       { header: 'AREA',     key: 'area',   width: 34 },
-      { header: 'GRUPO',    key: 'grupo',  width: 10 },
       { header: 'PERFIL',   key: 'perfil', width: 18 },
       { header: 'ESTADO',   key: 'estado', width: 12 },
     ];
@@ -6322,7 +6520,6 @@ async function exportarAccesos() {
       codigo: a.codigo || '',
       nombre: a.nombre || '',
       area: a.area || '',
-      grupo: grupoDeArea(a.area) || '',
       perfil: a.perfil === 'RAIZ' ? 'ADMINISTRADOR RAÍZ' : (PERFILES[a.perfil]?.label || a.perfil),
       estado: a.estado ? 'ACTIVO' : 'BLOQUEADO',
     }));
@@ -6332,7 +6529,7 @@ async function exportarAccesos() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `USUARIOS_SISCTE_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.download = `USUARIOS_RCA_${new Date().toISOString().slice(0,10)}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
     toast('✅ Usuarios exportados', 'ok');
@@ -6712,6 +6909,7 @@ const ACCIONES_AUDITORIA = [
     { v: 'rellenar_sin_novedad',          l: 'Rellenar Sin Novedad' },
     { v: 'combinar_duplicados',           l: 'Combinar duplicados' },
     { v: 'cerrar_mes',                    l: 'Cerrar mes' },
+    { v: 'preparar_mes',                  l: 'Preparar mes en todas las áreas' },
   ]},
   { grupo: 'Desbloqueos', items: [
     { v: 'aprobar_desbloqueo',            l: 'Aprobar desbloqueo' },
@@ -7000,7 +7198,7 @@ async function exportarAuditoria() {
     const sufijo = auditoriaFiltros.desde || auditoriaFiltros.hasta
       ? `_${auditoriaFiltros.desde || 'inicio'}_a_${auditoriaFiltros.hasta || 'hoy'}`
       : '';
-    a.download = `AUDITORIA_SISCTE${sufijo}.xlsx`;
+    a.download = `AUDITORIA_RCA${sufijo}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
     toast(`✅ ${filas.length} registros exportados`, 'ok');
@@ -7863,7 +8061,7 @@ async function exportarResumenGeneralExcel() {
   ws.mergeCells(filaFooterResNum, 1, filaFooterResNum, headers.length);
   const filaFooterRes = ws.getCell(filaFooterResNum, 1);
   const fechaGenRes = new Date().toLocaleString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  filaFooterRes.value = `Documento generado automáticamente mediante el Sistema SISCTE v6.0 — Unidad de Personal y Movilidad CTE · Generado: ${fechaGenRes}`;
+  filaFooterRes.value = `Documento generado automáticamente — Unidad de Personal y Movilidad CTE · Generado: ${fechaGenRes}`;
   filaFooterRes.font = { size: 8, italic: true, color: { argb: 'FF888888' } };
   filaFooterRes.alignment = { horizontal: 'center' };
 
@@ -8012,7 +8210,6 @@ window.eliminarAcceso               = eliminarAcceso;
 window.editarAcceso                 = editarAcceso;
 window.cargarAccesos                = cargarAccesos;
 window.buscarAccesos                = buscarAccesos;
-window.filtrarGrupoAccesos          = filtrarGrupoAccesos;
 window.cambiarPaginaAccesos         = cambiarPaginaAccesos;
 window.verAreasSinAcceso            = verAreasSinAcceso;
 window.cerrarModalAreasSinAcceso    = cerrarModalAreasSinAcceso;
@@ -8065,6 +8262,7 @@ window.descargarCodigosNoEncontrados = descargarCodigosNoEncontrados;
 window.verificarAreasSinAsignar     = verificarAreasSinAsignar;
 window.cargarConfigPanel            = cargarConfigPanel;
 window.guardarConfigCierre          = guardarConfigCierre;
+window.prepararMesEnTodasLasAreas   = prepararMesEnTodasLasAreas;
 window.restaurarConfigCierrePorDefecto = restaurarConfigCierrePorDefecto;
 window.actualizarResumenConfigCierre = actualizarResumenConfigCierre;
 window.actualizarResumenModoLlenado = actualizarResumenModoLlenado;
